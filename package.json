@@ -1,0 +1,26 @@
+{
+  "name": "HyperStaking-contracts",
+  "scripts": {
+    "test": "npx hardhat test",
+    "coverage": "npx hardhat coverage --solcoverjs .solcover.ts",
+    "lint": "npx eslint . --ext .js,.ts",
+    "check": "solhint -c .solhint.json 'contracts/**/*.sol'",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts-upgradeable": "^5.0.2",
+    "@typescript-eslint/eslint-plugin": "^8.4.0",
+    "@typescript-eslint/parser": "^8.4.0",
+    "dotenv": "^16.4.5",
+    "eslint": "^8.57.0",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-import": "^2.30.0",
+    "eslint-plugin-node": "^11.1.0",
+    "ethers": "^6.13.2",
+    "hardhat": "^2.22.10",
+    "hardhat-contract-sizer": "^2.10.0",
+    "husky": "^9.1.5",
+    "solhint": "^5.0.3"
+  }
+}
