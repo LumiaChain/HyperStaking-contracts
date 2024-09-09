@@ -14,7 +14,7 @@ const config: HardhatUserConfig = {
   solidity: {
     compilers: [
       {
-        version: "0.8.27",
+        version: "0.8.24",
         settings: {
           optimizer: {
             enabled: true,
@@ -28,11 +28,7 @@ const config: HardhatUserConfig = {
 
   defaultNetwork: "hardhat",
   networks: {
-    hardhat: {
-      accounts: {
-        mnemonic: process.env.WALLET_MNEMONIC,
-      },
-    },
+    hardhat: {},
     local: {
       url: process.env.LOCAL_RPC_URL,
       chainId: 31337,
