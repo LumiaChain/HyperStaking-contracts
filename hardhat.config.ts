@@ -4,6 +4,8 @@ import "@nomicfoundation/hardhat-toolbox";
 import "hardhat-contract-sizer";
 import "hardhat-gas-reporter";
 
+import "solidity-docgen";
+
 import dotenv from "dotenv";
 dotenv.config();
 
