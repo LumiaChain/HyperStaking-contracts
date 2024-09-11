@@ -3,14 +3,22 @@
   "scripts": {
     "test": "npx hardhat test",
     "coverage": "npx hardhat coverage --solcoverjs .solcover.ts",
-    "lint": "npx eslint . --ext .js,.ts",
+    "prettier": "prettier --write --plugin=prettier-plugin-solidity 'contracts/**/*.sol'",
+    "lint_sol": "prettier --list-different --plugin=prettier-plugin-solidity 'contracts/**/*.sol'",
+    "lint_js": "npx eslint . --ext .js,.ts",
     "check": "solhint -c .solhint.json 'contracts/**/*.sol'",
     "prepare": "husky",
     "docgen": "npx hardhat docgen"
   },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:orionprotocol/HyperStaking-contracts.git"
+  },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@openzeppelin/contracts-upgradeable": "^5.0.2",
+    "@types/mocha": "^10.0.7",
+    "@types/node": "^22.5.4",
     "@typescript-eslint/eslint-plugin": "^8.4.0",
     "@typescript-eslint/parser": "^8.4.0",
     "dotenv": "^16.4.5",
@@ -22,9 +30,9 @@
     "hardhat": "^2.22.10",
     "hardhat-contract-sizer": "^2.10.0",
     "husky": "^9.1.5",
+    "prettier": "^3.3.3",
+    "prettier-plugin-solidity": "^1.4.1",
+    "solidity-docgen": "^0.6.0-beta.36",
     "solhint": "^5.0.3"
-  },
-  "dependencies": {
-    "solidity-docgen": "^0.6.0-beta.36"
   }
 }
