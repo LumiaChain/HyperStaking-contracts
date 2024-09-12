@@ -1,19 +1,23 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.24;
 
-// UPGRADEABLE
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+// import {IERC20} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20Metadata.sol";
+// import {SafeERC20} from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20.sol";
 
 import {LibStaking, StakingStorage, UserInfo, PoolInfo} from "../libraries/LibStaking.sol";
 import {IStakingFacet} from "../interfaces/IStakingFacet.sol";
 
 /**
  * @title StakingFacet
+ * @notice This contract handles the core staking logic.
+ * It allows users to deposit and withdraw tokens from staking pools. The contract supports
+ * multiple staking pools for the same token, with each pool having a unique ID.
+ * Rewards are distributed based on the user's share in the pool.
+ *
  * @dev This contract is a facet of Diamond Proxy.
  */
 contract StakingFacet is IStakingFacet {
-    using SafeERC20 for IERC20; // hmh
+    // using SafeERC20 for IERC20;
 
     //============================================================================================//
     //                                         Modifiers                                          //
@@ -104,14 +108,24 @@ contract StakingFacet is IStakingFacet {
 
     // ========= View ========= //
 
+    function userInfo(uint256 poolId, address user) external view returns (UserInfo memory) {
+        StakingStorage storage s = LibStaking.diamondStorage();
+        return s.userInfo[poolId][user];
+    }
+
+    function poolInfo(uint256 poolId) external view returns (PoolInfo memory) {
+        StakingStorage storage s = LibStaking.diamondStorage();
+        return s.poolInfo[poolId];
+    }
+
     // TODO replace with const or Currency
     function nativeTokenAddress() public pure returns (address) {
         return address(uint160(uint256(keccak256("native"))));
     }
 
-    function generatePoolId(address stakeToken, uint256 idx) public pure returns (uint256) {
+    function generatePoolId(address stakeToken, uint96 idx) public pure returns (uint256) {
         return uint256(keccak256(
-            abi.encode(
+            abi.encodePacked(
                 stakeToken,
                 idx
             )
@@ -126,7 +140,7 @@ contract StakingFacet is IStakingFacet {
         StakingStorage storage s = LibStaking.diamondStorage();
 
         // use current count as idx
-        uint256 idx = s.stakeTokenPoolCounts[stakeToken];
+        uint96 idx = s.stakeTokenPoolCounts[stakeToken];
         poolId = generatePoolId(stakeToken, idx);
 
         // increment pool count

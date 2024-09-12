@@ -40,7 +40,7 @@ struct StakingStorage {
     mapping (uint256 poolId => PoolInfo) poolInfo;
 
     /// @notice Tracks how many pools have been created for each staking token.
-    mapping(address stakeToken => uint256) stakeTokenPoolCounts;
+    mapping(address stakeToken => uint96) stakeTokenPoolCounts;
 }
 
 library LibStaking {
