@@ -8,7 +8,8 @@
     "lint_js": "npx eslint . --ext .js,.ts",
     "check": "solhint -c .solhint.json 'contracts/**/*.sol'",
     "prepare": "husky",
-    "docgen": "npx hardhat docgen"
+    "docgen": "npx hardhat docgen",
+    "deploy-sepolia": "npx hardhat ignition deploy ignition/modules/HyperStaking.ts --network sepolia"
   },
   "repository": {
     "type": "git",

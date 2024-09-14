@@ -48,12 +48,11 @@ const config: HardhatUserConfig = {
     },
     sepolia: {
       url: process.env.SEPOLIA_RPC_URL,
+      chainId: 11155111,
       accounts: {
         mnemonic: process.env.WALLET_MNEMONIC,
       },
-
       initialBaseFeePerGas: 2500000000,
-      chainId: 11155111,
     },
   },
 
@@ -68,6 +67,10 @@ const config: HardhatUserConfig = {
     disambiguatePaths: false,
     runOnCompile: reportSize,
     strict: true,
+  },
+
+  etherscan: {
+    apiKey: process.env.ETHERSCAN_API_KEY,
   },
 };
 
