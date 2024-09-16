@@ -10,9 +10,12 @@ pragma solidity =0.8.24;
 /**
  * @notice Info of each user
  * @param amount Token amount the user has provided
+ * @param locked A mapping of strategy IDs to the amount of tokens locked in those strategies
+ * @param totalLocked The total amount of tokens locked across all strategies
  */
-struct UserInfo {
+struct UserStakingPoolInfo {
     uint256 amount;
+    uint256 totalStakeLocked;
 }
 
 /**
@@ -21,10 +24,10 @@ struct UserInfo {
  * @param stakeToken Address of the token that users stake in this pool
  * @param totalStake
  */
-struct PoolInfo { // TODO consider again this struct fields
-    uint256 poolId; // do we need it here?
+struct StakingPoolInfo { // TODO consider again this struct fields
+    uint256 poolId; // used for validation
     bool native; // hmm
-    address stakeToken; // keccak("native"), currency instead?
+    address stakeToken;
     uint256 totalStake;
 }
 
@@ -34,10 +37,10 @@ struct PoolInfo { // TODO consider again this struct fields
 
 struct StakingStorage {
     /// @notice Info of each user that stakes tokens
-    mapping (uint256 poolId => mapping (address => UserInfo)) userInfo;
+    mapping (uint256 poolId => mapping (address => UserStakingPoolInfo)) userInfo;
 
     /// @notice Info of each staking pool
-    mapping (uint256 poolId => PoolInfo) poolInfo;
+    mapping (uint256 poolId => StakingPoolInfo) poolInfo;
 
     /// @notice Tracks how many pools have been created for each staking token.
     mapping(address stakeToken => uint96) stakeTokenPoolCounts;

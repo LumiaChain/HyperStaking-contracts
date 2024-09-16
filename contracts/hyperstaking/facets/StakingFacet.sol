@@ -4,7 +4,7 @@ pragma solidity =0.8.24;
 // import {IERC20} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20Metadata.sol";
 // import {SafeERC20} from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20.sol";
 
-import {LibStaking, StakingStorage, UserInfo, PoolInfo} from "../libraries/LibStaking.sol";
+import {LibStaking, StakingStorage, UserStakingPoolInfo, StakingPoolInfo} from "../libraries/LibStaking.sol";
 import {IStakingFacet} from "../interfaces/IStakingFacet.sol";
 
 /**
@@ -25,7 +25,7 @@ contract StakingFacet is IStakingFacet {
 
     modifier validatePool(uint256 poolId) {
         StakingStorage storage s = LibStaking.diamondStorage();
-        PoolInfo memory pool = s.poolInfo[poolId];
+        StakingPoolInfo memory pool = s.poolInfo[poolId];
 
         if (poolId != s.poolInfo[poolId].poolId) revert PoolDoesNotExist();
         _;
@@ -43,7 +43,7 @@ contract StakingFacet is IStakingFacet {
         uint256 poolId = _createStakingPool(stakeToken);
 
         // save test pool in the storage
-        s.poolInfo[poolId] = PoolInfo({
+        s.poolInfo[poolId] = StakingPoolInfo({
             poolId: poolId,
             native: true,
             stakeToken: stakeToken,
@@ -65,8 +65,8 @@ contract StakingFacet is IStakingFacet {
     ) public payable validatePool(poolId) {
         StakingStorage storage s = LibStaking.diamondStorage();
 
-        PoolInfo storage pool = s.poolInfo[poolId];
-        UserInfo storage user = s.userInfo[poolId][to];
+        StakingPoolInfo storage pool = s.poolInfo[poolId];
+        UserStakingPoolInfo storage user = s.userInfo[poolId][to];
 
         // Effects
         user.amount += amount;
@@ -88,8 +88,8 @@ contract StakingFacet is IStakingFacet {
     function stakeWithdraw(uint256 poolId, uint256 amount, address to) public validatePool(poolId) {
         StakingStorage storage s = LibStaking.diamondStorage();
 
-        PoolInfo storage pool = s.poolInfo[poolId];
-        UserInfo storage user = s.userInfo[poolId][msg.sender];
+        StakingPoolInfo storage pool = s.poolInfo[poolId];
+        UserStakingPoolInfo storage user = s.userInfo[poolId][msg.sender];
 
         // Effects
         user.amount -= amount;
@@ -108,19 +108,31 @@ contract StakingFacet is IStakingFacet {
 
     // ========= View ========= //
 
-    function userInfo(uint256 poolId, address user) external view returns (UserInfo memory) {
+    function userShare(uint256 poolId, address user) public view returns (uint256) {
+        StakingStorage storage s = LibStaking.diamondStorage();
+
+        StakingPoolInfo storage pool = s.poolInfo[poolId];
+        UserStakingPoolInfo storage userStakingInfo = s.userInfo[poolId][user];
+
+        return userStakingInfo.amount * 1e18 / pool.totalStake;
+    }
+
+    function userInfo(
+        uint256 poolId,
+        address user
+    ) external view returns (UserStakingPoolInfo memory) {
         StakingStorage storage s = LibStaking.diamondStorage();
         return s.userInfo[poolId][user];
     }
 
-    function poolInfo(uint256 poolId) external view returns (PoolInfo memory) {
+    function poolInfo(uint256 poolId) external view returns (StakingPoolInfo memory) {
         StakingStorage storage s = LibStaking.diamondStorage();
         return s.poolInfo[poolId];
     }
 
     // TODO replace with const or Currency
     function nativeTokenAddress() public pure returns (address) {
-        return address(uint160(uint256(keccak256("native"))));
+        return address(uint160(uint256(keccak256("native-eth"))));
     }
 
     function generatePoolId(address stakeToken, uint96 idx) public pure returns (uint256) {
