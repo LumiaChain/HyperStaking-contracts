@@ -11,70 +11,76 @@ export enum FacetCutAction {
   Remove = 2,
 }
 
-export interface SelectorArray extends Array<string> {
+export class SelectorArray extends Array<string> {
   iface?: Interface;
-  remove?: (selectors: SelectorArray, functionNames: string[]) => SelectorArray;
-  get?: (selectors: SelectorArray, functionNames: string[]) => SelectorArray;
+
+  constructor(...args: string[]) {
+    super(...args);
+    // Needed for extending arrays in TypeScript
+    Object.setPrototypeOf(this, SelectorArray.prototype);
+  }
+
+  static getSelectors (iface: Interface): SelectorArray {
+    const selectors = new SelectorArray();
+    selectors.iface = iface;
+
+    for (const f of iface.fragments) {
+      if (f.type === "function") {
+        const functionFragment = f as FunctionFragment;
+        selectors.push(functionFragment.selector);
+      }
+    }
+
+    return selectors;
+  }
+
+  // get function selector from function signature
+  static getSelector (func: string) {
+    return FunctionFragment.from(func).selector;
+  }
+
+  // Method to remove selectors based on function names
+  remove(functionNames: string[]): SelectorArray {
+    const iface = this.iface;
+
+    const filteredSelectors = this.filter((selector) => {
+      return !functionNames.some((fn) => iface?.getFunction(fn)?.selector === selector);
+    });
+    return new SelectorArray(...filteredSelectors);
+  }
+
+  // Method to get selectors based on function names
+  get(functionNames: string[]): SelectorArray {
+    const iface = this.iface;
+
+    const filteredSelectors = this.filter((selector) => {
+      return !functionNames.some((fn) => iface?.getFunction(fn)?.selector === selector);
+    });
+    return new SelectorArray(...filteredSelectors);
+  }
+
+  // Method to push new selector strings into the instance array
+  add(selector: string) {
+    this.push(selector); // Directly use `push` since we're extending Array
+  }
 }
 
-// get function selectors from ABI
-export function getSelectors (iface: Interface): SelectorArray {
-  const selectors: SelectorArray = [];
+// Extract selectors from Contract Interface, return SelectorArray
+export function getSelectors(iface: Interface): SelectorArray {
+  const selectors = new SelectorArray();
+  selectors.iface = iface;
 
-  for (const f of iface.fragments) {
-    if (f.type === "function") {
-      const functionFragment = f as FunctionFragment;
-      selectors.push(functionFragment.selector);
+  for (const fragment of iface.fragments) {
+    if (fragment.type === "function") {
+      const functionFragment = fragment as FunctionFragment;
+      selectors.push(functionFragment.selector); // Push to the array directly
     }
   }
 
-  selectors.iface = iface;
-  selectors.remove = remove;
-  selectors.get = get;
   return selectors;
 }
 
-// get function selector from function signature
-export function getSelector (func: string) {
-  return FunctionFragment.from(func).selector;
-}
-
-// used with getSelectors to remove selectors from an array of selectors
-// functionNames argument is an array of function signatures
-export function remove (this: SelectorArray, functionNames: string[]): SelectorArray {
-  const selectors: SelectorArray = this.filter((v) => {
-    for (const functionName of functionNames) {
-      if (v === this.iface?.getFunction(functionName)?.selector) {
-        return false;
-      }
-    }
-    return true;
-  });
-
-  selectors.iface = this.iface;
-  selectors.remove = this.remove;
-  selectors.get = this.get;
-  return selectors;
-}
-
-// used with getSelectors to get selectors from an array of selectors
-// functionNames argument is an array of function signatures
-export function get (this: SelectorArray, functionNames: string[]): SelectorArray {
-  const selectors: SelectorArray = this.filter((v) => {
-    for (const functionName of functionNames) {
-      if (v === this.iface?.getFunction(functionName)?.selector) {
-        return true;
-      }
-    }
-    return false;
-  });
-  selectors.iface = this.iface;
-  selectors.remove = this.remove;
-  selectors.get = this.get;
-  return selectors;
-}
-
-// remove selectors using an array of signatures
+// Remove selectors using an array of signatures
 export function removeSelectors (selectors: string[], signatures: string[]) {
   const iface = new ethers.Interface(signatures.map(v => "function " + v));
   const removeSelectors = signatures.map(v => iface.getFunction(v)?.selector);
@@ -88,10 +94,11 @@ export type FacetStruct = {
 };
 
 // find a particular address position in the return value of diamondLoupeFacet.facets()
-export function findAddressPositionInFacets (facetAddress: string, facets: FacetStruct[]) {
+export function findAddressPositionInFacets (facetAddress: string, facets: FacetStruct[]): number {
   for (let i = 0; i < facets.length; i++) {
     if (facets[i].facetAddress === facetAddress) {
       return i;
     }
   }
+  return -1;
 }
