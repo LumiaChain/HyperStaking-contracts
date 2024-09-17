@@ -13,7 +13,7 @@ pragma solidity =0.8.24;
  * @param locked A mapping of strategy IDs to the amount of tokens locked in those strategies
  * @param totalLocked The total amount of tokens locked across all strategies
  */
-struct UserStakingPoolInfo {
+struct UserPoolInfo {
     uint256 amount;
     uint256 totalStakeLocked;
 }
@@ -37,7 +37,7 @@ struct StakingPoolInfo { // TODO consider again this struct fields
 
 struct StakingStorage {
     /// @notice Info of each user that stakes tokens
-    mapping (uint256 poolId => mapping (address => UserStakingPoolInfo)) userInfo;
+    mapping (uint256 poolId => mapping (address => UserPoolInfo)) userInfo;
 
     /// @notice Info of each staking pool
     mapping (uint256 poolId => StakingPoolInfo) poolInfo;

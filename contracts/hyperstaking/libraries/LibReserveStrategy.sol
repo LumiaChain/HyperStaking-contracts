@@ -15,10 +15,13 @@ struct UserStrategyInfo {
 struct StrategyInfo {
     uint256 strategyId; // used for validation
     uint256 poolId;
-    address stakeToken;
-    address revenueAsset;
     uint256 totalAllocated;
-    uint256 totalRevenueAssetInvested;
+}
+
+struct RevenueAsset {
+    address asset;
+    uint256 reserve;
+    uint256 price; // TODO price is hardcoded for now (price to ETH)
 }
 
 //================================================================================================//
@@ -28,6 +31,9 @@ struct StrategyInfo {
 struct ReserveStrategyStorage {
     /// @notice Info of each strategy
     mapping (uint256 strategyId => StrategyInfo) strategyInfo;
+
+    /// @notice Info of revenue asset for each strategy
+    mapping (uint256 strategyId => RevenueAsset) revenueAssetInfo;
 
     /// @notice Info of each user that stakes tokens
     mapping (uint256 strategyId => mapping (address => UserStrategyInfo)) userInfo;

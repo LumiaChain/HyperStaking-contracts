@@ -4,8 +4,12 @@ pragma solidity =0.8.24;
 // import {IERC20} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20Metadata.sol";
 // import {SafeERC20} from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20.sol";
 
-import {LibStaking, StakingStorage, UserStakingPoolInfo, StakingPoolInfo} from "../libraries/LibStaking.sol";
 import {IStakingFacet} from "../interfaces/IStakingFacet.sol";
+import {IStakingStrategy} from "../interfaces/IStakingStrategy.sol";
+
+import {
+    LibStaking, StakingStorage, UserPoolInfo, StakingPoolInfo
+} from "../libraries/LibStaking.sol";
 
 /**
  * @title StakingFacet
@@ -60,67 +64,64 @@ contract StakingFacet is IStakingFacet {
      */
     function stakeDeposit(
         uint256 poolId,
+        uint256 strategyId,
         uint256 amount,
         address to
     ) public payable validatePool(poolId) {
         StakingStorage storage s = LibStaking.diamondStorage();
 
         StakingPoolInfo storage pool = s.poolInfo[poolId];
-        UserStakingPoolInfo storage user = s.userInfo[poolId][to];
+        UserPoolInfo storage userPool = s.userInfo[poolId][to];
 
-        // Effects
-        user.amount += amount;
-        pool.totalStake += amount;
-
-        // Interactions
         if (pool.native) {
             if (msg.value != amount) revert DepositBadValue();
         } else {
             revert Unsupported();
         }
 
-        emit StakeDeposit(msg.sender, poolId, amount, to);
+        pool.totalStake += amount;
+        userPool.amount += amount;
+
+        IStakingStrategy(address(this)).allocate(strategyId, amount);
+
+        emit StakeDeposit(msg.sender, to, poolId, strategyId, amount);
     }
 
     /**
      * @notice Main withdraw function
      */
-    function stakeWithdraw(uint256 poolId, uint256 amount, address to) public validatePool(poolId) {
+    function stakeWithdraw(
+        uint256 poolId,
+        uint256 strategyId,
+        uint256 amount,
+        address to
+    ) public validatePool(poolId) returns (uint256 withdrawAmount) {
         StakingStorage storage s = LibStaking.diamondStorage();
 
         StakingPoolInfo storage pool = s.poolInfo[poolId];
-        UserStakingPoolInfo storage user = s.userInfo[poolId][msg.sender];
+        UserPoolInfo storage userPool = s.userInfo[poolId][msg.sender];
 
-        // Effects
-        user.amount -= amount;
-        pool.totalStake -= amount;
+        withdrawAmount = IStakingStrategy(address(this)).exit(strategyId, amount);
 
-        // Interactions
         if (pool.native) {
-            (bool success, ) = to.call{value: amount}("");
+            (bool success, ) = to.call{value: withdrawAmount}("");
             if (!success) revert WithdrawFailedCall();
         } else {
             revert Unsupported();
         }
 
-        emit StakeWithdraw(msg.sender, poolId, amount, to);
+        pool.totalStake -= withdrawAmount;
+        userPool.amount -= withdrawAmount;
+
+        emit StakeWithdraw(msg.sender, to, poolId, strategyId, amount, withdrawAmount);
     }
 
     // ========= View ========= //
 
-    function userShare(uint256 poolId, address user) public view returns (uint256) {
-        StakingStorage storage s = LibStaking.diamondStorage();
-
-        StakingPoolInfo storage pool = s.poolInfo[poolId];
-        UserStakingPoolInfo storage userStakingInfo = s.userInfo[poolId][user];
-
-        return userStakingInfo.amount * 1e18 / pool.totalStake;
-    }
-
-    function userInfo(
+    function userPoolInfo(
         uint256 poolId,
         address user
-    ) external view returns (UserStakingPoolInfo memory) {
+    ) external view returns (UserPoolInfo memory) {
         StakingStorage storage s = LibStaking.diamondStorage();
         return s.userInfo[poolId][user];
     }
@@ -128,6 +129,15 @@ contract StakingFacet is IStakingFacet {
     function poolInfo(uint256 poolId) external view returns (StakingPoolInfo memory) {
         StakingStorage storage s = LibStaking.diamondStorage();
         return s.poolInfo[poolId];
+    }
+
+    function userPoolShare(uint256 poolId, address user) public view returns (uint256) {
+        StakingStorage storage s = LibStaking.diamondStorage();
+
+        StakingPoolInfo storage pool = s.poolInfo[poolId];
+        UserPoolInfo storage userPool = s.userInfo[poolId][user];
+
+        return userPool.amount * 1e18 / pool.totalStake;
     }
 
     // TODO replace with const or Currency
