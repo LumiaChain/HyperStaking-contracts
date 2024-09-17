@@ -2,10 +2,12 @@ import { /* time, */ loadFixture } from "@nomicfoundation/hardhat-toolbox/networ
 // import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import hre from "hardhat";
+import { parseEther } from "ethers";
 
 import DiamondModule from "../ignition/modules/Diamond";
 import HyperStakingModule from "../ignition/modules/HyperStaking";
 import RevertingContractModule from "../ignition/modules/RevertingContract";
+import TestERC20Module from "../ignition/modules/TestERC20";
 
 describe("Staking", function () {
   async function deployDiamond() {
@@ -21,16 +23,39 @@ describe("Staking", function () {
     const [owner, alice] = await hre.ethers.getSigners();
     const { diamond } = await hre.ignition.deploy(HyperStakingModule);
 
-    const stakingFacet = await hre.ethers.getContractAt("StakingFacet", diamond);
+    const stakingFacet = await hre.ethers.getContractAt("IStakingFacet", diamond);
+    const strategy = await hre.ethers.getContractAt("IStakingStrategy", diamond);
+
+    const { testERC20 } = await hre.ignition.deploy(TestERC20Module, {
+      parameters: {
+        TestERC20Module: {
+          symbol: "testWstETH",
+          name: "Test Wrapped Liquid Staked ETH",
+        },
+      },
+    });
+    const testWstETH = testERC20;
 
     await stakingFacet.init();
     const nativeTokenAddress = await stakingFacet.nativeTokenAddress();
     const ethPoolId = await stakingFacet.generatePoolId(nativeTokenAddress, 0);
 
-    return { diamond, stakingFacet, ethPoolId, owner, alice };
+    // strategy with neutral to eth 1:1 asset price
+    await strategy.init(ethPoolId, testWstETH, parseEther("1"));
+    const ethStrategy0Id = await strategy.generateStrategyId(ethPoolId, 0);
+
+    /* eslint-disable object-property-newline */
+    return {
+      diamond, // diamond
+      stakingFacet, strategy, // diamond facets
+      testWstETH, // test tokens
+      ethPoolId, ethStrategy0Id, // ids
+      owner, alice, // addresses
+    };
+    /* eslint-enable object-property-newline */
   }
 
-  describe("Diamond", function () {
+  describe("Diamond Ownership", function () {
     it("Should set the right owner", async function () {
       const { ownershipFacet, owner } = await loadFixture(deployDiamond);
 
@@ -47,33 +72,33 @@ describe("Staking", function () {
 
   describe("Staking", function () {
     it("Should be able to deposit stake", async function () {
-      const { stakingFacet, ethPoolId, owner, alice } = await loadFixture(deployHyperStaking);
+      const { stakingFacet, ethPoolId, ethStrategy0Id, owner, alice } = await loadFixture(deployHyperStaking);
 
-      const stakeAmount = hre.ethers.parseEther("5");
-      await expect(stakingFacet.stakeDeposit(ethPoolId, stakeAmount, owner, { value: stakeAmount }))
+      const stakeAmount = parseEther("5");
+      await expect(stakingFacet.stakeDeposit(ethPoolId, ethStrategy0Id, stakeAmount, owner, { value: stakeAmount }))
         .to.changeEtherBalances(
           [owner, stakingFacet],
           [-stakeAmount, stakeAmount],
         );
 
       // event
-      await expect(stakingFacet.stakeDeposit(ethPoolId, stakeAmount, owner, { value: stakeAmount }))
+      await expect(stakingFacet.stakeDeposit(ethPoolId, ethStrategy0Id, stakeAmount, owner, { value: stakeAmount }))
         .to.emit(stakingFacet, "StakeDeposit")
-        .withArgs(owner.address, ethPoolId, stakeAmount, owner.address);
+        .withArgs(owner.address, owner.address, ethPoolId, ethStrategy0Id, stakeAmount);
 
-      const stakeAmountForAlice = hre.ethers.parseEther("11");
+      const stakeAmountForAlice = parseEther("11");
       await expect(stakingFacet.stakeDeposit(
-        ethPoolId, stakeAmountForAlice, alice, { value: stakeAmountForAlice }),
+        ethPoolId, ethStrategy0Id, stakeAmountForAlice, alice, { value: stakeAmountForAlice }),
       )
         .to.emit(stakingFacet, "StakeDeposit")
-        .withArgs(owner.address, ethPoolId, stakeAmountForAlice, alice.address);
+        .withArgs(owner.address, alice.address, ethPoolId, ethStrategy0Id, stakeAmountForAlice);
 
       // UserInfo
       expect(
-        (await stakingFacet.userInfo(ethPoolId, owner.address)).amount,
+        (await stakingFacet.userPoolInfo(ethPoolId, owner.address)).amount,
       ).to.equal(stakeAmount * 2n);
       expect(
-        (await stakingFacet.userInfo(ethPoolId, alice.address)).amount,
+        (await stakingFacet.userPoolInfo(ethPoolId, alice.address)).amount,
       ).to.equal(stakeAmountForAlice);
 
       // PoolInfo
@@ -82,24 +107,24 @@ describe("Staking", function () {
     });
 
     it("Should be able to withdraw stake", async function () {
-      const { stakingFacet, ethPoolId, owner, alice } = await loadFixture(deployHyperStaking);
+      const { stakingFacet, ethPoolId, ethStrategy0Id, owner, alice } = await loadFixture(deployHyperStaking);
 
-      const stakeAmount = hre.ethers.parseEther("2.2");
-      const withdrawAmount = hre.ethers.parseEther("0.5");
+      const stakeAmount = parseEther("2.2");
+      const withdrawAmount = parseEther("0.5");
 
-      await stakingFacet.stakeDeposit(ethPoolId, stakeAmount, owner, { value: stakeAmount });
+      await stakingFacet.stakeDeposit(ethPoolId, ethStrategy0Id, stakeAmount, owner, { value: stakeAmount });
 
-      await expect(stakingFacet.stakeWithdraw(ethPoolId, withdrawAmount, owner))
+      await expect(stakingFacet.stakeWithdraw(ethPoolId, ethStrategy0Id, withdrawAmount, owner))
         .to.changeEtherBalances(
           [owner, stakingFacet],
           [withdrawAmount, -withdrawAmount],
         );
 
-      await expect(stakingFacet.stakeWithdraw(ethPoolId, withdrawAmount, owner))
+      await expect(stakingFacet.stakeWithdraw(ethPoolId, ethStrategy0Id, withdrawAmount, owner))
         .to.emit(stakingFacet, "StakeWithdraw")
         .withArgs(owner.address, ethPoolId, withdrawAmount, owner.address);
 
-      await expect(stakingFacet.stakeWithdraw(ethPoolId, withdrawAmount, alice))
+      await expect(stakingFacet.stakeWithdraw(ethPoolId, ethStrategy0Id, withdrawAmount, alice))
         .to.changeEtherBalances(
           [owner, stakingFacet, alice],
           [0, -withdrawAmount, withdrawAmount],
@@ -144,36 +169,46 @@ describe("Staking", function () {
 
     describe("Errors", function () {
       it("DepositBadValue", async function () {
-        const { stakingFacet, ethPoolId, owner } = await loadFixture(deployHyperStaking);
+        const { stakingFacet, ethPoolId, ethStrategy0Id, owner } = await loadFixture(deployHyperStaking);
 
-        const stakeAmount = hre.ethers.parseEther("1");
-        const value = hre.ethers.parseEther("0.99");
+        const stakeAmount = parseEther("1");
+        const value = parseEther("0.99");
 
-        await expect(stakingFacet.stakeDeposit(ethPoolId, stakeAmount, owner, { value }))
+        await expect(stakingFacet.stakeDeposit(ethPoolId, ethStrategy0Id, stakeAmount, owner, { value }))
           .to.be.revertedWithCustomError(stakingFacet, "DepositBadValue");
       });
 
       it("WithdrawFailedCall", async function () {
-        const { stakingFacet, ethPoolId, owner } = await loadFixture(deployHyperStaking);
+        const { stakingFacet, ethPoolId, ethStrategy0Id, owner } = await loadFixture(deployHyperStaking);
 
         // test contract which reverts on payable call
         const { revertingContract } = await hre.ignition.deploy(RevertingContractModule);
 
-        const stakeAmount = hre.ethers.parseEther("1");
+        const stakeAmount = parseEther("1");
 
-        await stakingFacet.stakeDeposit(ethPoolId, stakeAmount, owner, { value: stakeAmount });
-        await expect(stakingFacet.stakeWithdraw(ethPoolId, stakeAmount, revertingContract))
+        await stakingFacet.stakeDeposit(ethPoolId, ethStrategy0Id, stakeAmount, owner, { value: stakeAmount });
+        await expect(stakingFacet.stakeWithdraw(ethPoolId, ethStrategy0Id, stakeAmount, revertingContract))
           .to.be.revertedWithCustomError(stakingFacet, "WithdrawFailedCall");
       });
 
       it("PoolDoesNotExist", async function () {
-        const { stakingFacet, owner } = await loadFixture(deployHyperStaking);
+        const { stakingFacet, ethStrategy0Id, owner } = await loadFixture(deployHyperStaking);
 
         const badPoolId = "0xabca816169f82123e129cf759e8d851bd8a678458c95df05d183240301c330f9";
 
-        await expect(stakingFacet.stakeDeposit(badPoolId, 1, owner, { value: 1 }))
+        await expect(stakingFacet.stakeDeposit(badPoolId, ethStrategy0Id, 1, owner, { value: 1 }))
           .to.be.revertedWithCustomError(stakingFacet, "PoolDoesNotExist");
       });
+
+      // TODO
+      // it("StrategyDoesNotExist", async function () {
+      //  const { stakingFacet, ethPoolId, owner } = await loadFixture(deployHyperStaking);
+      //
+      //  const badStrategyId = "0xabca816169f82123e129cf759e8d851bd8a678458c95df05d183240301c330f9";
+      //
+      //  await expect(stakingFacet.stakeDeposit(ethPoolId, badStrategyId, 1, owner, { value: 1 }))
+      //    .to.be.revertedWithCustomError(stakingFacet, "StrategyDoesNotExist");
+      // });
     });
   });
 });

@@ -35,26 +35,44 @@ export class SelectorArray extends Array<string> {
   }
 
   // get function selector from function signature
-  static getSelector (func: string) {
-    return FunctionFragment.from(func).selector;
+  static getSelector (funcSig: string) {
+    return FunctionFragment.from(funcSig).selector;
   }
 
-  // Method to remove selectors based on function names
-  remove(functionNames: string[]): SelectorArray {
-    const iface = this.iface;
-
+  // Method to remove selectors based on function signatures
+  remove(funcSigs: string[]): SelectorArray {
     const filteredSelectors = this.filter((selector) => {
-      return !functionNames.some((fn) => iface?.getFunction(fn)?.selector === selector);
+      return !funcSigs.some((fn) => SelectorArray.getSelector(fn) === selector);
+    });
+
+    return new SelectorArray(...filteredSelectors);
+  }
+
+  // Method to get selectors based on function signatures
+  get(funcSigs: string[]): SelectorArray {
+    const filteredSelectors = this.filter((selector) => {
+      return funcSigs.some((fn) => SelectorArray.getSelector(fn) === selector);
     });
     return new SelectorArray(...filteredSelectors);
   }
 
-  // Method to get selectors based on function names
-  get(functionNames: string[]): SelectorArray {
+  // Method to remove selectors based on function names
+  removeByNames(funcNames: string[]): SelectorArray {
     const iface = this.iface;
 
     const filteredSelectors = this.filter((selector) => {
-      return !functionNames.some((fn) => iface?.getFunction(fn)?.selector === selector);
+      return !funcNames.some((fn) => iface?.getFunction(fn)?.selector === selector);
+    });
+
+    return new SelectorArray(...filteredSelectors);
+  }
+
+  // Method to get selectors based on function names
+  getByNames(functionNames: string[]): SelectorArray {
+    const iface = this.iface;
+
+    const filteredSelectors = this.filter((selector) => {
+      return functionNames.some((fn) => iface?.getFunction(fn)?.selector === selector);
     });
     return new SelectorArray(...filteredSelectors);
   }

@@ -11,10 +11,10 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const { diamond } = m.useModule(DiamondModule);
 
   const stakingFacet = m.contract("StakingFacet");
-  const diamondCut = m.contractAt("IDiamondCut", diamond);
+  const stakingFacetInterface = getContractInterface("IStakingFacet");
 
-  // needed to get the function selectors
-  const stakingFacetInterface = getContractInterface("StakingFacet");
+  const strategyFacet = m.contract("ReserveStrategyFacet");
+  const strategyFacetInterface = getContractInterface("IStakingStrategy");
 
   // cut StakingFacet
   const cut = [
@@ -23,10 +23,16 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       action: FacetCutAction.Add,
       functionSelectors: getSelectors(stakingFacetInterface),
     },
+    {
+      facetAddress: strategyFacet,
+      action: FacetCutAction.Add,
+      functionSelectors: getSelectors(strategyFacetInterface),
+    },
   ];
 
-  // ZeroAddress for init function
-  const owner = m.getAccount(0);
+  const owner = m.getAccount(0); // ZeroAddress for init function
+
+  const diamondCut = m.contractAt("IDiamondCut", diamond);
   m.call(diamondCut, "diamondCut", [cut, ZeroAddress, "0x"], { from: owner });
 
   return { diamond };
