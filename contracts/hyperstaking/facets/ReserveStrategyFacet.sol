@@ -49,6 +49,7 @@ contract ReserveStrategyFacet is IStakingStrategy {
     /// @inheritdoc IStakingStrategy
     function allocate(
         uint256 strategyId,
+        address user,
         uint256 amount
     ) external validateStrategy(strategyId) {
         ReserveStrategyStorage storage r = LibReserveStrategy.diamondStorage();
@@ -56,46 +57,51 @@ contract ReserveStrategyFacet is IStakingStrategy {
 
         StrategyInfo storage strategy = r.strategyInfo[strategyId];
         RevenueAsset storage asset = r.revenueAssetInfo[strategyId];
-        UserPoolInfo storage userPool = s.userInfo[strategy.poolId][msg.sender];
-        UserStrategyInfo storage userStrategy = r.userInfo[strategyId][msg.sender];
+        UserPoolInfo storage userPool = s.userInfo[strategy.poolId][user];
+        UserStrategyInfo storage userStrategy = r.userInfo[strategyId][user];
 
         userStrategy.lockedStake += amount;
-        userPool.totalStakeLocked += amount;
+        userPool.totalStakeLocked += amount; // hmm
         userStrategy.revenueAssetAllocated = amount * 1e18 / asset.price;
 
         strategy.totalAllocated += amount;
 
-        emit Allocate(strategyId, strategy.poolId, amount);
+        emit Allocate(strategyId, strategy.poolId, user, amount);
     }
 
     /// @inheritdoc IStakingStrategy
     function exit(
         uint256 strategyId,
+        address user,
         uint256 amount
     ) external returns (uint256 exitAmount) {
         ReserveStrategyStorage storage r = LibReserveStrategy.diamondStorage();
         StakingStorage storage s = LibStaking.diamondStorage();
 
         StrategyInfo storage strategy = r.strategyInfo[strategyId];
-        UserPoolInfo storage userPool = s.userInfo[strategy.poolId][msg.sender];
-        UserStrategyInfo storage userStrategy = r.userInfo[strategyId][msg.sender];
+        RevenueAsset storage asset = r.revenueAssetInfo[strategyId];
+        UserPoolInfo storage userPool = s.userInfo[strategy.poolId][user];
+        UserStrategyInfo storage userStrategy = r.userInfo[strategyId][user];
 
-        exitAmount = calcUserExitAmount(strategyId, msg.sender, amount);
+        exitAmount = calcUserExitAmount(strategyId, user, amount);
 
         // user revenue
-        int256 revenue = int256(exitAmount - amount);
+        int256 revenue = int256(exitAmount) - int256(amount);
 
-        // Effect
         userStrategy.lockedStake -= amount;
-        userPool.totalStakeLocked -= amount;
+        userPool.totalStakeLocked -= amount; // TODO handle userPool in staking
+        userStrategy.revenueAssetAllocated -= amount * 1e18 / asset.price;
 
         strategy.totalAllocated -= amount;
 
-        userPool.amount += uint256(revenue);
+        if (revenue > 0)
+            userPool.amount += uint256(revenue);
+        else
+            userPool.amount -= uint256(-revenue);
 
         // TODO ensure proper handling of revenueAssetAllocated once actual protocols are integrated
 
-        emit Exit(strategyId, strategy.poolId, amount, revenue);
+        emit Exit(strategyId, strategy.poolId, user, amount, revenue);
 
         return exitAmount;
     }
@@ -113,7 +119,7 @@ contract ReserveStrategyFacet is IStakingStrategy {
 
         asset.reserve += amount;
 
-        emit RevenueAssetSupply(strategyId, asset.asset, amount);
+        emit RevenueAssetSupply(msg.sender, strategyId, asset.asset, amount);
     }
 
     // TODO ACL
@@ -129,7 +135,7 @@ contract ReserveStrategyFacet is IStakingStrategy {
 
         asset.reserve -= amount;
 
-        emit RevenueAssetWithdraw(strategyId, asset.asset, amount);
+        emit RevenueAssetWithdraw(msg.sender, strategyId, asset.asset, amount);
     }
 
     // ========= View ========= //
@@ -166,8 +172,7 @@ contract ReserveStrategyFacet is IStakingStrategy {
 
         uint256 totalAllocated = strategy.totalAllocated;
 
-        // use 1e18 as a scaling factor, where 0.1 ETH == 10%
-        return userAllocation * 1e18 / totalAllocated;
+        return userAllocation * LibStaking.PRECISSION_FACTOR / totalAllocated;
     }
 
     /// @inheritdoc IStakingStrategy
@@ -181,13 +186,16 @@ contract ReserveStrategyFacet is IStakingStrategy {
         UserStrategyInfo storage userStrategy = r.userInfo[strategyId][user];
         RevenueAsset storage asset = r.revenueAssetInfo[strategyId];
 
-        // share part of the total available for user to exit (+ 1e18 factor)
-        uint256 exitPart = (amount * 1e18 / userStrategy.lockedStake);
+        // share part of the total available for user to exit
+        uint256 exitPart = (amount * LibStaking.PRECISSION_FACTOR / userStrategy.lockedStake);
 
         // The total amount of ETH if the entire reserve were converted back to ETH
-        uint256 totalEthEquivalent = userStrategy.revenueAssetAllocated * asset.price / 1e18;
+        uint256 totalEthEquivalent =
+            userStrategy.revenueAssetAllocated * asset.price / LibStaking.PRECISSION_FACTOR;
 
-        return exitPart * userStrategyShare(strategyId, user) / 1e18 * totalEthEquivalent / 1e18;
+        return
+            exitPart * userStrategyShare(strategyId, user) / LibStaking.PRECISSION_FACTOR
+            * totalEthEquivalent / 1e18; // TODO use token decimals
     }
 
     // TODO remove, only a test mockup

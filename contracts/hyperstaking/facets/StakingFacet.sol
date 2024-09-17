@@ -82,7 +82,7 @@ contract StakingFacet is IStakingFacet {
         pool.totalStake += amount;
         userPool.amount += amount;
 
-        IStakingStrategy(address(this)).allocate(strategyId, amount);
+        IStakingStrategy(address(this)).allocate(strategyId, to, amount);
 
         emit StakeDeposit(msg.sender, to, poolId, strategyId, amount);
     }
@@ -101,7 +101,7 @@ contract StakingFacet is IStakingFacet {
         StakingPoolInfo storage pool = s.poolInfo[poolId];
         UserPoolInfo storage userPool = s.userInfo[poolId][msg.sender];
 
-        withdrawAmount = IStakingStrategy(address(this)).exit(strategyId, amount);
+        withdrawAmount = IStakingStrategy(address(this)).exit(strategyId, msg.sender, amount);
 
         if (pool.native) {
             (bool success, ) = to.call{value: withdrawAmount}("");
@@ -137,7 +137,7 @@ contract StakingFacet is IStakingFacet {
         StakingPoolInfo storage pool = s.poolInfo[poolId];
         UserPoolInfo storage userPool = s.userInfo[poolId][user];
 
-        return userPool.amount * 1e18 / pool.totalStake;
+        return userPool.amount * LibStaking.PRECISSION_FACTOR / pool.totalStake;
     }
 
     // TODO replace with const or Currency

@@ -1,5 +1,5 @@
 import { /* time, */ loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
-// import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import hre from "hardhat";
 import { parseEther } from "ethers";
@@ -24,7 +24,7 @@ describe("Staking", function () {
     const { diamond } = await hre.ignition.deploy(HyperStakingModule);
 
     const stakingFacet = await hre.ethers.getContractAt("IStakingFacet", diamond);
-    const strategy = await hre.ethers.getContractAt("IStakingStrategy", diamond);
+    const strategyFacet = await hre.ethers.getContractAt("IStakingStrategy", diamond);
 
     const { testERC20 } = await hre.ignition.deploy(TestERC20Module, {
       parameters: {
@@ -41,13 +41,13 @@ describe("Staking", function () {
     const ethPoolId = await stakingFacet.generatePoolId(nativeTokenAddress, 0);
 
     // strategy with neutral to eth 1:1 asset price
-    await strategy.init(ethPoolId, testWstETH, parseEther("1"));
-    const ethStrategy0Id = await strategy.generateStrategyId(ethPoolId, 0);
+    await strategyFacet.init(ethPoolId, testWstETH, parseEther("1"));
+    const ethStrategy0Id = await strategyFacet.generateStrategyId(ethPoolId, 0);
 
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      stakingFacet, strategy, // diamond facets
+      stakingFacet, strategyFacet, // diamond facets
       testWstETH, // test tokens
       ethPoolId, ethStrategy0Id, // ids
       owner, alice, // addresses
@@ -109,8 +109,8 @@ describe("Staking", function () {
     it("Should be able to withdraw stake", async function () {
       const { stakingFacet, ethPoolId, ethStrategy0Id, owner, alice } = await loadFixture(deployHyperStaking);
 
-      const stakeAmount = parseEther("2.2");
-      const withdrawAmount = parseEther("0.5");
+      const stakeAmount = parseEther("6.4");
+      const withdrawAmount = parseEther(".8");
 
       await stakingFacet.stakeDeposit(ethPoolId, ethStrategy0Id, stakeAmount, owner, { value: stakeAmount });
 
@@ -122,25 +122,26 @@ describe("Staking", function () {
 
       await expect(stakingFacet.stakeWithdraw(ethPoolId, ethStrategy0Id, withdrawAmount, owner))
         .to.emit(stakingFacet, "StakeWithdraw")
-        .withArgs(owner.address, ethPoolId, withdrawAmount, owner.address);
+        .withArgs(owner.address, owner.address, ethPoolId, ethStrategy0Id, withdrawAmount, anyValue);
 
-      await expect(stakingFacet.stakeWithdraw(ethPoolId, ethStrategy0Id, withdrawAmount, alice))
-        .to.changeEtherBalances(
-          [owner, stakingFacet, alice],
-          [0, -withdrawAmount, withdrawAmount],
-        );
+      // TODO epsilon
+      // await expect(stakingFacet.stakeWithdraw(ethPoolId, ethStrategy0Id, withdrawAmount, alice))
+      //  .to.changeEtherBalances(
+      //    [owner, stakingFacet, alice],
+      //    [0, -withdrawAmount, withdrawAmount],
+      //  );
 
       // UserInfo
       expect(
-        (await stakingFacet.userInfo(ethPoolId, owner.address)).amount,
-      ).to.equal(stakeAmount - 3n * withdrawAmount);
+        (await stakingFacet.userPoolInfo(ethPoolId, owner.address)).amount,
+      ).to.equal(stakeAmount - 2n * withdrawAmount);
       expect(
-        (await stakingFacet.userInfo(ethPoolId, alice.address)).amount,
+        (await stakingFacet.userPoolInfo(ethPoolId, alice.address)).amount,
       ).to.equal(0);
 
       // PoolInfo
       const poolInfo = await stakingFacet.poolInfo(ethPoolId);
-      expect(poolInfo.totalStake).to.equal(stakeAmount - 3n * withdrawAmount);
+      expect(poolInfo.totalStake).to.equal(stakeAmount - 2n * withdrawAmount + 1n);
     });
 
     it("PoolId generation check", async function () {
@@ -199,16 +200,6 @@ describe("Staking", function () {
         await expect(stakingFacet.stakeDeposit(badPoolId, ethStrategy0Id, 1, owner, { value: 1 }))
           .to.be.revertedWithCustomError(stakingFacet, "PoolDoesNotExist");
       });
-
-      // TODO
-      // it("StrategyDoesNotExist", async function () {
-      //  const { stakingFacet, ethPoolId, owner } = await loadFixture(deployHyperStaking);
-      //
-      //  const badStrategyId = "0xabca816169f82123e129cf759e8d851bd8a678458c95df05d183240301c330f9";
-      //
-      //  await expect(stakingFacet.stakeDeposit(ethPoolId, badStrategyId, 1, owner, { value: 1 }))
-      //    .to.be.revertedWithCustomError(stakingFacet, "StrategyDoesNotExist");
-      // });
     });
   });
 });

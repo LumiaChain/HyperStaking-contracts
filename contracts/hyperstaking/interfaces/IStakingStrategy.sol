@@ -13,11 +13,32 @@ interface IStakingStrategy {
     //                                          Events                                            //
     //============================================================================================//
 
-    event Allocate(uint256 indexed strategyId, uint256 indexed poolId, uint256 amount);
-    event Exit(uint256 indexed strategyId, uint256 indexed poolId, uint256 amount, int256 revenue);
+    event Allocate(
+        uint256 indexed strategyId,
+        uint256 indexed poolId,
+        address indexed user,
+        uint256 amount
+    );
+    event Exit(
+        uint256 indexed strategyId,
+        uint256 indexed poolId,
+        address indexed user,
+        uint256 amount,
+        int256 revenue
+    );
 
-    event RevenueAssetSupply(uint256 indexed strategyId, address indexed asset, uint256 amount);
-    event RevenueAssetWithdraw(uint256 indexed strategyId, address indexed asset, uint256 amount);
+    event RevenueAssetSupply(
+        address indexed from,
+        uint256 indexed strategyId,
+        address indexed asset,
+        uint256 amount
+    );
+    event RevenueAssetWithdraw(
+        address indexed to,
+        uint256 indexed strategyId,
+        address indexed asset,
+        uint256 amount
+    );
 
     event StrategyCreate(
         address indexed from,
@@ -46,13 +67,17 @@ interface IStakingStrategy {
      * @notice Allocates a specified amount of the stake token from staking pool strategy
      * @param amount The amount of the asset to allocate from the reserve
      */
-    function allocate(uint256 strategyId, uint256 amount) external;
+    function allocate(uint256 strategyId, address user, uint256 amount) external;
 
     /**
      * @notice Withdraws a specified amount of the token from the reserve back to the staking pool
      * @param amount The amount of the asset to withdraw and return to the reserve
      */
-    function exit(uint256 strategyId, uint256 amount) external returns (uint256 exitAmount);
+    function exit(
+        uint256 strategyId,
+        address user,
+        uint256 amount
+    ) external returns (uint256 exitAmount);
 
     // TODO ACL
     function supplyRevenueAsset(uint256 strategyId, uint256 amount) external;

@@ -6,8 +6,6 @@ pragma solidity =0.8.24;
 //================================================================================================//
 
 struct UserStrategyInfo {
-    uint256 strategyId; // used for validation
-    uint256 poolId;
     uint256 lockedStake;
     uint256 revenueAssetAllocated;
 }
@@ -21,7 +19,7 @@ struct StrategyInfo {
 struct RevenueAsset {
     address asset;
     uint256 reserve;
-    uint256 price; // TODO price is hardcoded for now (price to ETH)
+    uint256 price; // TODO price is hardcoded for now (price to ETH) (1e18 precission)
 }
 
 //================================================================================================//

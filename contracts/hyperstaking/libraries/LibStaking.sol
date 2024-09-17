@@ -49,6 +49,9 @@ struct StakingStorage {
 library LibStaking {
   bytes32 constant internal STAKING_STORAGE_POSITION = keccak256("hyperstaking-staking.storage");
 
+  // 1e18 as a scaling factor, e.g. for shares, where 0.1 ETH == 10%
+  uint256 constant internal PRECISSION_FACTOR = 1e18;
+
   function diamondStorage() internal pure returns (StakingStorage storage s) {
     bytes32 position = STAKING_STORAGE_POSITION;
     assembly {
