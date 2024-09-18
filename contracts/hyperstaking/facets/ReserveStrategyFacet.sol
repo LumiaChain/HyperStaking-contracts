@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity =0.8.24;
+pragma solidity =0.8.27;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -29,7 +29,7 @@ contract ReserveStrategyFacet is IStakingStrategy {
         ReserveStrategyStorage storage r = LibReserveStrategy.diamondStorage();
         StrategyInfo memory strategy = r.strategyInfo[strategyId];
 
-        if (strategyId != strategy.strategyId) revert StrategyDoesNotExist();
+        require(strategyId == strategy.strategyId, StrategyDoesNotExist());
         _;
     }
 

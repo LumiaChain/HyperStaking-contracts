@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity =0.8.24;
+pragma solidity =0.8.27;
 
 import {UserPoolInfo, StakingPoolInfo} from "../libraries/LibStaking.sol";
 

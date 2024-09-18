@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity =0.8.24;
+pragma solidity =0.8.27;
 
 // import {IERC20} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20Metadata.sol";
 // import {SafeERC20} from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20.sol";
@@ -31,7 +31,7 @@ contract StakingFacet is IStakingFacet {
         StakingStorage storage s = LibStaking.diamondStorage();
         StakingPoolInfo memory pool = s.poolInfo[poolId];
 
-        if (poolId != s.poolInfo[poolId].poolId) revert PoolDoesNotExist();
+        require(poolId == s.poolInfo[poolId].poolId, PoolDoesNotExist());
         _;
     }
 
