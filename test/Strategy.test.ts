@@ -1,12 +1,14 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
-import hre from "hardhat";
+import hre, { ethers } from "hardhat";
 import { parseEther } from "ethers";
 
 import HyperStakingModule from "../ignition/modules/HyperStaking";
+import PirexModule from "../ignition/modules/Pirex";
 import TestERC20Module from "../ignition/modules/TestERC20";
+import { PirexEth } from "../typechain-types";
 
-describe("Staking", function () {
+describe("Strategy", function () {
   async function deployHyperStaking() {
     const [owner, alice] = await hre.ethers.getSigners();
     const { diamond } = await hre.ignition.deploy(HyperStakingModule);
@@ -43,6 +45,17 @@ describe("Staking", function () {
       owner, alice, // addresses
     };
     /* eslint-enable object-property-newline */
+  }
+
+  async function deployAndMockPirex() {
+    const [owner, alice, rewardRecipient] = await hre.ethers.getSigners();
+
+    const { pxEth, upxEth, pirexEth, autoPxEth } = await hre.ignition.deploy(PirexModule);
+
+    // increase rewards buffer
+    await (pirexEth.connect(rewardRecipient) as PirexEth).harvest(await ethers.provider.getBlockNumber(), { value: parseEther("100") });
+
+    return { pxEth, upxEth, pirexEth, autoPxEth, owner, alice };
   }
 
   describe("ReserveStrategy", function () {
@@ -146,6 +159,43 @@ describe("Staking", function () {
       //  await expect(stakingFacet.stakeDeposit(ethPoolId, badStrategyId, 1, owner, { value: 1 }))
       //    .to.be.revertedWithCustomError(stakingFacet, "StrategyDoesNotExist");
       // });
+    });
+  });
+
+  describe.only("Pirex integration", function () {
+    it("It should be possible to deposit ETH and get pxETH", async function () {
+      const { pxEth, pirexEth, owner } = await loadFixture(deployAndMockPirex);
+
+      await pirexEth.deposit(owner.address, false, { value: parseEther("1") });
+
+      expect(await pxEth.balanceOf(owner.address)).to.be.greaterThan(0);
+    });
+
+    it("It should be possible to deposit ETH and auto-compund it with apxEth", async function () {
+      const { pxEth, pirexEth, autoPxEth, owner } = await loadFixture(deployAndMockPirex);
+
+      await pirexEth.deposit(owner.address, true, { value: parseEther("5") });
+
+      expect(await pxEth.balanceOf(owner.address)).to.equal(0);
+      expect(await autoPxEth.balanceOf(owner.address)).to.be.greaterThan(0);
+    });
+
+    it("It should be possible to instant Redeem apxEth back to ETH", async function () {
+      const { pxEth, pirexEth, autoPxEth, owner, alice } = await loadFixture(deployAndMockPirex);
+
+      const initialDeposit = parseEther("1");
+      await pirexEth.deposit(owner.address, true, { value: initialDeposit });
+
+      const totalAssets = await autoPxEth.totalAssets();
+      await autoPxEth.withdraw(totalAssets / 2n, owner.address, owner.address);
+
+      await expect(pirexEth.instantRedeemWithPxEth(initialDeposit / 2n, alice.address))
+        .to.changeEtherBalances(
+          [pirexEth, alice],
+          [-initialDeposit / 2n, initialDeposit / 2n],
+        );
+
+      expect(await pxEth.balanceOf(owner.address)).to.equal(0);
     });
   });
 });
