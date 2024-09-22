@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-// import {IERC20} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20Metadata.sol";
-// import {SafeERC20} from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20.sol";
-
 import {IStakingFacet} from "../interfaces/IStakingFacet.sol";
-import {IStakingStrategy} from "../interfaces/IStakingStrategy.sol";
+import {IStrategyVault} from "../interfaces/IStrategyVault.sol";
 
 import {
     LibStaking, StakingStorage, UserPoolInfo, StakingPoolInfo
 } from "../libraries/LibStaking.sol";
+
+import {LibStrategyVault, StrategyVaultStorage} from "../libraries/LibStrategyVault.sol";
 
 /**
  * @title StakingFacet
@@ -21,17 +20,17 @@ import {
  * @dev This contract is a facet of Diamond Proxy.
  */
 contract StakingFacet is IStakingFacet {
-    // using SafeERC20 for IERC20;
-
     //============================================================================================//
     //                                         Modifiers                                          //
     //============================================================================================//
 
-    modifier validatePool(uint256 poolId) {
+    // validate pool and strategy valut
+    modifier validate(uint256 poolId, address strategy) {
         StakingStorage storage s = LibStaking.diamondStorage();
-        StakingPoolInfo memory pool = s.poolInfo[poolId];
+        StrategyVaultStorage storage r = LibStrategyVault.diamondStorage();
 
         require(poolId == s.poolInfo[poolId].poolId, PoolDoesNotExist());
+        require(poolId == r.vaultInfo[strategy].poolId, VaultDoesNotExist());
         _;
     }
 
@@ -64,10 +63,10 @@ contract StakingFacet is IStakingFacet {
      */
     function stakeDeposit(
         uint256 poolId,
-        uint256 strategyId,
+        address strategy,
         uint256 amount,
         address to
-    ) public payable validatePool(poolId) {
+    ) public payable validate(poolId, strategy) {
         StakingStorage storage s = LibStaking.diamondStorage();
 
         StakingPoolInfo storage pool = s.poolInfo[poolId];
@@ -80,11 +79,12 @@ contract StakingFacet is IStakingFacet {
         }
 
         pool.totalStake += amount;
-        userPool.amount += amount;
+        userPool.staked += amount;
 
-        IStakingStrategy(address(this)).allocate(strategyId, to, amount);
+        // will lock user stake
+        IStrategyVault(address(this)).deposit(strategy, amount, to);
 
-        emit StakeDeposit(msg.sender, to, poolId, strategyId, amount);
+        emit StakeDeposit(msg.sender, to, poolId, strategy, amount);
     }
 
     /**
@@ -92,16 +92,20 @@ contract StakingFacet is IStakingFacet {
      */
     function stakeWithdraw(
         uint256 poolId,
-        uint256 strategyId,
+        address strategy,
         uint256 amount,
         address to
-    ) public validatePool(poolId) returns (uint256 withdrawAmount) {
+    ) public validate(poolId, strategy) returns (uint256 withdrawAmount) {
         StakingStorage storage s = LibStaking.diamondStorage();
 
         StakingPoolInfo storage pool = s.poolInfo[poolId];
         UserPoolInfo storage userPool = s.userInfo[poolId][msg.sender];
 
-        withdrawAmount = IStakingStrategy(address(this)).exit(strategyId, msg.sender, amount);
+        withdrawAmount = IStrategyVault(address(this)).withdraw(strategy, amount, msg.sender);
+
+        // stake should be unlocked at this point
+        pool.totalStake -= amount;
+        userPool.staked -= amount;
 
         if (pool.native) {
             (bool success, ) = to.call{value: withdrawAmount}("");
@@ -110,10 +114,7 @@ contract StakingFacet is IStakingFacet {
             revert Unsupported();
         }
 
-        pool.totalStake -= withdrawAmount;
-        userPool.amount -= withdrawAmount;
-
-        emit StakeWithdraw(msg.sender, to, poolId, strategyId, amount, withdrawAmount);
+        emit StakeWithdraw(msg.sender, to, poolId, strategy, amount, withdrawAmount);
     }
 
     // ========= View ========= //
@@ -137,10 +138,10 @@ contract StakingFacet is IStakingFacet {
         StakingPoolInfo storage pool = s.poolInfo[poolId];
         UserPoolInfo storage userPool = s.userInfo[poolId][user];
 
-        return userPool.amount * LibStaking.PRECISSION_FACTOR / pool.totalStake;
+        return userPool.staked * LibStaking.PRECISSION_FACTOR / pool.totalStake;
     }
 
-    // TODO replace with const or Currency
+    // TODO replace with WETH or abstract Currency
     function nativeTokenAddress() public pure returns (address) {
         return address(uint160(uint256(keccak256("native-eth"))));
     }

@@ -1,6 +1,7 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
+import { parseEther } from "ethers";
 
-const DEFAULT_TOKEN_SUPPLY = 21_000_000;
+const DEFAULT_TOKEN_SUPPLY = parseEther("21000000");
 
 const TestERC20Module = buildModule("TestERC20Module", (m) => {
   const symbol = m.getParameter("symbol", "TT");

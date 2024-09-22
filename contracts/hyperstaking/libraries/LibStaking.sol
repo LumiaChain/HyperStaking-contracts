@@ -5,17 +5,16 @@ pragma solidity =0.8.27;
 //                                            Types                                               //
 //================================================================================================//
 
-// TODO stakeToken to abstract Currency (which supports both native and erc20)
+// TODO stakeToken to abstract Currency (which supports both native and erc20), or use WETH
 
 /**
  * @notice Info of each user
  * @param amount Token amount the user has provided
- * @param locked A mapping of strategy IDs to the amount of tokens locked in those strategies
- * @param totalLocked The total amount of tokens locked across all strategies
+ * @param totalLocked The total amount of tokens locked in vaults across all strategies
  */
 struct UserPoolInfo {
-    uint256 amount;
-    uint256 totalStakeLocked;
+    uint256 staked;
+    uint256 stakeLocked;
 }
 
 /**

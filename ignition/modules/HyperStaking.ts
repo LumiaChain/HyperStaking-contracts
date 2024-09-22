@@ -1,20 +1,18 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 import { getSelectors, FacetCutAction } from "../../scripts//libraries/diamond";
 import { getContractInterface } from "../../scripts//libraries/hardhat";
-
 import { ZeroAddress } from "ethers";
-
 import DiamondModule from "./Diamond";
 
-// HyperStakingModule is in fact a proxy upgrade which adds the StakingFacet to the Diamond
+// HyperStakingModule is in fact a proxy upgrade which adds the Facets to the Diamond
 const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const { diamond } = m.useModule(DiamondModule);
 
   const stakingFacet = m.contract("StakingFacet");
   const stakingFacetInterface = getContractInterface("IStakingFacet");
 
-  const strategyFacet = m.contract("ReserveStrategyFacet");
-  const strategyFacetInterface = getContractInterface("IStakingStrategy");
+  const vaultFacet = m.contract("StrategyVaultFacet");
+  const vaultFacetInterface = getContractInterface("IStrategyVault");
 
   // cut StakingFacet
   const cut = [
@@ -24,9 +22,9 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       functionSelectors: getSelectors(stakingFacetInterface),
     },
     {
-      facetAddress: strategyFacet,
+      facetAddress: vaultFacet,
       action: FacetCutAction.Add,
-      functionSelectors: getSelectors(strategyFacetInterface),
+      functionSelectors: getSelectors(vaultFacetInterface),
     },
   ];
 
