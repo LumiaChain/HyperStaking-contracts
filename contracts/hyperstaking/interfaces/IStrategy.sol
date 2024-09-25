@@ -32,14 +32,18 @@ interface IStrategy {
     //============================================================================================//
 
     /**
-     * @notice Allocates a specified amount of the stake to strategy
+     * @notice Allocates a specified amount of the stake to the strategy
      * @param amount_ The amount of the asset to allocate
+     * @param user_ The address of the user making the allocation
+     * @return allocation The amount successfully allocated
      */
     function allocate(uint256 amount_, address user_) external payable returns (uint256 allocation);
 
     /**
-     * @notice Exit a specified amount of the reserve token from the strategy to the vault
-     * @param shares_ The amount of the revenue asset to withdraw
+     * @notice Exits a specified amount of the strategy shares to the vault
+     * @param shares_ The amount of the strategy-specific asset (shares) to withdraw
+     * @param user_ The address of the user requesting the exit
+     * @return exitAmount The amount successfully exited
      */
     function exit(uint256 shares_, address user_) external returns (uint256 exitAmount);
 }

@@ -4,9 +4,9 @@
 
 This specification proposal outlines the initial phase of development, focusing on staking, reward distribution, and revenue generation strategies. The contracts will be deployed on the ethereum blockchain and will utilize a Diamond Proxy architecture to allow modularity and upgradability.
 
-<center>
-<img src="img/init_diagram.png" alt="Diagram" width="650">
-</center>
+<p align="center">
+    <img src="img/general_scheme.png" alt="General Scheme">
+</p>
 
 ## 0. Diamond Proxy Architecture
 
@@ -17,78 +17,102 @@ Lumia smart contracts will be developed using the [Diamond Proxy pattern](https:
 
 ### Access Control List (ACL)
 
-The **Access Control List (ACL)** in Lumia Smart Contracts defines roles like `LumiaRewardsManager`, `StakingPoolManager`, and `StrategyManager`, each with specific permissions to manage different parts of the protocol. The **DefaultAdmin** role holds the authority to assign and revoke these roles, ensuring controlled access to critical functions.
+The **Access Control List (ACL)** in Lumia Smart Contracts defines roles like `RewardsManager`, `StakingPoolManager`, and `StrategyManager`, each with specific permissions to manage different parts of the protocol. The **DefaultAdmin** role holds the authority to assign and revoke these roles, ensuring controlled access to critical functions. Additionally, the **DefaultAdmin** role is also responsible for managing **proxy upgrades**, allowing it to add, replace and delete specific contracts functionality.
 
-## 1. Lumia Rewards
+## 1. Staking Pools
+
+The Lumia protocol features multiple staking pools, allowing tokens like ETH to be staked across different pools. Each pool operates independently, even for the same asset.
+
+- **ETH Pools:** ETH can be staked into different pools, with rewards earned in both Ethereum and Lumia (Lumia Rewards) tokens. Multiple ETH pools can exist, each linked to different strategies.
+
+- **Pool Identification:** Each staking pool is assigned a unique `poolId`, generated using the following Solidity function:
+
+```solidity
+function generatePoolId(address stakeToken, uint96 idx) public pure returns (uint256) {
+  return uint256(keccak256(
+      abi.encodePacked(
+          stakeToken,
+          idx
+      )
+  ));
+}
+```
+
+  The `poolId` is based on the token's address and an index (`idx`), which represents the pool number for that asset. This ensures unique identification for each pool and provides an efficient way to manage contract storage. The `generatePoolId` function is publicly available for external systems to calculate the `poolId` as needed.
+
+- **Strategy Assignment:** Each staking pool is assigned a strategy at creation. Only one instance of a strategy is connected to a pool, and the system validates that a strategy is not already assigned to another pool, preventing contract storage collisions
+
+- **Staking Operations:** Since multiple pools can exist for the same token, users are required to choose which pool and strategy to use when staking. Users interact with the staking pools through the `stakeDeposit` and `stakeWithdraw` functions.
+
+- **Adding New Pools:** New staking pools are added using the `AddStakingPool` function, which is restricted to the `StakingPoolManager` ACL role, ensuring that only authorized entities can create and configure new pools.
+
+
+## 2. Lumia Rewards
 
 Lumia will implement a rewards system to incentivize staking participants:
 
-- **Token Airdrops:** Stakers will receive Lumia tokens as airdrops. The distribution will be based on each staker's share in the pool and the duration of their staking period.
+- **Token Airdrops:** Stakers will receive Lumia tokens as airdrops (other tokens can also be distributed). The distribution is based on each staker's contribution to a specific investment strategy and the period their stake is locked within that strategy. Once tokens are unlocked from the strategy, reward accumulation stops for the unlocked portion.
 
-- **Reward Distribution:** The reward distribution mechanism will use a method similar to Synthetix's staking rewards model (as detailed in the [video series](https://www.youtube.com/watch?v=6ZO5aYg1GI8)), customized to fit the specific needs of the Lumia project. This approach boils down to calculating `rewardPerSecond`, dynamically adjusting based on the total stake in the pool at any given time.
+- **Reward Distribution:** A reward distribution method similar to Synthetix's staking rewards model (as detailed in the [video series](https://www.youtube.com/watch?v=6ZO5aYg1GI8)) is used, customized to fit the specific needs of the Lumia project. This method involves calculating `rewardPerSecond`, dynamically adjusted based on the total stake in the pool at any given time.
 
-The addPoolReward function, which adds rewards to a staking pool, will have Restricted Access. Only the LumiaRewardsManager ACL role will be allowed to use this function to ensure controlled management of rewards and prevent unauthorized changes. Additionally, the rewards will have properties such as a start and end time, allowing them to be defined in advance before they begin.
+- **Multi-Token Distribution:** It will be possible to distribute multiple tokens at the same time to the same user's strategy allocation. However, the number of these distributions will be limited to a configurable amount set by the manager (between 3 and 10). This limitation is in place because calculating distributions for each token is done separately, increasing the total transaction costs for the staking user.
 
-## 2. Staking Pools
-
-The Lumia protocol will feature multiple staking pools, initially focusing on an ETH staking pool:
-
-- **ETH Pool:** The protocol will enable users to stake ETH into a dedicated ETH pool. This pool will allow participants to earn rewards both in Ethereum and Lumia (Lumia Rewards) tokens.
-
-- **Multi-Strategy Connectivity:** Each staking pool can be connected to multiple strategies simultaneously, but there will only be one pool per token. To achieve this, tokens staked in the pool can be allocated and unlocked from various strategies as needed. Consequently, what users hold is more akin to a share of the pool, rather than direct control over the strategies themselves. This design allows for dynamic management of assets within the pool, optimizing returns by leveraging multiple strategies without direct user intervention in strategy management.
-
-- **Expansion to Additional Pools:** The protocol will support the addition of new staking pools for different tokens, providing opportunities to expand the ecosystem and accommodate various assets. The creation of new staking pools will be managed through the `AddStakingPool` functionality, which is restricted to the `StakingPoolManager` ACL role. This restriction ensures that only authorized roles can add and configure new staking pools.
+The `addPoolReward` function, which adds rewards to a staking pool, is restricted. Only the `RewardsManager` ACL role is permitted to use this function to ensure controlled management of rewards and to prevent unauthorized changes. Additionally, the rewards are assigned properties such as a start and end time, allowing them to be defined in advance before they begin.
 
 
 ## 3. Revenue Strategies
 
-Lumia will employ dynamic, low-risk strategies to generate optimal income for stakers. Instead of directly interacting with external protocols, such as Lido, for each individual stake—which is suboptimal—the protocol will enable more efficient management of pooled assets.
+Low-risk strategies are used to generate optimal income for stakers. All strategies implement a common interface, enabling seamless integration with staking pools and allowing new strategies to be added over time. The interface is defined in the [IStrategy.sol](../../contracts/hyperstaking/interfaces/IStrategy.sol) contract and includes the following key functions:
 
-### Dynamic Strategy Management
+```solidity
+    /**
+     * @notice Allocates a specified amount of the stake to the strategy
+     * @param amount_ The amount of the asset to allocate
+     * @param user_ The address of the user making the allocation
+     * @return allocation The amount successfully allocated
+     */
+    function allocate(uint256 amount_, address user_) external payable returns (uint256 allocation);
 
-The `StrategyManager` ACL role will have the ability to move pool liquidity dynamically across different strategies to maximize returns for users. Since a user's initial stake represents a share in the pool, their allocation can be spread across multiple strategies to optimize yield.
+    /**
+     * @notice Exits a specified amount of the strategy shares to the vault
+     * @param shares_ The amount of the strategy-specific asset (shares) to withdraw
+     * @param user_ The address of the user requesting the exit
+     * @return exitAmount The amount successfully exited
+     */
+    function exit(uint256 shares_, address user_) external returns (uint256 exitAmount);
+```
 
-- **Strategy Interface:** Each strategy will implement a standardized Solidity interface, ensuring compatibility with the staking pools. This interface will require strategies to have the following functions:
-  - **`allocate`**: This function allocates a specified amount of liquidity from the staking pool to the strategy.
-  - **`exit`**: This function withdraws a specified amount of liquidity from the strategy back to the staking pool.
+This interface allows strategies to be deployed independently of the main upgradeable Proxy Diamond code and linked with new staking pools (migration of liquidity to different strategies for existing staking pools is planned)
 
-- **Liquidity Migration:** The `StrategyManager` will have access to the `MigratePoolLiquidity` function, which allows for the reallocation of liquidity between strategies. This function will perform an `exit` of a certain amount of liquidity from one strategy and an `allocate` to another, enabling dynamic adjustments based on market conditions and optimizing user returns.
+- **APR Calculation:** Each strategy provides the necessary data for calculating the Annual Percentage Rate (APR), allowing for transparent tracking of returns for stakers.
 
-- **APR Calculation:** Each strategy will also provide data necessary for calculating the Annual Percentage Rate (APR).
+- **Shares:** Are emitted by the strategies and moved to the `StrategyVault`. These shares represent the user’s contribution in the strategy, (vault may potentially issue derivative tradable liquidity tokens). Specific strategies examples are detailed below.
 
 
 ### Example Strategy: Reserve-Based Strategy
 
-One example of a strategy is a **reserve-based strategy** focused on yield generation through the Lido Protocol. This reserve is managed to ensure sufficient liquidity for staking and unstaking operations. When users stake ETH, the strategy allocates a portion of the available stETH from the reserve to this user, allowing them to benefit from staking rewards generated by Lido.
+One example of a strategy is a **reserve-based strategy** focused on yield generation through a specific defined asset (e.g., stETH from the Lido Protocol). This reserve is managed to ensure sufficient liquidity for staking and unstaking operations. When users stake ETH, the strategy allocates a portion of the available wstETH from the reserve to the user, allowing them to benefit from staking rewards generated by Lido.
 
-<center>
+<p align="center">
 <img src="img/reserve_base_strategy.png" alt="Diagram" width="750">
-</center>
+</p>
 
-When users exit, the strategy provides the user with their initial ETH plus the generated income from Lido, ensuring smooth exits without interacting with external protocols for each individual transaction. This approach minimizes transaction costs and optimizes the use of liquidity within the pool.
+When users exit, the strategy returns their initial ETH plus the generated income, ensuring smooth exits without needing to interact with external protocols for each individual transaction. This approach minimizes transaction costs and optimizes the use of liquidity within the pool.
 
-However, this solution has its limitations. It may occur that the strategy does not have full ETH coverage at a given time. In such cases, the user will still be able to perform a partial unstake. Additionally, the user does not lose their accrued revenue, as it is securely tracked within the contract, ensuring they can claim their rewards once the reserve is replenished.
+However, this solution has its limitations. It’s possible that the strategy may not have full ETH coverage at certain times. In such cases, the user will still be able to perform a partial unstake. Additionally, the user will not lose any accrued revenue, as it is tracked within the contract, allowing them to claim their rewards once the reserve is replenished.
 
+A simplified version of this strategy has been implemented and is currently being used for testing purposes.
 
-### Example Strategy: Multi-Asset Reserve-Based Strategy
+### Example Strategy: Dinero Protocol Integration
 
-In addition to single-asset strategies, Lumia can implement a multi-asset reserve-based strategy to optimize staking rewards across various tokens. This strategy pools together a basket of assets, each with its own yield-generation potential, to create a more diversified and resilient reserve, thus mitigating the risk of relying on a single asset for returns.
+Another example strategy is the [**Dinero Protocol**](https://dinero.xyz/) **Integration**, focused on yield generation through the **apxETH** token, emitted by the `PirexETH` contract from the Dinero Protocol. The strategy auto-compounds pxETH into apxETH to maximize returns, generating around 8% APY, and is stored in the Lumia `StrategyVault`.
 
-<center>
-<img src="img/multi_asset_reserve_strategy.png" alt="Diagram" width="750">
-</center>
+<p align="center">
+<img src="img/dinero_strategy.png" alt="Diagram" width="750">
+</p>
 
-- **Diverse Staking Assets:** The reserve can include multiple tokens from various staking platforms (e.g., stETH, rETH), each providing exposure to different staking rewards. By pooling these assets, the system can generalize various reserve-based strategies, offering exposure to multiple tokens without requiring additional logic or direct interaction with external protocols.
+When users stake ETH, the strategy interacts directly with the Dinero Protocol, converting ETH into pxETH, which is then auto-compounded into apxETH. This allows users to benefit from the compounding returns offered by the Dinero Protocol.
 
-- **Dynamic Allocation:** The `StrategyManager` dynamically allocates and rebalances liquidity between these tokens based on performance and market conditions, easily shifting liquidity across underlying tokens to maximize returns.
+When users unstake, the Dinero Protocol is used to redeem pxETH from apxETH (an ERC-4626 vault). pxETH is then converted to ETH for withdrawal, plus accumulated interest, with a 0.5% fee applied.
 
-- **Exit:* When users want to withdraw their stake, they receive a proportional share of the underlying token assets (e.g., a mix of stETH, rETH). If full liquidity is not available, partial withdrawals are supported, allowing users to claim the remaining portion later when liquidity is restored.
-
----
-
-#TODO
-- StrategyManager sets % golas for assets
-- LidoProtocol integration
-- Uniswap integration
-
----
+In the future, the fee could be reduced by implementing a delayed unstake option, creating an unstake buffer for ongoing operations, similar to the model used in the Dinero Protocol.

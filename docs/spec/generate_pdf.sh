@@ -14,4 +14,4 @@ function generate_pdf {
   rm $temp_html
 }
 
-generate_pdf README.md spec.pdf
+generate_pdf spec.md spec.pdf
