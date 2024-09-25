@@ -9,12 +9,12 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {PirexIntegration} from "./PirexIntegration.sol";
 
 /**
- * @title PirexStrategy
+ * @title DineroStrategy
  * @notice This contract manages liquidity staking the base (ETH) asset in Pirex protocol.
  *
  * @dev This contract is a facet of Diamond Proxy.
  */
-contract PirexStrategy is IStrategy, PirexIntegration {
+contract DineroStrategy is IStrategy, PirexIntegration {
     using SafeERC20 for IERC20;
 
     /// Diamond deployment address

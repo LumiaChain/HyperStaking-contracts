@@ -23,7 +23,7 @@ describe("Staking", function () {
   async function deployHyperStaking() {
     const [owner, alice] = await hre.ethers.getSigners();
     const { diamond } = await hre.ignition.deploy(HyperStakingModule);
-    const stakingFacet = await hre.ethers.getContractAt("IStakingFacet", diamond);
+    const stakingFacet = await hre.ethers.getContractAt("IStaking", diamond);
     const vaultFacet = await hre.ethers.getContractAt("IStrategyVault", diamond);
 
     const { testERC20 } = await hre.ignition.deploy(TestERC20Module, {

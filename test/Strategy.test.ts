@@ -5,10 +5,10 @@ import hre, { ethers } from "hardhat";
 import { parseEther } from "ethers";
 
 import HyperStakingModule from "../ignition/modules/HyperStaking";
-import { PirexMockModule } from "../ignition/modules/Pirex";
+import PirexMockModule from "../ignition/modules/PirexMock";
 import TestERC20Module from "../ignition/modules/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
-import PirexStrategyModule from "../ignition/modules/PirexStrategy";
+import DineroStrategyModule from "../ignition/modules/DineroStrategy";
 import { PirexEth } from "../typechain-types";
 
 describe("Strategy", function () {
@@ -26,7 +26,7 @@ describe("Strategy", function () {
     const [owner, alice] = await hre.ethers.getSigners();
     const { diamond } = await hre.ignition.deploy(HyperStakingModule);
 
-    const stakingFacet = await hre.ethers.getContractAt("IStakingFacet", diamond);
+    const stakingFacet = await hre.ethers.getContractAt("IStaking", diamond);
     const vaultFacet = await hre.ethers.getContractAt("IStrategyVault", diamond);
 
     const { testERC20 } = await hre.ignition.deploy(TestERC20Module, {
@@ -65,9 +65,9 @@ describe("Strategy", function () {
     await vaultFacet.init(ethPoolId, reserveStrategy, testWstETH);
 
     const { pxEth, upxEth, pirexEth, autoPxEth } = await loadFixture(getOrMockPirex);
-    const { pirexStrategy } = await hre.ignition.deploy(PirexStrategyModule, {
+    const { dineroStrategy } = await hre.ignition.deploy(DineroStrategyModule, {
       parameters: {
-        PirexStrategyModule: {
+        DineroStrategyModule: {
           diamond: await diamond.getAddress(),
           pxEth: await pxEth.getAddress(),
           pirexEth: await pirexEth.getAddress(),
@@ -76,14 +76,14 @@ describe("Strategy", function () {
       },
     });
 
-    await vaultFacet.init(ethPoolId, pirexStrategy, autoPxEth);
+    await vaultFacet.init(ethPoolId, dineroStrategy, autoPxEth);
 
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
       stakingFacet, vaultFacet, // diamond facets
       pxEth, upxEth, pirexEth, autoPxEth, // pirex mock
-      testWstETH, reserveStrategy, pirexStrategy, // test contracts
+      testWstETH, reserveStrategy, dineroStrategy, // test contracts
       ethPoolId, // ids
       reserveAssetPrice, reserveStrategyAssetSupply, // values
       owner, alice, // addresses
@@ -208,42 +208,42 @@ describe("Strategy", function () {
     });
   });
 
-  describe("Pirex Strategy", function () {
-    it("Staking deposit to Pirex strategy should aquire apxEth", async function () {
-      const { stakingFacet, vaultFacet, autoPxEth, ethPoolId, pirexStrategy, owner } = await loadFixture(deployHyperStaking);
+  describe("Dinero Strategy", function () {
+    it("Staking deposit to dinero strategy should aquire apxEth", async function () {
+      const { stakingFacet, vaultFacet, autoPxEth, ethPoolId, dineroStrategy, owner } = await loadFixture(deployHyperStaking);
 
       const stakeAmount = parseEther("8");
 
       // event
-      await expect(stakingFacet.stakeDeposit(ethPoolId, pirexStrategy, stakeAmount, owner, { value: stakeAmount }))
-        .to.emit(pirexStrategy, "Allocate")
+      await expect(stakingFacet.stakeDeposit(ethPoolId, dineroStrategy, stakeAmount, owner, { value: stakeAmount }))
+        .to.emit(dineroStrategy, "Allocate")
         .withArgs(owner.address, stakeAmount, stakeAmount);
 
       expect((await stakingFacet.userPoolInfo(ethPoolId, owner)).staked).to.equal(stakeAmount);
 
-      expect((await vaultFacet.vaultInfo(pirexStrategy)).totalStakeLocked).to.equal(stakeAmount);
-      expect((await vaultFacet.vaultAssetInfo(pirexStrategy)).token).to.equal(autoPxEth.target);
-      expect((await vaultFacet.vaultAssetInfo(pirexStrategy)).totalShares).to.equal(stakeAmount);
+      expect((await vaultFacet.vaultInfo(dineroStrategy)).totalStakeLocked).to.equal(stakeAmount);
+      expect((await vaultFacet.vaultAssetInfo(dineroStrategy)).token).to.equal(autoPxEth.target);
+      expect((await vaultFacet.vaultAssetInfo(dineroStrategy)).totalShares).to.equal(stakeAmount);
 
       expect(await autoPxEth.balanceOf(vaultFacet.target)).to.equal(stakeAmount);
     });
 
-    it("Unstaking from to Pirex strategy should exchange apxEth back to eth", async function () {
-      const { stakingFacet, vaultFacet, autoPxEth, ethPoolId, pirexStrategy, owner } = await loadFixture(deployHyperStaking);
+    it("Unstaking from to dinero strategy should exchange apxEth back to eth", async function () {
+      const { stakingFacet, vaultFacet, autoPxEth, ethPoolId, dineroStrategy, owner } = await loadFixture(deployHyperStaking);
 
       const stakeAmount = parseEther("3");
-      await stakingFacet.stakeDeposit(ethPoolId, pirexStrategy, stakeAmount, owner, { value: stakeAmount });
+      await stakingFacet.stakeDeposit(ethPoolId, dineroStrategy, stakeAmount, owner, { value: stakeAmount });
 
-      await expect(stakingFacet.stakeWithdraw(ethPoolId, pirexStrategy, stakeAmount, owner))
-        .to.emit(pirexStrategy, "Exit")
+      await expect(stakingFacet.stakeWithdraw(ethPoolId, dineroStrategy, stakeAmount, owner))
+        .to.emit(dineroStrategy, "Exit")
         .withArgs(owner.address, stakeAmount, anyValue);
 
       expect((await stakingFacet.userPoolInfo(ethPoolId, owner.address)).staked).to.equal(0);
 
-      expect((await vaultFacet.userVaultInfo(pirexStrategy, owner.address)).stakeLocked).to.equal(0);
-      expect((await vaultFacet.vaultInfo(pirexStrategy)).totalStakeLocked).to.equal(0);
-      expect((await vaultFacet.vaultAssetInfo(pirexStrategy)).token).to.equal(autoPxEth.target);
-      expect((await vaultFacet.vaultAssetInfo(pirexStrategy)).totalShares).to.equal(0);
+      expect((await vaultFacet.userVaultInfo(dineroStrategy, owner.address)).stakeLocked).to.equal(0);
+      expect((await vaultFacet.vaultInfo(dineroStrategy)).totalStakeLocked).to.equal(0);
+      expect((await vaultFacet.vaultAssetInfo(dineroStrategy)).token).to.equal(autoPxEth.target);
+      expect((await vaultFacet.vaultAssetInfo(dineroStrategy)).totalShares).to.equal(0);
 
       expect(await autoPxEth.balanceOf(vaultFacet.target)).to.equal(0);
     });

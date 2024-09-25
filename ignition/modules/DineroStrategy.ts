@@ -6,15 +6,15 @@ const PX_ETH_ADDRESS = "0x";
 const PIREX_ETH_ADDRESS = "0x";
 const AUTO_PX_ETH_ADDRESS = "0x";
 
-const PirexStrategyModule = buildModule("PirexStrategyModule", (m) => {
+const DineroStrategyModule = buildModule("DineroStrategyModule", (m) => {
   const diamond = m.getParameter("diamond", DIAMOND_ADDRESS);
   const pxEth = m.getParameter("pxEth", PX_ETH_ADDRESS);
   const pirexEth = m.getParameter("pirexEth", PIREX_ETH_ADDRESS);
   const autoPxEth = m.getParameter("autoPxEth", AUTO_PX_ETH_ADDRESS);
 
-  const pirexStrategy = m.contract("PirexStrategy", [diamond, pxEth, pirexEth, autoPxEth]);
+  const dineroStrategy = m.contract("DineroStrategy", [diamond, pxEth, pirexEth, autoPxEth]);
 
-  return { pirexStrategy };
+  return { dineroStrategy };
 });
 
-export default PirexStrategyModule;
+export default DineroStrategyModule;

@@ -9,7 +9,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const { diamond } = m.useModule(DiamondModule);
 
   const stakingFacet = m.contract("StakingFacet");
-  const stakingFacetInterface = getContractInterface("IStakingFacet");
+  const stakingFacetInterface = getContractInterface("IStaking");
 
   const vaultFacet = m.contract("StrategyVaultFacet");
   const vaultFacetInterface = getContractInterface("IStrategyVault");
