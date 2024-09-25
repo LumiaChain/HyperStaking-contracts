@@ -5,22 +5,21 @@ import hre, { ethers } from "hardhat";
 import { parseEther } from "ethers";
 
 import HyperStakingModule from "../ignition/modules/HyperStaking";
-import PirexModule from "../ignition/modules/Pirex";
+import { PirexMockModule } from "../ignition/modules/Pirex";
 import TestERC20Module from "../ignition/modules/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
 import PirexStrategyModule from "../ignition/modules/PirexStrategy";
 import { PirexEth } from "../typechain-types";
 
 describe("Strategy", function () {
-  async function deployAndMockPirex() {
-    const [owner, alice, rewardRecipient] = await hre.ethers.getSigners();
-
-    const { pxEth, upxEth, pirexEth, autoPxEth } = await hre.ignition.deploy(PirexModule);
+  async function getOrMockPirex() {
+    const [, , rewardRecipient] = await hre.ethers.getSigners();
+    const { pxEth, upxEth, pirexEth, autoPxEth } = await hre.ignition.deploy(PirexMockModule);
 
     // increase rewards buffer
     await (pirexEth.connect(rewardRecipient) as PirexEth).harvest(await ethers.provider.getBlockNumber(), { value: parseEther("100") });
 
-    return { pxEth, upxEth, pirexEth, autoPxEth, owner, alice };
+    return { pxEth, upxEth, pirexEth, autoPxEth };
   }
 
   async function deployHyperStaking() {
@@ -65,7 +64,7 @@ describe("Strategy", function () {
 
     await vaultFacet.init(ethPoolId, reserveStrategy, testWstETH);
 
-    const { pxEth, upxEth, pirexEth, autoPxEth } = await loadFixture(deployAndMockPirex);
+    const { pxEth, upxEth, pirexEth, autoPxEth } = await loadFixture(getOrMockPirex);
     const { pirexStrategy } = await hre.ignition.deploy(PirexStrategyModule, {
       parameters: {
         PirexStrategyModule: {
@@ -252,7 +251,8 @@ describe("Strategy", function () {
 
   describe("Pirex Mock", function () {
     it("It should be possible to deposit ETH and get pxETH", async function () {
-      const { pxEth, pirexEth, owner } = await loadFixture(deployAndMockPirex);
+      const [owner] = await hre.ethers.getSigners();
+      const { pxEth, pirexEth } = await loadFixture(getOrMockPirex);
 
       await pirexEth.deposit(owner.address, false, { value: parseEther("1") });
 
@@ -260,7 +260,8 @@ describe("Strategy", function () {
     });
 
     it("It should be possible to deposit ETH and auto-compund it with apxEth", async function () {
-      const { pxEth, pirexEth, autoPxEth, owner } = await loadFixture(deployAndMockPirex);
+      const [owner] = await hre.ethers.getSigners();
+      const { pxEth, pirexEth, autoPxEth } = await loadFixture(getOrMockPirex);
 
       await pirexEth.deposit(owner.address, true, { value: parseEther("5") });
 
@@ -269,7 +270,8 @@ describe("Strategy", function () {
     });
 
     it("It should be possible to instant Redeem apxEth back to ETH", async function () {
-      const { pxEth, pirexEth, autoPxEth, owner, alice } = await loadFixture(deployAndMockPirex);
+      const [owner, alice] = await hre.ethers.getSigners();
+      const { pxEth, pirexEth, autoPxEth } = await loadFixture(getOrMockPirex);
 
       const initialDeposit = parseEther("1");
       await pirexEth.deposit(owner.address, true, { value: initialDeposit });

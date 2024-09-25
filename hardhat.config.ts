@@ -40,16 +40,21 @@ const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   networks: {
     hardhat: {},
-    local: {
+    localhost: {
       url: process.env.LOCAL_RPC_URL,
       chainId: 31337,
-      accounts: {
-        mnemonic: process.env.WALLET_MNEMONIC,
-      },
     },
     sepolia: {
       url: process.env.SEPOLIA_RPC_URL,
       chainId: 11155111,
+      accounts: {
+        mnemonic: process.env.WALLET_MNEMONIC,
+      },
+      initialBaseFeePerGas: 2500000000,
+    },
+    holesky: {
+      url: process.env.HOLESKY_RPC_URL,
+      chainId: 17000,
       accounts: {
         mnemonic: process.env.WALLET_MNEMONIC,
       },

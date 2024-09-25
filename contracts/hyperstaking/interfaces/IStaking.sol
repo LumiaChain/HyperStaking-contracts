@@ -4,10 +4,10 @@ pragma solidity =0.8.27;
 import {UserPoolInfo, StakingPoolInfo} from "../libraries/LibStaking.sol";
 
 /**
- * @title IStakingFacet
+ * @title IStaking
  * @dev Interface for StakingFacet
  */
-interface IStakingFacet {
+interface IStaking{
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//

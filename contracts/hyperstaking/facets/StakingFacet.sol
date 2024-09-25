@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {IStakingFacet} from "../interfaces/IStakingFacet.sol";
+import {IStaking} from "../interfaces/IStaking.sol";
 import {IStrategyVault} from "../interfaces/IStrategyVault.sol";
 
 import {
@@ -19,7 +19,7 @@ import {LibStrategyVault, StrategyVaultStorage} from "../libraries/LibStrategyVa
  *
  * @dev This contract is a facet of Diamond Proxy.
  */
-contract StakingFacet is IStakingFacet {
+contract StakingFacet is IStaking {
     //============================================================================================//
     //                                         Modifiers                                          //
     //============================================================================================//
