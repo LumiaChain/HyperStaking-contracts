@@ -39,8 +39,8 @@ describe("Strategy", function () {
     });
     const testWstETH = testERC20;
 
-    await stakingFacet.init();
     const nativeTokenAddress = await stakingFacet.nativeTokenAddress();
+    await stakingFacet.createStakingPool(nativeTokenAddress);
     const ethPoolId = await stakingFacet.generatePoolId(nativeTokenAddress, 0);
 
     // -------------------- Apply Strategies --------------------
@@ -62,7 +62,7 @@ describe("Strategy", function () {
     await testWstETH.approve(reserveStrategy.target, reserveStrategyAssetSupply);
     await reserveStrategy.supplyRevenueAsset(reserveStrategyAssetSupply);
 
-    await vaultFacet.init(ethPoolId, reserveStrategy, testWstETH);
+    await vaultFacet.addStrategy(ethPoolId, reserveStrategy, testWstETH);
 
     const { pxEth, upxEth, pirexEth, autoPxEth } = await loadFixture(getOrMockPirex);
     const { dineroStrategy } = await hre.ignition.deploy(DineroStrategyModule, {
@@ -76,7 +76,7 @@ describe("Strategy", function () {
       },
     });
 
-    await vaultFacet.init(ethPoolId, dineroStrategy, autoPxEth);
+    await vaultFacet.addStrategy(ethPoolId, dineroStrategy, autoPxEth);
 
     /* eslint-disable object-property-newline */
     return {
@@ -202,7 +202,7 @@ describe("Strategy", function () {
 
         const randomToken = "0x8Da05a7A689c2C054246B186bEe1C75fcD1df0bC";
 
-        await expect(vaultFacet.init(ethPoolId, reserveStrategy, randomToken))
+        await expect(vaultFacet.addStrategy(ethPoolId, reserveStrategy, randomToken))
           .to.be.revertedWithCustomError(vaultFacet, "VaultAlreadyExist");
       });
     });

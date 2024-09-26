@@ -29,8 +29,8 @@ contract StrategyVaultFacet is IStrategyVault {
     //                                      Public Functions                                      //
     //============================================================================================//
 
-    // TODO remove, only for testing purposes
-    function init(
+    // TODO ACL
+    function addStrategy(
         uint256 poolId,
         address strategy,
         address token

@@ -38,20 +38,9 @@ contract StakingFacet is IStaking {
     //                                     TEST INIT                                              //
     //============================================================================================//
 
-    /// @dev REMOVE THIS FUNCTION, only for testing
-    function init() public {
-        StakingStorage storage s = LibStaking.diamondStorage();
-
-        address stakeToken = nativeTokenAddress();
-        uint256 poolId = _createStakingPool(stakeToken);
-
-        // save test pool in the storage
-        s.poolInfo[poolId] = StakingPoolInfo({
-            poolId: poolId,
-            native: true,
-            stakeToken: stakeToken,
-            totalStake: 0
-        });
+    /// TODO ACL
+    function createStakingPool(address stakeToken) public returns (uint256 poolId) {
+        poolId = _createStakingPool(stakeToken);
     }
 
     //============================================================================================//
@@ -141,9 +130,12 @@ contract StakingFacet is IStaking {
         return userPool.staked * LibStaking.PRECISSION_FACTOR / pool.totalStake;
     }
 
-    // TODO replace with WETH or abstract Currency
     function nativeTokenAddress() public pure returns (address) {
-        return address(uint160(uint256(keccak256("native-eth"))));
+        return address(uint160(uint256(
+            keccak256(
+                abi.encodePacked("native")
+            )
+        )));
     }
 
     function generatePoolId(address stakeToken, uint96 idx) public pure returns (uint256) {
@@ -168,6 +160,18 @@ contract StakingFacet is IStaking {
 
         // increment pool count
         s.stakeTokenPoolCounts[stakeToken]++;
+
+        bool native = false;
+        if(stakeToken == nativeTokenAddress())
+            native = true;
+
+        // save test pool in the storage
+        s.poolInfo[poolId] = StakingPoolInfo({
+            poolId: poolId,
+            native: native,
+            stakeToken: stakeToken,
+            totalStake: 0
+        });
 
         emit StakingPoolCreate(msg.sender, stakeToken, idx, poolId);
     }

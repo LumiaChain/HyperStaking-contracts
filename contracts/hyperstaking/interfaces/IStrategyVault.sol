@@ -45,8 +45,8 @@ interface IStrategyVault {
     //                                          Mutable                                           //
     //============================================================================================//
 
-    /// @notice Initializes the contract with one vault // TODO test function - remove
-    function init(uint256 poolId, address strategy, address token) external;
+    /// @notice Adds a new strategy and assigns it to the specified staking pool // TODO ACL
+    function addStrategy(uint256 poolId, address strategy, address vaultToken) external;
 
     function deposit(address strategy, uint256 amount, address user) external payable;
 

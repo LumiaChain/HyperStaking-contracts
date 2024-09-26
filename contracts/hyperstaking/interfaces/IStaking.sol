@@ -60,9 +60,10 @@ interface IStaking{
     //============================================================================================//
 
     /**
-     * @notice Initializes the contract, setting up necessary state variables, // TODO remove
+     * @notice Create new staking pool for given token address
+     * @dev nativeTokenAddress() for native coin.
      */
-    function init() external;
+    function createStakingPool(address stakeToken) external returns (uint256 poolId);
 
     /**
      * @notice Deposits a specified amount into a staking pool with a chosen strategy
