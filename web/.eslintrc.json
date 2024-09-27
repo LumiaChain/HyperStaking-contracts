@@ -1,0 +1,16 @@
+{
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "rules": {
+    "quotes": ["error", "double"],
+    "semi": ["error", "always"],
+    "comma-dangle": ["error", "always-multiline"],
+    "quote-props": "off",
+    "space-before-function-paren": [
+      "error", {
+        "anonymous": "always",
+        "named": "ignore",
+        "asyncArrow": "always"
+      }
+    ]
+  }
+}
