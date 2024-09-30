@@ -9,7 +9,8 @@
     "check": "solhint -c .solhint.json 'contracts/**/*.sol'",
     "prepare": "husky",
     "docgen": "npx hardhat docgen",
-    "deploy-holesky": "npx hardhat ignition deploy ignition/modules/HyperStaking.ts --network holesky"
+    "deploy-hyperstaking-holesky": "npx hardhat ignition deploy ignition/modules/HyperStaking.ts --network holesky",
+    "deploy-dinero-strategy-holesky": "npx hardhat ignition deploy ignition/modules/DineroStrategy.ts --parameters ignition/parameters.holesky.json --network holesky"
   },
   "repository": {
     "type": "git",

@@ -26,8 +26,9 @@ contract PirexIntegration {
     event PirexDepositCompound(
         address indexed receiver,
         uint256 ethDeposited,
-        uint256 apxEthReceived,
-        uint256 feeAmount
+        uint256 postFeeAmount,
+        uint256 feeAmount,
+        uint256 apxEthReceived
     );
 
     event PirexInstantEthRedeem(
@@ -73,15 +74,18 @@ contract PirexIntegration {
         require(msg.value > 0, ZeroAmount());
 
         bool compound = true;
-        uint256 feeAmount;
-        (apxEthReceived, feeAmount) = PirexEth(PIREX_ETH).deposit{
+        uint256 postFeeAmount; // pxETH minted for the receiver
+        uint256 feeAmount; // distributed as fees
+        (postFeeAmount, feeAmount) = PirexEth(PIREX_ETH).deposit{
             value: msg.value
         }(
             receiver_,
             compound
         );
 
-        emit PirexDepositCompound(receiver_, msg.value, apxEthReceived, feeAmount);
+        apxEthReceived = AutoPxEth(AUTO_PX_ETH).convertToShares(postFeeAmount);
+
+        emit PirexDepositCompound(receiver_, msg.value, postFeeAmount, feeAmount, apxEthReceived);
     }
 
     // shares - apxEth amount

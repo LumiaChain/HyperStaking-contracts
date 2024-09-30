@@ -11,8 +11,6 @@ import {PirexIntegration} from "./PirexIntegration.sol";
 /**
  * @title DineroStrategy
  * @notice This contract manages liquidity staking the base (ETH) asset in Pirex protocol.
- *
- * @dev This contract is a facet of Diamond Proxy.
  */
 contract DineroStrategy is IStrategy, PirexIntegration {
     using SafeERC20 for IERC20;

@@ -47,9 +47,8 @@ contract StakingFacet is IStaking {
     //                                      Public Functions                                      //
     //============================================================================================//
 
-    /**
-     * @notice Main deposit function
-     */
+    /// @notice Main deposit function
+    /// @inheritdoc IStaking
     function stakeDeposit(
         uint256 poolId,
         address strategy,
@@ -76,9 +75,8 @@ contract StakingFacet is IStaking {
         emit StakeDeposit(msg.sender, to, poolId, strategy, amount);
     }
 
-    /**
-     * @notice Main withdraw function
-     */
+    /// @notice Main withdraw function
+    /// @inheritdoc IStaking
     function stakeWithdraw(
         uint256 poolId,
         address strategy,
@@ -108,6 +106,7 @@ contract StakingFacet is IStaking {
 
     // ========= View ========= //
 
+    /// @inheritdoc IStaking
     function userPoolInfo(
         uint256 poolId,
         address user
@@ -116,11 +115,18 @@ contract StakingFacet is IStaking {
         return s.userInfo[poolId][user];
     }
 
+    /// @inheritdoc IStaking
+    function stakeTokenPoolCount(address stakeToken) external view returns (uint96) {
+        StakingStorage storage s = LibStaking.diamondStorage();
+        return s.stakeTokenPoolCount[stakeToken];
+    }
+
     function poolInfo(uint256 poolId) external view returns (StakingPoolInfo memory) {
         StakingStorage storage s = LibStaking.diamondStorage();
         return s.poolInfo[poolId];
     }
 
+    /// @inheritdoc IStaking
     function userPoolShare(uint256 poolId, address user) public view returns (uint256) {
         StakingStorage storage s = LibStaking.diamondStorage();
 
@@ -138,6 +144,7 @@ contract StakingFacet is IStaking {
         )));
     }
 
+    /// @inheritdoc IStaking
     function generatePoolId(address stakeToken, uint96 idx) public pure returns (uint256) {
         return uint256(keccak256(
             abi.encodePacked(
@@ -155,11 +162,11 @@ contract StakingFacet is IStaking {
         StakingStorage storage s = LibStaking.diamondStorage();
 
         // use current count as idx
-        uint96 idx = s.stakeTokenPoolCounts[stakeToken];
+        uint96 idx = s.stakeTokenPoolCount[stakeToken];
         poolId = generatePoolId(stakeToken, idx);
 
         // increment pool count
-        s.stakeTokenPoolCounts[stakeToken]++;
+        s.stakeTokenPoolCount[stakeToken]++;
 
         bool native = false;
         if(stakeToken == nativeTokenAddress())

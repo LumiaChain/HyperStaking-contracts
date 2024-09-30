@@ -61,6 +61,7 @@ interface IStaking{
 
     /**
      * @notice Create new staking pool for given token address
+     * @param stakeToken address of the token for which the pool will be created
      * @dev nativeTokenAddress() for native coin.
      */
     function createStakingPool(address stakeToken) external returns (uint256 poolId);
@@ -111,6 +112,13 @@ interface IStaking{
         uint256 poolId,
         address user
     ) external view returns (UserPoolInfo memory);
+
+     /**
+     * @notice Returns the number of staking pools available for a given token
+     * @param stakeToken The address of the token for which to count the staking pools
+     * @return The total number of staking pools for the specified token
+     */
+    function stakeTokenPoolCount(address stakeToken) external view returns (uint96);
 
     /**
      * @notice Returns information about a specific staking pool
