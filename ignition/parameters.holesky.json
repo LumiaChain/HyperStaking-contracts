@@ -1,0 +1,8 @@
+{
+  "DineroStrategyModule": {
+    "diamond": "0xfE72b15d3Cb70224E91aBdCa5531966F48180876",
+    "pirexEth": "0x5F3aA7609768D3A0bAC351fa32E9909d1369D43a",
+    "pxEth": "0x3E2D9E1a3743A4bD0A0cd7C7bf94Dd72bD431A7e",
+    "autoPxEth": "0x0e4bf0D7e9198756B821446C6Fb7A17Dfbfca198"
+  }
+}

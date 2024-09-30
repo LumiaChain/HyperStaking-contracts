@@ -1,0 +1,12 @@
+{
+  "DiamondModule#DiamondCutFacet": "0x89Ddc39d0BE80E675e800a8059A271d63B686062",
+  "DiamondModule#DiamondInit": "0xD07b0Bf0468c97A2F3E4522b738FeABb161B81dE",
+  "DiamondModule#DiamondLoupeFacet": "0x1231934E9a82679503b6D9c8D13d5abE05901dE2",
+  "DiamondModule#OwnershipFacet": "0x5C2B465DB5dD3c0921335D75E3A1E61b6C51C8c8",
+  "HyperStakingModule#StakingFacet": "0x30E783014d80a12C183d27A655340045aF4BC22e",
+  "HyperStakingModule#StrategyVaultFacet": "0x12D33b211E5F62a9935d8B0F6C941745Fca7c161",
+  "DiamondModule#Diamond": "0xfE72b15d3Cb70224E91aBdCa5531966F48180876",
+  "DiamondModule#IDiamondCut": "0xfE72b15d3Cb70224E91aBdCa5531966F48180876",
+  "HyperStakingModule#IDiamondCut": "0xfE72b15d3Cb70224E91aBdCa5531966F48180876",
+  "DineroStrategyModule#DineroStrategy": "0xFeA618E29263A0501533fd438FD33618139F6E7b"
+}
