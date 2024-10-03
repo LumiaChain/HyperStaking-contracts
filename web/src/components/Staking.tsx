@@ -1,24 +1,36 @@
-import { useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { useAccount } from "wagmi";
 import { createWalletClient, custom, publicActions, Address, parseEther } from "viem";
 
 import {
-  getStaking, getUserPoolInfo, getPoolInfo, stakeDeposit, stakeWithdraw,
+  getStaking, getVault, getUserPoolInfo, getPoolInfo, stakeDeposit, stakeWithdraw,
   formatEtherBalance, getAutoPxEth, getAutoPxEthVaultBalance,
+  getUserStrategyContribution, formatSolidityPercentage, SolidityBytes,
 } from "@/actions/web3-actions";
 
-const Staking = () => {
+import Loading from "./Loading";
+
+interface LoadingComponentRef {
+  addLoadingMsg: (message: string) => number;
+  removeLoadingMsg: (id: number) => void;
+}
+
+const Staking: React.FC = () => {
+  const loadingRef = useRef<LoadingComponentRef>(null);
+
   const [blockNumber, setBlockNumber] = useState<bigint | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null); // To store the interval ID
+  const [init, setInit] = useState(true);
+
   // const [account, setAccount] = useState<Address | null>(null);
   const [accountHumanBalance, setAccountHumanBalance] = useState<string>("0.00");
   const [accountHumanStake, setAccountHumanStake] = useState<string>("0.00");
+  const [accountContrib, setAccountContrib] = useState<string>("0.00");
 
-  const [inputStakeBalance, setInputStakeBalance] = useState<string>("0.0");
-  const [inputUnstakeBalance, setInputUnstakeBalance] = useState<string>("0.0");
+  const [inputStakeBalance, setInputStakeBalance] = useState<string>("");
+  const [inputUnstakeBalance, setInputUnstakeBalance] = useState<string>("");
   const [totalStake, setTotalStake] = useState<string>("");
   const [vaultApxEth, setVaultApxEth] = useState<string>("");
-
-  const [loading, setLoading] = useState(true);
 
   const { address, chain } = useAccount();
   const account = address as Address;
@@ -34,7 +46,26 @@ const Staking = () => {
 
   const staking = getStaking(walletClient);
   const autoPxEth = getAutoPxEth(walletClient);
-  // const vault = getVault(walletClient);
+  const vault = getVault(walletClient);
+
+  // ----- Show loading status -----
+
+  const handleLoadingJob = async (loadingMessage: string, asyncJob: () => Promise<void>) => {
+    const loadingId = loadingRef.current?.addLoadingMsg(loadingMessage);
+
+    try {
+      await asyncJob(); // Wait for the async function to complete
+    } finally {
+      // Ensure the loading message lasts at least 1 second
+      if (loadingId !== undefined) {
+        setTimeout(() => {
+          loadingRef.current?.removeLoadingMsg(loadingId);
+        }, 1000);
+      }
+    }
+  };
+
+  // ----- Set Functions -----
 
   const getNativeBalance = useCallback(async (): Promise<bigint> => {
     return walletClient.getBalance({
@@ -56,46 +87,105 @@ const Staking = () => {
     return getAutoPxEthVaultBalance(autoPxEth);
   }, [autoPxEth]);
 
-  const stake = async () => {
-    const amount = parseEther(inputStakeBalance);
-    await stakeDeposit(staking, amount, account);
-  };
+  const getUserContrib = useCallback(async (): Promise<bigint> => {
+    return getUserStrategyContribution(vault, account);
+  }, [vault, account]);
 
-  const unstake = async () => {
-    const amount = parseEther(inputUnstakeBalance);
-    await stakeWithdraw(staking, amount, account);
-  };
+  // ----- Update Functions -----
 
-  useEffect(() => {
-    const fetchData = async () => {
+  const updateBlockNumber = useCallback(async () => {
+    await handleLoadingJob("Fetching block number...", async () => {
       const blockNumber = await walletClient.getBlockNumber();
       setBlockNumber(blockNumber);
+    });
+  }, [walletClient]);
 
+  const updateStakeValues = useCallback(async () => {
+    await handleLoadingJob("Fetching stake balances...", async () => {
       // const accounts = await walletClient.getAddresses();
       // setAccount(accounts[0]);
 
-      const balance = await getNativeBalance();
-      setAccountHumanBalance(formatEtherBalance(balance));
+      const nativeBalance = await getNativeBalance();
+      setAccountHumanBalance(formatEtherBalance(nativeBalance));
 
-      const stake = await getUserStake();
-      setAccountHumanStake(formatEtherBalance(stake));
+      const stakeBalance = await getUserStake();
+      setAccountHumanStake(formatEtherBalance(stakeBalance));
+
+      const contrib = await getUserContrib();
+      setAccountContrib(formatSolidityPercentage(contrib));
 
       const totalStake = await getTotalStake();
       setTotalStake(formatEtherBalance(totalStake));
 
       const vaultApxEth = await getVaultApxEth();
       setVaultApxEth(formatEtherBalance(vaultApxEth));
+    });
+  }, [getNativeBalance, getUserStake, getTotalStake, getVaultApxEth, getUserContrib]);
 
-      setLoading(false);
+  const waitForStakeAction = async (hash: SolidityBytes) => {
+    const receipt = await walletClient.waitForTransactionReceipt({ hash });
+    if (receipt.status === "success") {
+      console.log("Transaction confirmed");
+      await updateStakeValues(); // Call your function to fetch updated values
+    } else {
+      console.log("Transaction failed");
+    }
+  };
+
+  // ----- Write Functions -----
+
+  const stake = async () => {
+    try {
+      const amount = parseEther(inputStakeBalance);
+      const hash = await stakeDeposit(staking, amount, account);
+      setInputStakeBalance("");
+
+      await handleLoadingJob("Waiting for stake tx confirmation...", async () => {
+        await waitForStakeAction(hash);
+      });
+      await updateStakeValues();
+    } catch (error) {
+      console.error("Error staking:", error);
+    }
+  };
+
+  const unstake = async () => {
+    try {
+      const amount = parseEther(inputUnstakeBalance);
+      const hash = await stakeWithdraw(staking, amount, account);
+      setInputUnstakeBalance("");
+
+      await handleLoadingJob("Waiting for unstake tx confirmation...", async () => {
+        await waitForStakeAction(hash);
+      });
+      await updateStakeValues();
+    } catch (error) {
+      console.error("Error unstaking:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (init) {
+      console.log("init");
+      // Immediately fetch block number and stake values on mount
+      updateBlockNumber();
+      updateStakeValues();
+      setInit(false);
+    }
+
+    if (!intervalRef.current) {
+      // Set the interval to fetch the block number every 10 seconds
+      intervalRef.current = setInterval(updateBlockNumber, 10000);
+    }
+
+    // Clean up the interval when the component unmounts
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null; // Reset the interval ref
+      }
     };
-    fetchData();
-  }, [
-    walletClient,
-    getNativeBalance,
-    getUserStake,
-    getTotalStake,
-    getVaultApxEth,
-  ]);
+  }, [init, updateBlockNumber, updateStakeValues]);
 
   const setMaxInputStake = async () => {
     const balance = await getNativeBalance();
@@ -112,20 +202,16 @@ const Staking = () => {
 
   return (
     <div>
-      <div className="flex flex-col text-xl font-semibold items-center justify-start h-[150px]">
-        {
-          loading
-            ? (<div>Loading...</div>)
-            : (<div>Sync: OK</div>)
-        }
-      </div>
+      <Loading ref={loadingRef} />
 
-      <div className="grid text-md gap-4 mx-auto w-[600px]">
-        <div className="grid grid-cols-2 gap-2 mb-2 text-xl">
+      <br />
+
+      <div className="grid text-md gap-4 mx-auto w-[450px]">
+        <div className="grid grid-cols-3 gap-2 mb-2 text-md ">
           <input
             type="text"
-            className="border p-2 rounded-md text-black"
-            placeholder="0"
+            className="col-span-2 border p-2 rounded-md text-black"
+            placeholder="0.0"
             value={inputStakeBalance}
             onChange={(e) => setInputStakeBalance(e.target.value)}
           />
@@ -135,7 +221,7 @@ const Staking = () => {
           >
             Stake
           </button>
-          <div className="align-left text-sm">
+          <div className="col-span-2 align-left text-sm">
             <span> Balance (ETH): {accountHumanBalance} </span>
             <button
               className="text-blue-500 font-semibold hover:text-blue-700"
@@ -146,11 +232,11 @@ const Staking = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 mb-2 text-xl">
+        <div className="grid grid-cols-3 gap-2 mb-2 text-md">
           <input
             type="text"
-            className="border p-2 rounded-md text-black"
-            placeholder="0"
+            className="col-span-2 border p-2 rounded-md text-black"
+            placeholder="0.0"
             value={inputUnstakeBalance}
             onChange={(e) => setInputUnstakeBalance(e.target.value)}
           />
@@ -160,7 +246,7 @@ const Staking = () => {
           >
               Unstake
           </button>
-          <div className="align-left text-sm">
+          <div className="col-span-2 align-left text-sm">
             <span> Stake (ETH): {accountHumanStake} </span>
             <button
               className="text-blue-500 font-semibold hover:text-blue-700"
@@ -174,9 +260,8 @@ const Staking = () => {
       </div>
 
       <br />
-      <br />
 
-      <ol className="list-inside text-xl text-left font-[family-name:var(--font-geist-mono)]">
+      <ol className="list-inside text-md text-left font-[family-name:var(--font-geist-mono)]">
         <li className="mb-2">
           <b className="text-xl"> Account: </b>
         </li>
@@ -185,6 +270,7 @@ const Staking = () => {
           <code className="col-span-1 px-2 rounded font-medium"> Address:</code> <div className="col-span-2">{account.toString()}</div>
           <code className="col-span-1 px-2 rounded font-medium"> ETH Balance:</code> <div className="col-span-2">{accountHumanBalance} ETH</div>
           <code className="col-span-1 px-2 rounded font-medium"> Stake Locked:</code> <div className="col-span-2">{accountHumanStake} ETH</div>
+          <code className="col-span-1 px-2 rounded font-medium"> User Contribution:</code> <div className="col-span-2">{accountContrib} %</div>
         </li>
 
         <br />

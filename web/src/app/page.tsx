@@ -48,7 +48,7 @@ export default function Home() {
   }
 
   return (
-    <div className="grid grid-rows-[10px_1fr_20px] items-center justify-items-center min-h-screen px-5 p-8 pb-20 gap-16 font-[family-name:var(--font-geist-sans)]">
+    <div className="grid grid-rows-[10px_1fr_20px] items-center justify-items-center min-h-screen p-8 px-0 pb-10 gap-16 font-[family-name:var(--font-geist-sans)]">
       <header className="relative min-w-full">
         <div className="container mx-auto h-[100px] flex items-center justify-between p-10">
 
