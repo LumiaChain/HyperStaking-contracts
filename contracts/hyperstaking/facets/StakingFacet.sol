@@ -133,7 +133,7 @@ contract StakingFacet is IStaking {
         StakingPoolInfo storage pool = s.poolInfo[poolId];
         UserPoolInfo storage userPool = s.userInfo[poolId][user];
 
-        return userPool.staked * LibStaking.PRECISSION_FACTOR / pool.totalStake;
+        return userPool.staked * LibStaking.PRECISION_FACTOR / pool.totalStake;
     }
 
     function nativeTokenAddress() public pure returns (address) {

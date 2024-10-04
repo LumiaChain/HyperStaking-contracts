@@ -128,9 +128,9 @@ contract StrategyVaultFacet is IStrategyVault {
         VaultAsset memory asset = v.vaultAssetInfo[strategy];
 
         // amout ratio of the total stake locked in vault
-        uint256 amountRatio = (amount * LibStaking.PRECISSION_FACTOR / vault.totalStakeLocked);
+        uint256 amountRatio = (amount * LibStaking.PRECISION_FACTOR / vault.totalStakeLocked);
 
-        return amountRatio * asset.totalShares / LibStaking.PRECISSION_FACTOR;
+        return amountRatio * asset.totalShares / LibStaking.PRECISION_FACTOR;
     }
 
     /// @inheritdoc IStrategyVault
@@ -144,7 +144,7 @@ contract StrategyVaultFacet is IStrategyVault {
             return 0;
         }
 
-        return userVault.stakeLocked * LibStaking.PRECISSION_FACTOR / vault.totalStakeLocked;
+        return userVault.stakeLocked * LibStaking.PRECISION_FACTOR / vault.totalStakeLocked;
     }
 
     //============================================================================================//
