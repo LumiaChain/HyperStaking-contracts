@@ -10,7 +10,7 @@ pragma solidity =0.8.27;
 /**
  * @notice Info of each user
  * @param amount Token amount the user has provided
- * @param totalLocked The total amount of tokens locked in vaults across all strategies
+ * @param stakeLocked The total amount of tokens locked in vaults across all strategies
  */
 struct UserPoolInfo {
     uint256 staked;
@@ -46,15 +46,15 @@ struct StakingStorage {
 }
 
 library LibStaking {
-  bytes32 constant internal STAKING_STORAGE_POSITION = keccak256("hyperstaking-staking.storage");
+    bytes32 constant internal STAKING_STORAGE_POSITION = keccak256("hyperstaking-staking.storage");
 
-  // 1e18 as a scaling factor, e.g. for shares, where 0.1 ETH == 10%
-  uint256 constant internal PRECISSION_FACTOR = 1e18;
+    // 1e18 as a scaling factor, e.g. for shares, where 0.1 ETH == 10%
+    uint256 constant internal PRECISION_FACTOR = 1e18;
 
-  function diamondStorage() internal pure returns (StakingStorage storage s) {
-    bytes32 position = STAKING_STORAGE_POSITION;
-    assembly {
-      s.slot := position
+    function diamondStorage() internal pure returns (StakingStorage storage s) {
+        bytes32 position = STAKING_STORAGE_POSITION;
+        assembly {
+            s.slot := position
+        }
     }
-  }
 }

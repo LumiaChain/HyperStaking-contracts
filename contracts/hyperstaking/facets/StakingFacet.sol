@@ -27,10 +27,10 @@ contract StakingFacet is IStaking {
     // validate pool and strategy valut
     modifier validate(uint256 poolId, address strategy) {
         StakingStorage storage s = LibStaking.diamondStorage();
-        StrategyVaultStorage storage r = LibStrategyVault.diamondStorage();
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
 
         require(poolId == s.poolInfo[poolId].poolId, PoolDoesNotExist());
-        require(poolId == r.vaultInfo[strategy].poolId, VaultDoesNotExist());
+        require(poolId == v.vaultInfo[strategy].poolId, VaultDoesNotExist());
         _;
     }
 

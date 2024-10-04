@@ -7,7 +7,7 @@ import {UserPoolInfo, StakingPoolInfo} from "../libraries/LibStaking.sol";
  * @title IStaking
  * @dev Interface for StakingFacet
  */
-interface IStaking{
+interface IStaking {
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//

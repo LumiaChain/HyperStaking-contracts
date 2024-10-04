@@ -36,13 +36,13 @@ struct StrategyVaultStorage {
 }
 
 library LibStrategyVault {
-  bytes32 constant internal STRATEGY_VAULT_STORAGE_POSITION
-    = keccak256("hyperstaking-strategy-vault.storage");
+    bytes32 constant internal STRATEGY_VAULT_STORAGE_POSITION
+        = keccak256("hyperstaking-strategy-vault.storage");
 
-  function diamondStorage() internal pure returns (StrategyVaultStorage storage s) {
-    bytes32 position = STRATEGY_VAULT_STORAGE_POSITION;
-    assembly {
-      s.slot := position
+    function diamondStorage() internal pure returns (StrategyVaultStorage storage s) {
+        bytes32 position = STRATEGY_VAULT_STORAGE_POSITION;
+        assembly {
+            s.slot := position
+        }
     }
-  }
 }

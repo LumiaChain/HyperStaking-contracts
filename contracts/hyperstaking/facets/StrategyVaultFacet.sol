@@ -44,12 +44,12 @@ contract StrategyVaultFacet is IStrategyVault {
         uint256 amount,
         address user
     ) external payable {
-        StrategyVaultStorage storage r = LibStrategyVault.diamondStorage();
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         StakingStorage storage s = LibStaking.diamondStorage();
 
-        UserVaultInfo storage userVault = r.userInfo[strategy][user];
-        VaultInfo storage vault = r.vaultInfo[strategy];
-        VaultAsset storage asset = r.vaultAssetInfo[strategy];
+        UserVaultInfo storage userVault = v.userInfo[strategy][user];
+        VaultInfo storage vault = v.vaultInfo[strategy];
+        VaultAsset storage asset = v.vaultAssetInfo[strategy];
         UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
         userVault.stakeLocked += amount;
@@ -72,12 +72,12 @@ contract StrategyVaultFacet is IStrategyVault {
         uint256 amount,
         address user
     ) external returns (uint256 withdrawAmount) {
-        StrategyVaultStorage storage r = LibStrategyVault.diamondStorage();
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         StakingStorage storage s = LibStaking.diamondStorage();
 
-        UserVaultInfo storage userVault = r.userInfo[strategy][user];
-        VaultInfo storage vault = r.vaultInfo[strategy];
-        VaultAsset storage asset = r.vaultAssetInfo[strategy];
+        UserVaultInfo storage userVault = v.userInfo[strategy][user];
+        VaultInfo storage vault = v.vaultInfo[strategy];
+        VaultAsset storage asset = v.vaultAssetInfo[strategy];
         UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
         uint256 shares = convertToShares(strategy, amount);
@@ -101,20 +101,20 @@ contract StrategyVaultFacet is IStrategyVault {
         address strategy,
         address user
     ) external view returns (UserVaultInfo  memory) {
-        StrategyVaultStorage storage r = LibStrategyVault.diamondStorage();
-        return r.userInfo[strategy][user];
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+        return v.userInfo[strategy][user];
     }
 
     /// @inheritdoc IStrategyVault
     function vaultInfo(address strategy) external view returns (VaultInfo memory) {
-        StrategyVaultStorage storage r = LibStrategyVault.diamondStorage();
-        return r.vaultInfo[strategy];
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+        return v.vaultInfo[strategy];
     }
 
     /// @inheritdoc IStrategyVault
     function vaultAssetInfo(address strategy) external view returns (VaultAsset memory) {
-        StrategyVaultStorage storage r = LibStrategyVault.diamondStorage();
-        return r.vaultAssetInfo[strategy];
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+        return v.vaultAssetInfo[strategy];
     }
 
     /// @inheritdoc IStrategyVault
@@ -122,10 +122,10 @@ contract StrategyVaultFacet is IStrategyVault {
         address strategy,
         uint256 amount
     ) public view returns (uint256) {
-        StrategyVaultStorage storage r = LibStrategyVault.diamondStorage();
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
 
-        VaultInfo memory vault = r.vaultInfo[strategy];
-        VaultAsset memory asset = r.vaultAssetInfo[strategy];
+        VaultInfo memory vault = v.vaultInfo[strategy];
+        VaultAsset memory asset = v.vaultAssetInfo[strategy];
 
         // amout ratio of the total stake locked in vault
         uint256 amountRatio = (amount * LibStaking.PRECISSION_FACTOR / vault.totalStakeLocked);
@@ -135,10 +135,10 @@ contract StrategyVaultFacet is IStrategyVault {
 
     /// @inheritdoc IStrategyVault
     function userContribution(address strategy, address user) public view returns (uint256) {
-        StrategyVaultStorage storage r = LibStrategyVault.diamondStorage();
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
 
-        UserVaultInfo memory userVault = r.userInfo[strategy][user];
-        VaultInfo memory vault = r.vaultInfo[strategy];
+        UserVaultInfo memory userVault = v.userInfo[strategy][user];
+        VaultInfo memory vault = v.vaultInfo[strategy];
 
         if (userVault.stakeLocked == 0 || vault.totalStakeLocked == 0) {
             return 0;
@@ -153,19 +153,19 @@ contract StrategyVaultFacet is IStrategyVault {
 
 
     function _createVault(uint256 poolId, address strategy, VaultAsset memory asset) internal {
-        StrategyVaultStorage storage r = LibStrategyVault.diamondStorage();
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
 
-        require(r.vaultInfo[strategy].poolId == 0, VaultAlreadyExist());
+        require(v.vaultInfo[strategy].poolId == 0, VaultAlreadyExist());
 
         // create a new VaultInfo and store it in storage
-        r.vaultInfo[strategy] = VaultInfo({
+        v.vaultInfo[strategy] = VaultInfo({
             poolId: poolId,
             strategy: strategy,
             totalStakeLocked: 0
         });
 
         // save VaultAsset for this strategy
-        r.vaultAssetInfo[strategy] = asset;
+        v.vaultAssetInfo[strategy] = asset;
 
         emit VaultCreate(msg.sender, poolId, strategy, asset.token);
     }
