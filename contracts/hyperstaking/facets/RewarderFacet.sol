@@ -13,7 +13,7 @@ import {
 } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 import {
-    LibRewarder, RewarderStorage, UserRewarderInfo, RewardInfo, RewardPool
+    LibRewarder, RewarderStorage, UserRewardInfo, RewardInfo, RewardPool
 } from "../libraries/LibRewarder.sol";
 
 /**
@@ -24,22 +24,92 @@ import {
 contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
-    modifier onlyStopped(address strategy_) {
+    //============================================================================================//
+    //                                         Modifiers                                          //
+    //============================================================================================//
+
+    modifier onlyStopped(address strategy) {
         RewarderStorage storage r = LibRewarder.diamondStorage();
-        RewardInfo storage rewardInfo = r.rewardsInfo[strategy_];
+        RewardInfo storage rewardInfo = r.rewardsInfo[strategy];
 
         require(rewardInfo.stopped > 0, NotStopped());
         _;
     }
 
-    modifier onlyNotStopped(address strategy_) {
+    modifier onlyNotStopped(address strategy) {
         RewarderStorage storage r = LibRewarder.diamondStorage();
-        RewardInfo storage rewardInfo = r.rewardsInfo[strategy_];
+        RewardInfo storage rewardInfo = r.rewardsInfo[strategy];
 
         require(rewardInfo.stopped == 0, Stopped());
         _;
     }
 
+    //============================================================================================//
+    //                                      Public Functions                                      //
+    //============================================================================================//
+
+    /**
+     * Allows staker to receive a reward token.
+     */
+    function claim(address strategy, address user) external returns (uint256 pending) {
+        onUpdate(strategy, user);
+
+        RewarderStorage storage r = LibRewarder.diamondStorage();
+        RewardInfo storage rewardInfo = r.rewardsInfo[strategy];
+        UserRewardInfo storage userInfo = r.userInfo[strategy][user];
+
+        pending = userInfo.tokensUnclaimed;
+        if(pending > 0){
+            userInfo.tokensUnclaimed = 0;
+            rewardInfo.rewardToken.safeTransfer(user, pending);
+            emit RewardClaim(strategy, user, pending);
+        }
+    }
+
+    /**
+     * @notice Function called by StrategyVault whenever withdrawal.
+     * @dev onUpdate depends on the totalStakeLocked (the value in effect until this moment).
+     *      Function should be called before updating this value in the vault.
+     * @param strategy address of strategy
+     * @param user Address of the user
+     */
+    function onUpdate(address strategy, address user) public nonReentrant {
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+        UserVaultInfo storage userVault = v.userInfo[strategy][user];
+
+        RewarderStorage storage r = LibRewarder.diamondStorage();
+        UserRewardInfo storage userInfo = r.userInfo[strategy][user];
+        RewardPool storage pool = r.rewardPools[strategy];
+        updatePool(strategy);
+
+        // include unclaimed tokens
+        uint256 pending = _pendingTokens(strategy, user, pool);
+
+        userInfo.amount = userVault.stakeLocked;
+        userInfo.rewardPerTokenPaid =
+            userInfo.amount * pool.accTokenPerShare
+            / LibRewarder.REWARD_PRECISION;
+
+        if (pending > 0) {
+           userInfo.tokensUnclaimed += pending;
+        }
+    }
+
+    /**
+     * @notice Update reward variables of the given poolInfo.
+     */
+    function updatePool(address strategy) public {
+        RewardPool memory updatedPool = _calculatePoolInfo(strategy);
+
+        RewarderStorage storage r = LibRewarder.diamondStorage();
+        RewardPool storage pool = r.rewardPools[strategy];
+
+        if (updatedPool.lastRewardTimestamp > pool.lastRewardTimestamp) {
+            r.rewardPools[strategy] = pool;
+        }
+    }
+
+    /* ========== ACL  ========== */
 
     /**
      * @notice Function which transfrFrom reward tokens from the sender and starts updates
@@ -48,50 +118,52 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
      * TODO Pausable
      */
     function notifyReward(
-        address strategy_,
-        IERC20 rewardToken_,
-        uint256 rewardAmount_,
-        uint64 startTimestamp_,
-        uint64 distributionEnd_
-    ) external onlyNotStopped(strategy_) nonReentrant {
-        require(address(rewardToken_) != address(0), ZeroAddress());
-        require(startTimestamp_ >= block.timestamp, StartTimestampPassed());
-        require(distributionEnd_ > startTimestamp_, InvalidDistributionRange());
+        address strategy,
+        IERC20 rewardToken,
+        uint256 rewardAmount,
+        uint64 startTimestamp,
+        uint64 distributionEnd
+    ) external onlyNotStopped(strategy) nonReentrant {
+        require(address(rewardToken) != address(0), ZeroAddress());
+        require(startTimestamp >= block.timestamp, StartTimestampPassed());
+        require(distributionEnd > startTimestamp, InvalidDistributionRange());
 
-        updatePool(strategy_);
+        updatePool(strategy);
 
         RewarderStorage storage r = LibRewarder.diamondStorage();
-        RewardInfo storage rewardInfo = r.rewardsInfo[strategy_];
-        RewardPool storage pool = r.rewardPools[strategy_];
+        RewardInfo storage rewardInfo = r.rewardsInfo[strategy];
+        RewardPool storage pool = r.rewardPools[strategy];
 
-        if (startTimestamp_ == 0) {
-            startTimestamp_ = uint64(block.timestamp);
+        // TODO check if rewardInfo and pool is empty
+
+        if (startTimestamp == 0) {
+            startTimestamp = uint64(block.timestamp);
         }
 
         // tokens left from an earlier unfinished distribution
-        uint256 leftover = _tokenReward(strategy_);
+        uint256 leftover = _tokenReward(strategy);
 
         // override previous distribution
-        rewardInfo.rewardToken = rewardToken_;
-        rewardInfo.distributionStart = startTimestamp_;
-        rewardInfo.distributionEnd = distributionEnd_;
+        rewardInfo.rewardToken = rewardToken;
+        rewardInfo.distributionStart = startTimestamp;
+        rewardInfo.distributionEnd = distributionEnd;
 
         // rate is rounded down (lose precision), so it should not exceed the available amount
-        uint256 tokensPerSecond = (rewardAmount_ + leftover) / (distributionEnd_ - startTimestamp_);
+        uint256 tokensPerSecond = (rewardAmount + leftover) / (distributionEnd - startTimestamp);
         require(tokensPerSecond <= 1e30, RateTooHigh());
 
         pool.tokensPerSecond = tokensPerSecond;
-        pool.lastRewardTimestamp = startTimestamp_;
+        pool.lastRewardTimestamp = startTimestamp;
 
-        rewardToken_.safeTransferFrom(msg.sender, address(this), rewardAmount_ + leftover);
+        rewardToken.safeTransferFrom(msg.sender, address(this), rewardAmount + leftover);
 
         emit RewardNotify(
-            strategy_,
-            address(rewardToken_),
-            rewardAmount_,
-            rewardAmount_ + leftover,
-            startTimestamp_,
-            distributionEnd_
+            strategy,
+            address(rewardToken),
+            rewardAmount,
+            rewardAmount + leftover,
+            startTimestamp,
+            distributionEnd
         );
     }
 
@@ -104,123 +176,64 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
      * TODO Pausable
      */
     function withdrawRemaining(
-        address strategy_,
-        address receiver_
-    ) external onlyStopped(strategy_) {
+        address strategy,
+        address receiver
+    ) external onlyStopped(strategy) {
         RewarderStorage storage r = LibRewarder.diamondStorage();
-        RewardInfo storage rewardInfo = r.rewardsInfo[strategy_];
+        RewardInfo storage rewardInfo = r.rewardsInfo[strategy];
 
-        uint256 amount = _tokenReward(strategy_);
+        uint256 amount = _tokenReward(strategy);
         if(amount > 0) {
-            rewardInfo.rewardToken.safeTransfer(receiver_, amount);
-            emit WithdrawRemaining(strategy_, receiver_, amount);
-        }
-    }
-
-    // /**
-    //  * @notice Retrieves all reward tokens.
-    //  * @dev should be used only in emergency.
-    //  * Emits {AdminWithdraw}.
-    //  *
-    //  * TODO ACL
-    //  * TODO consider if safe inside Diamond, so it couldn't withdraw tokens from other modules
-    //  */
-    // function emergencyWithdraw(address receiver_) external {
-    //     RewarderStorage storage r = LibRewarder.diamondStorage();
-    //
-    //     uint256 amount = r.rewardToken.balanceOf(address(this));
-    //     if(amount > 0) {
-    //         r.ewardToken.safeTransfer(receiver_, amount);
-    //         emit EnergencyWithdraw(receiver_, amount);
-    //     }
-    // }
-
-    /* ========== DiamondInternal  ========== */
-
-    /**
-     * @notice Function called by StrategyVault whenever withdrawal.
-     * @dev onUpdate depends on the totalStakeLocked (the value in effect until this moment).
-     *      Function should be called before updating this value in the vault.
-     * @param user_ Address of the user
-     */
-    function onUpdate(address strategy_, address user_) public nonReentrant {
-        updatePool(strategy_);
-
-        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-        UserVaultInfo storage userVault = v.userInfo[strategy_][user_];
-
-        RewarderStorage storage r = LibRewarder.diamondStorage();
-        UserRewarderInfo storage userInfo = r.userInfo[strategy_][user_];
-        RewardPool storage pool = r.rewardPools[strategy_];
-
-        // include unclaimed tokens
-        uint256 pending = _pendingTokens(strategy_, user_, pool);
-
-        userInfo.amount = userVault.stakeLocked;
-        userInfo.rewardPerTokenPaid =
-            userInfo.amount * pool.accTokenPerShare
-            / LibRewarder.REWARD_PRECISION;
-
-        if (pending > 0) {
-           userInfo.tokensUnclaimed += pending;
+            rewardInfo.rewardToken.safeTransfer(receiver, amount);
+            emit WithdrawRemaining(strategy, receiver, amount);
         }
     }
 
     // TODO ACL
-    function stop(address strategy_) external {
-        updatePool(strategy_);
+    function stop(address strategy) external {
+        updatePool(strategy);
 
         RewarderStorage storage r = LibRewarder.diamondStorage();
-        RewardInfo storage rewardInfo = r.rewardsInfo[strategy_];
+        RewardInfo storage rewardInfo = r.rewardsInfo[strategy];
 
         uint64 stopped = uint64(block.timestamp);
         rewardInfo.stopped = stopped;
-        emit Stop(strategy_, msg.sender, stopped);
-    }
-
-    /* ========== USER ========== */
-
-    /**
-     * Allows staker to receive a reward token.
-     */
-    function claim(address strategy_, address user_) external returns (uint256 pending) {
-        onUpdate(strategy_, user_);
-
-        RewarderStorage storage r = LibRewarder.diamondStorage();
-        RewardInfo storage rewardInfo = r.rewardsInfo[strategy_];
-        UserRewarderInfo storage userInfo = r.userInfo[strategy_][user_];
-
-        pending = userInfo.tokensUnclaimed;
-        if(pending > 0){
-            userInfo.tokensUnclaimed = 0;
-            rewardInfo.rewardToken.safeTransfer(user_, pending);
-            emit RewardClaim(strategy_, user_, pending);
-        }
+        emit Stop(strategy, msg.sender, stopped);
     }
 
     /* ========== VIEW ========== */
 
     /**
      * @notice View function to see unclaimed tokens
-     * @param user_ Address of user.
+     * @param user Address of user.
      * @return pending reward for a given user.
      */
-    function unclaimedTokens(address strategy_, address user_) external view returns (uint256) {
+    function unclaimedTokens(address strategy, address user) external view returns (uint256) {
         RewarderStorage storage r = LibRewarder.diamondStorage();
-        UserRewarderInfo storage userInfo = r.userInfo[strategy_][user_];
+        UserRewardInfo storage userInfo = r.userInfo[strategy][user];
 
-        return  userInfo.tokensUnclaimed + _pendingTokens(strategy_, user_, _calculatePoolInfo(strategy_));
+        return  userInfo.tokensUnclaimed + _pendingTokens(strategy, user, _calculatePoolInfo(strategy));
     }
 
     /**
      * @notice View function to see balance of reward token.
      * TODO It should not work like this
      */
-    function balance(address strategy_) external view returns (uint256) {
+    function balance(address strategy) external view returns (uint256) {
         RewarderStorage storage r = LibRewarder.diamondStorage();
-        RewardInfo storage rewardInfo = r.rewardsInfo[strategy_];
+        RewardInfo storage rewardInfo = r.rewardsInfo[strategy];
 
         return rewardInfo.rewardToken.balanceOf(address(this));
+    }
+
+    function rewarderExist(address strategy) public view returns (bool) {
+        RewarderStorage storage r = LibRewarder.diamondStorage();
+        RewardInfo storage rewardInfo = r.rewardsInfo[strategy];
+
+        if (address(rewardInfo.rewardToken) == address(0)) {
+            return false;
+        }
+        return true;
     }
 
     //============================================================================================//
@@ -228,25 +241,11 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
     //============================================================================================//
 
     /**
-     * @notice Update reward variables of the given poolInfo.
-     */
-    function updatePool(address strategy_) public {
-        RewardPool memory updatedPool = _calculatePoolInfo(strategy_);
-
-        RewarderStorage storage r = LibRewarder.diamondStorage();
-        RewardPool storage pool = r.rewardPools[strategy_];
-
-        if (updatedPool.lastRewardTimestamp > pool.lastRewardTimestamp) {
-            r.rewardPools[strategy_] = pool;
-        }
-    }
-
-    /**
      * @notice Returns current timestamp within token distribution or distribution end date
      */
-    function _lastTimeRewardApplicable(address strategy_) internal view returns (uint64) {
+    function _lastTimeRewardApplicable(address strategy) internal view returns (uint64) {
         RewarderStorage storage r = LibRewarder.diamondStorage();
-        RewardInfo storage rewardInfo = r.rewardsInfo[strategy_];
+        RewardInfo storage rewardInfo = r.rewardsInfo[strategy];
 
         if (rewardInfo.stopped > 0) {
             return rewardInfo.stopped;
@@ -259,11 +258,11 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
     /**
      * @notice Fuction which calculate tokenReward based on current time state (timeElapsed)
      */
-    function _tokenReward(address strategy_) internal view returns (uint256) {
+    function _tokenReward(address strategy) internal view returns (uint256) {
         RewarderStorage storage r = LibRewarder.diamondStorage();
-        RewardPool storage pool = r.rewardPools[strategy_];
+        RewardPool storage pool = r.rewardPools[strategy];
 
-        uint64 timeElapsed = _lastTimeRewardApplicable(strategy_) - pool.lastRewardTimestamp;
+        uint64 timeElapsed = _lastTimeRewardApplicable(strategy) - pool.lastRewardTimestamp;
         return timeElapsed * pool.tokensPerSecond;
     }
 
@@ -272,20 +271,20 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
      * @dev Used for updating shares during pool update and for returning pendingTokens.
      */
     function _calculatePoolInfo(
-        address strategy_
+        address strategy
     ) internal view returns (RewardPool memory pool) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-        VaultInfo storage vaultInfo = v.vaultInfo[strategy_];
+        VaultInfo storage vaultInfo = v.vaultInfo[strategy];
 
         RewarderStorage storage r = LibRewarder.diamondStorage();
-        pool = r.rewardPools[strategy_];
+        pool = r.rewardPools[strategy];
 
         // reward distribution didn't started yet
         if (pool.lastRewardTimestamp == 0) {
             return pool;
         }
 
-        uint256 tokenReward = _tokenReward(strategy_);
+        uint256 tokenReward = _tokenReward(strategy);
         if (tokenReward > 0) {
             if (vaultInfo.totalStakeLocked > 0) {
                 // increase acctokenPerShare
@@ -295,7 +294,7 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
             }
 
             // update timestamp
-            pool.lastRewardTimestamp = _lastTimeRewardApplicable(strategy_);
+            pool.lastRewardTimestamp = _lastTimeRewardApplicable(strategy);
         }
     }
 
@@ -304,15 +303,15 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
      * @return pending reward for a given user.
      */
     function _pendingTokens(
-        address strategy_,
-        address user_,
-        RewardPool memory pool_
+        address strategy,
+        address user,
+        RewardPool memory pool
     ) internal view returns (uint256 pending) {
         RewarderStorage storage r = LibRewarder.diamondStorage();
-        UserRewarderInfo storage userInfo = r.userInfo[strategy_][user_];
+        UserRewardInfo storage userInfo = r.userInfo[strategy][user];
 
         pending =
-            userInfo.amount * pool_.accTokenPerShare / LibRewarder.REWARD_PRECISION
+            userInfo.amount * pool.accTokenPerShare / LibRewarder.REWARD_PRECISION
             - userInfo.rewardPerTokenPaid;
     }
 }

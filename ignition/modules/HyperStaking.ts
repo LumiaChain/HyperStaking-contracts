@@ -1,6 +1,6 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
-import { getSelectors, FacetCutAction } from "../../scripts//libraries/diamond";
-import { getContractInterface } from "../../scripts//libraries/hardhat";
+import { getSelectors, FacetCutAction } from "../../scripts/libraries/diamond";
+import { getContractInterface } from "../../scripts/libraries/hardhat";
 import { ZeroAddress } from "ethers";
 import DiamondModule from "./Diamond";
 
@@ -14,6 +14,9 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const vaultFacet = m.contract("StrategyVaultFacet");
   const vaultFacetInterface = getContractInterface("IStrategyVault");
 
+  const rewarderFacet = m.contract("RewarderFacet");
+  const rewarderFacetInterface = getContractInterface("IRewarder");
+
   // cut StakingFacet
   const cut = [
     {
@@ -26,6 +29,11 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       action: FacetCutAction.Add,
       functionSelectors: getSelectors(vaultFacetInterface),
     },
+    {
+      facetAddress: rewarderFacet,
+      action: FacetCutAction.Add,
+      functionSelectors: getSelectors(rewarderFacetInterface),
+    },
   ];
 
   const owner = m.getAccount(0); // ZeroAddress for init function
@@ -33,7 +41,11 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const diamondCut = m.contractAt("IDiamondCut", diamond);
   m.call(diamondCut, "diamondCut", [cut, ZeroAddress, "0x"], { from: owner });
 
-  return { diamond };
+  const staking = m.contractAt("IStaking", diamond);
+  const vault = m.contractAt("IStrategyVault", diamond);
+  const rewarder = m.contractAt("IRewarder", diamond);
+
+  return { diamond, staking, vault, rewarder };
 });
 
 export default HyperStakingModule;

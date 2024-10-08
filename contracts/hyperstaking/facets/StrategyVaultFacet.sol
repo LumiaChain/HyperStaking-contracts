@@ -3,6 +3,7 @@ pragma solidity =0.8.27;
 
 import {IStrategyVault} from "../interfaces/IStrategyVault.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
+import {IRewarder} from "../interfaces/IRewarder.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -52,6 +53,11 @@ contract StrategyVaultFacet is IStrategyVault {
         VaultAsset storage asset = v.vaultAssetInfo[strategy];
         UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
+        // rewarder depends on the stake values and should be called before updating them
+        if (IRewarder(address(this)).rewarderExist(strategy)) {
+            IRewarder(address(this)).onUpdate(strategy, user);
+        }
+
         userVault.stakeLocked += amount;
         vault.totalStakeLocked += amount;
         userPool.stakeLocked += amount;
@@ -60,8 +66,8 @@ contract StrategyVaultFacet is IStrategyVault {
         uint256 shares = IStrategy(strategy).allocate{value: amount}(amount, user);
 
         // fetch shares to this vault
-        IERC20(asset.token).safeTransferFrom(strategy, address(this), shares);
         asset.totalShares += shares;
+        IERC20(asset.token).safeTransferFrom(strategy, address(this), shares);
 
         emit Deposit(vault.poolId, strategy, user, amount, shares);
     }
@@ -79,6 +85,11 @@ contract StrategyVaultFacet is IStrategyVault {
         VaultInfo storage vault = v.vaultInfo[strategy];
         VaultAsset storage asset = v.vaultAssetInfo[strategy];
         UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
+
+        // rewarder depends on the stake values and should be called before updating them
+        if (IRewarder(address(this)).rewarderExist(strategy)) {
+            IRewarder(address(this)).onUpdate(strategy, user);
+        }
 
         uint256 shares = convertToShares(strategy, amount);
 

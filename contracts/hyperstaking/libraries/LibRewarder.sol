@@ -13,7 +13,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * rewardPerTokenPaid The amount of reward tokens not available to claim.
  * tokensUnclaimed The amount of reward unclaimed tokens, waiting to be claimed by user.
  */
-struct UserRewarderInfo {
+struct UserRewardInfo {
     uint256 amount;
     uint256 rewardPerTokenPaid;
     uint256 tokensUnclaimed;
@@ -61,7 +61,7 @@ struct RewarderStorage {
     mapping(address strategy => RewardPool) rewardPools;
 
     /// @notice Info of each user that stakes tokens into strategy
-    mapping(address strategy => mapping(address user => UserRewarderInfo)) userInfo;
+    mapping(address strategy => mapping(address user => UserRewardInfo)) userInfo;
 }
 
 library LibRewarder {

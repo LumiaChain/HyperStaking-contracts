@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 // import {} from "../libraries/LibRewarder.sol";
 
 /**
@@ -37,4 +38,43 @@ interface IRewarder {
     error RateTooHigh();
     error StartTimestampPassed();
     error InvalidDistributionRange();
+
+    //============================================================================================//
+    //                                          Mutable                                           //
+    //============================================================================================//
+
+    function claim(address strategy, address user) external returns (uint256 pending);
+
+    function onUpdate(address strategy, address user) external;
+
+    function updatePool(address strategy) external;
+
+    /* ========== ACL  ========== */
+
+    function notifyReward(
+        address strategy,
+        IERC20 rewardToken,
+        uint256 rewardAmount,
+        uint64 startTimestamp,
+        uint64 distributionEnd
+    ) external;
+
+    function withdrawRemaining(address strategy, address receiver) external;
+
+    function stop(address strategy) external;
+
+    //============================================================================================//
+    //                                           View                                             //
+    //============================================================================================//
+
+    function unclaimedTokens(address strategy, address user) external view returns (uint256);
+
+    function balance(address strategy) external view returns (uint256);
+
+    function rewarderExist(address strategy) external view returns (bool);
+
+    // TODO
+    // function userRewarderInfo() external view returns();
+    // function rewardInfo() external view returns();
+    // function rewardPool() external view returns();
 }
