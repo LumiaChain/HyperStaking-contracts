@@ -6,10 +6,10 @@ import { parseEther } from "ethers";
 
 import HyperStakingModule from "../ignition/modules/HyperStaking";
 import PirexMockModule from "../ignition/modules/PirexMock";
-import TestERC20Module from "../ignition/modules/TestERC20";
-import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
 import DineroStrategyModule from "../ignition/modules/DineroStrategy";
 import { PirexEth } from "../typechain-types";
+
+import * as shared from "./shared";
 
 describe("Strategy", function () {
   async function getMockedPirex() {
@@ -26,34 +26,19 @@ describe("Strategy", function () {
     const [owner, alice] = await hre.ethers.getSigners();
     const { diamond, staking, vault } = await hre.ignition.deploy(HyperStakingModule);
 
-    const { testERC20 } = await hre.ignition.deploy(TestERC20Module, {
-      parameters: {
-        TestERC20Module: {
-          symbol: "testWstETH",
-          name: "Test Wrapped Liquid Staked ETH",
-        },
-      },
-    });
-    const testWstETH = testERC20;
+    // --------------------- Deploy Tokens ----------------------
 
-    const nativeTokenAddress = await staking.nativeTokenAddress();
-    await staking.createStakingPool(nativeTokenAddress);
-    const ethPoolId = await staking.generatePoolId(nativeTokenAddress, 0);
+    const testWstETH = await shared.deloyTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
+
+    // ------------------ Create Staking Pools ------------------
+
+    const { nativeTokenAddress, ethPoolId } = await shared.createNativeStakingPool(staking);
 
     // -------------------- Apply Strategies --------------------
 
     // strategy asset price to eth 2:1
     const reserveAssetPrice = parseEther("2");
-
-    const { reserveStrategy } = await hre.ignition.deploy(ReserveStrategyModule, {
-      parameters: {
-        ReserveStrategyModule: {
-          diamond: await diamond.getAddress(),
-          asset: await testWstETH.getAddress(),
-          assetPrice: reserveAssetPrice,
-        },
-      },
-    });
+    const reserveStrategy = await shared.createReserveStrategy(diamond, testWstETH, reserveAssetPrice);
 
     const reserveStrategyAssetSupply = parseEther("55");
     await testWstETH.approve(reserveStrategy.target, reserveStrategyAssetSupply);
@@ -83,13 +68,13 @@ describe("Strategy", function () {
       testWstETH, reserveStrategy, dineroStrategy, // test contracts
       ethPoolId, // ids
       reserveAssetPrice, reserveStrategyAssetSupply, // values
-      owner, alice, // addresses
+      nativeTokenAddress, owner, alice, // addresses
     };
     /* eslint-enable object-property-newline */
   }
 
   describe("ReserveStrategy", function () {
-    it("Check state after allocation", async function () {
+    it("check state after allocation", async function () {
       const {
         staking, vault, testWstETH, ethPoolId, reserveStrategy, reserveAssetPrice, owner, alice,
       } = await loadFixture(deployHyperStaking);
@@ -134,7 +119,7 @@ describe("Strategy", function () {
       expect(await testWstETH.balanceOf(vault.target)).to.equal((ownerAmount + aliceAmount) * parseEther("1") / reserveAssetPrice);
     });
 
-    it("Check state after exit", async function () {
+    it("check state after exit", async function () {
       const {
         staking, vault, testWstETH, ethPoolId, reserveStrategy, reserveAssetPrice, owner,
       } = await loadFixture(deployHyperStaking);
@@ -206,7 +191,7 @@ describe("Strategy", function () {
   });
 
   describe("Dinero Strategy", function () {
-    it("Staking deposit to dinero strategy should aquire apxEth", async function () {
+    it("staking deposit to dinero strategy should aquire apxEth", async function () {
       const { staking, vault, autoPxEth, ethPoolId, dineroStrategy, owner } = await loadFixture(deployHyperStaking);
 
       const stakeAmount = parseEther("8");
@@ -233,7 +218,7 @@ describe("Strategy", function () {
       expect(await autoPxEth.balanceOf(vault.target)).to.equal(stakeAmount);
     });
 
-    it("Unstaking from to dinero strategy should exchange apxEth back to eth", async function () {
+    it("unstaking from to dinero strategy should exchange apxEth back to eth", async function () {
       const { staking, vault, autoPxEth, ethPoolId, dineroStrategy, owner } = await loadFixture(deployHyperStaking);
 
       const stakeAmount = parseEther("3");
@@ -255,7 +240,7 @@ describe("Strategy", function () {
   });
 
   describe("Pirex Mock", function () {
-    it("It should be possible to deposit ETH and get pxETH", async function () {
+    it("it should be possible to deposit ETH and get pxETH", async function () {
       const [owner] = await hre.ethers.getSigners();
       const { pxEth, pirexEth } = await loadFixture(getMockedPirex);
 
@@ -264,7 +249,7 @@ describe("Strategy", function () {
       expect(await pxEth.balanceOf(owner.address)).to.be.greaterThan(0);
     });
 
-    it("It should be possible to deposit ETH and auto-compund it with apxEth", async function () {
+    it("it should be possible to deposit ETH and auto-compund it with apxEth", async function () {
       const [owner] = await hre.ethers.getSigners();
       const { pxEth, pirexEth, autoPxEth } = await loadFixture(getMockedPirex);
 
@@ -274,7 +259,7 @@ describe("Strategy", function () {
       expect(await autoPxEth.balanceOf(owner.address)).to.be.greaterThan(0);
     });
 
-    it("It should be possible to instant Redeem apxEth back to ETH", async function () {
+    it("it should be possible to instant Redeem apxEth back to ETH", async function () {
       const [owner, alice] = await hre.ethers.getSigners();
       const { pxEth, pirexEth, autoPxEth } = await loadFixture(getMockedPirex);
 

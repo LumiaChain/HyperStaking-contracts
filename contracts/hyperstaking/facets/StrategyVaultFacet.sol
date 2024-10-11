@@ -25,6 +25,16 @@ contract StrategyVaultFacet is IStrategyVault {
     //                                         Modifiers                                          //
     //============================================================================================//
 
+    /**
+     * @dev Rewarder calculations depends on the stake values and should be called before
+     * updating them.
+     */
+    modifier updateRewards(address strategy, address user) {
+        if (IRewarder(address(this)).rewarderExist(strategy)) {
+            IRewarder(address(this)).updateUser(strategy, user);
+        }
+        _;
+    }
 
     //============================================================================================//
     //                                      Public Functions                                      //
@@ -44,7 +54,7 @@ contract StrategyVaultFacet is IStrategyVault {
         address strategy,
         uint256 amount,
         address user
-    ) external payable {
+    ) external updateRewards(strategy, user) payable {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         StakingStorage storage s = LibStaking.diamondStorage();
 
@@ -52,11 +62,6 @@ contract StrategyVaultFacet is IStrategyVault {
         VaultInfo storage vault = v.vaultInfo[strategy];
         VaultAsset storage asset = v.vaultAssetInfo[strategy];
         UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
-
-        // rewarder depends on the stake values and should be called before updating them
-        if (IRewarder(address(this)).rewarderExist(strategy)) {
-            IRewarder(address(this)).onUpdate(strategy, user);
-        }
 
         userVault.stakeLocked += amount;
         vault.totalStakeLocked += amount;
@@ -77,7 +82,7 @@ contract StrategyVaultFacet is IStrategyVault {
         address strategy,
         uint256 amount,
         address user
-    ) external returns (uint256 withdrawAmount) {
+    ) external updateRewards(strategy, user) returns (uint256 withdrawAmount) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         StakingStorage storage s = LibStaking.diamondStorage();
 
@@ -86,18 +91,12 @@ contract StrategyVaultFacet is IStrategyVault {
         VaultAsset storage asset = v.vaultAssetInfo[strategy];
         UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
-        // rewarder depends on the stake values and should be called before updating them
-        if (IRewarder(address(this)).rewarderExist(strategy)) {
-            IRewarder(address(this)).onUpdate(strategy, user);
-        }
-
         uint256 shares = convertToShares(strategy, amount);
+        asset.totalShares -= shares;
 
         userVault.stakeLocked -= amount;
         vault.totalStakeLocked -= amount;
         userPool.stakeLocked -= amount;
-
-        asset.totalShares -= shares;
 
         IERC20(asset.token).safeIncreaseAllowance(strategy, shares);
         withdrawAmount = IStrategy(strategy).exit(shares, user);

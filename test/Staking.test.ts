@@ -6,9 +6,9 @@ import { parseEther } from "ethers";
 
 import DiamondModule from "../ignition/modules/Diamond";
 import HyperStakingModule from "../ignition/modules/HyperStaking";
-import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
 import RevertingContractModule from "../ignition/modules/RevertingContract";
-import TestERC20Module from "../ignition/modules/TestERC20";
+
+import * as shared from "./shared";
 
 describe("Staking", function () {
   async function deployDiamond() {
@@ -24,56 +24,20 @@ describe("Staking", function () {
     const [owner, alice] = await hre.ethers.getSigners();
     const { diamond, staking, vault } = await hre.ignition.deploy(HyperStakingModule);
 
-    // -------------------- Create Staking Pools --------------------
+    // --------------------- Deploy Tokens ----------------------
 
-    // testErc20
-    const { testERC20 } = await hre.ignition.deploy(TestERC20Module, {
-      parameters: {
-        TestERC20Module: {
-          symbol: "testERC20",
-          name: "Test ERC20 Token",
-        },
-      },
-    });
+    const testERC20 = await shared.deloyTestERC20("Test ERC20 Token", "tERC20");
+    const testWstETH = await shared.deloyTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
 
-    await staking.createStakingPool(testERC20);
-    const erc20PoolId = await staking.generatePoolId(testERC20, 0);
+    // ------------------ Create Staking Pools ------------------
 
-    // testWstETH
-    const testWstETH = (await hre.ignition.deploy(TestERC20Module, {
-      parameters: {
-        TestERC20Module: {
-          symbol: "testWstETH",
-          name: "Test Wrapped Liquid Staked ETH",
-        },
-      },
-    })).testERC20;
+    const erc20PoolId = await shared.createStakingPool(staking, testERC20);
+    const { nativeTokenAddress, ethPoolId } = await shared.createNativeStakingPool(staking);
 
-    const nativeTokenAddress = await staking.nativeTokenAddress();
-    await staking.createStakingPool(nativeTokenAddress);
-    const ethPoolId = await staking.generatePoolId(nativeTokenAddress, 0);
+    // -------------------- Apply Strategies --------------------
 
-    // -------------------- Apply Strategy --------------------
-
-    const reserveStrategy1 = (await hre.ignition.deploy(ReserveStrategyModule, {
-      parameters: {
-        ReserveStrategyModule: {
-          diamond: await diamond.getAddress(),
-          asset: await testWstETH.getAddress(),
-          assetPrice: parseEther("1"),
-        },
-      },
-    })).reserveStrategy;
-
-    const reserveStrategy2 = (await hre.ignition.deploy(ReserveStrategyModule, {
-      parameters: {
-        ReserveStrategyModule: {
-          diamond: await diamond.getAddress(),
-          asset: await testWstETH.getAddress(),
-          assetPrice: parseEther("2"),
-        },
-      },
-    })).reserveStrategy;
+    const reserveStrategy1 = await shared.createReserveStrategy(diamond, testWstETH, parseEther("1"));
+    const reserveStrategy2 = await shared.createReserveStrategy(diamond, testWstETH, parseEther("2"));
 
     const reserveStrategyAssetSupply = parseEther("55");
     await testWstETH.approve(reserveStrategy1.target, reserveStrategyAssetSupply);
@@ -94,19 +58,19 @@ describe("Staking", function () {
       staking, vault, // diamond facets
       testWstETH, reserveStrategy1, reserveStrategy2, // test contracts
       ethPoolId, erc20PoolId, // ids
-      owner, alice, // addresses
+      nativeTokenAddress, owner, alice, // addresses
     };
     /* eslint-enable object-property-newline */
   }
 
   describe("Diamond Ownership", function () {
-    it("Should set the right owner", async function () {
+    it("should set the right owner", async function () {
       const { ownershipFacet, owner } = await loadFixture(deployDiamond);
 
       expect(await ownershipFacet.owner()).to.equal(owner.address);
     });
 
-    it("It should be able to transfer ownership", async function () {
+    it("it should be able to transfer ownership", async function () {
       const { ownershipFacet, alice } = await loadFixture(deployDiamond);
 
       await ownershipFacet.transferOwnership(alice.address);
@@ -115,7 +79,7 @@ describe("Staking", function () {
   });
 
   describe("Staking", function () {
-    it("Should be able to deposit stake", async function () {
+    it("should be able to deposit stake", async function () {
       const { staking, ethPoolId, reserveStrategy1, owner, alice } = await loadFixture(deployHyperStaking);
 
       const stakeAmount = parseEther("5");
@@ -131,11 +95,11 @@ describe("Staking", function () {
         .withArgs(owner.address, owner.address, ethPoolId, reserveStrategy1, stakeAmount);
 
       const stakeAmountForAlice = parseEther("11");
-      await expect(staking.stakeDeposit(
+      await expect(staking.connect(alice).stakeDeposit(
         ethPoolId, reserveStrategy1, stakeAmountForAlice, alice, { value: stakeAmountForAlice }),
       )
         .to.emit(staking, "StakeDeposit")
-        .withArgs(owner.address, alice.address, ethPoolId, reserveStrategy1, stakeAmountForAlice);
+        .withArgs(alice.address, alice.address, ethPoolId, reserveStrategy1, stakeAmountForAlice);
 
       // UserInfo
       expect(
@@ -150,7 +114,7 @@ describe("Staking", function () {
       expect(poolInfo.totalStake).to.equal(stakeAmount * 2n + stakeAmountForAlice);
     });
 
-    it("Should be able to withdraw stake", async function () {
+    it("should be able to withdraw stake", async function () {
       const { staking, ethPoolId, reserveStrategy1, owner, alice } = await loadFixture(deployHyperStaking);
 
       const stakeAmount = parseEther("6.4");
@@ -188,7 +152,7 @@ describe("Staking", function () {
       expect(poolInfo.totalStake).to.equal(stakeAmount - 2n * withdrawAmount);
     });
 
-    it("PoolId generation check", async function () {
+    it("poolId generation check", async function () {
       const { staking } = await loadFixture(deployHyperStaking);
 
       const randomTokenAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";

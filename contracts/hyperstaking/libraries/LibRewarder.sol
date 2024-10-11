@@ -9,14 +9,12 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @notice Info of each MasterChef user.
- * amount LP token amount the user has provided.
  * rewardPerTokenPaid The amount of reward tokens not available to claim.
- * tokensUnclaimed The amount of reward unclaimed tokens, waiting to be claimed by user.
+ * rewardUnclaimed The amount of reward unclaimed tokens, waiting to be claimed by user.
  */
 struct UserRewardInfo {
-    uint256 amount;
     uint256 rewardPerTokenPaid;
-    uint256 tokensUnclaimed;
+    uint256 rewardUnclaimed;
 }
 
 /**
@@ -38,12 +36,12 @@ struct RewardInfo {
  * @notice Reward variables for the pool.
  * @dev Tracks the distribution rate and the accumulated reward per token.
  * @param tokensPerSecond Distribution rate of the token per second.
- * @param accTokenPerShare Accumulated reward per token (scaled).
+ * @param rewardPerToken Last updated amount of reward per staked token.
  * @param lastRewardTimestamp The last time rewards were distributed to the pool.
  */
 struct RewardPool {
     uint256 tokensPerSecond;
-    uint256 accTokenPerShare;
+    uint256 rewardPerToken;
     uint64 lastRewardTimestamp;
 }
 
@@ -52,6 +50,9 @@ struct RewardPool {
 //================================================================================================//
 
 struct RewarderStorage {
+    /// @notice Info of each user that stakes tokens into strategy
+    mapping(address strategy => mapping(address user => UserRewardInfo)) userInfo;
+
     /// @notice Mapping that stores reward distribution info for each strategy.
     /// @dev Maps a strategy address to its corresponding RewardInfo details.
     mapping(address strategy => RewardInfo) rewardsInfo;
@@ -59,9 +60,6 @@ struct RewarderStorage {
     /// @notice Mapping that stores reward pool state for each strategy.
     /// @dev Maps a strategy address to its corresponding RewardPool state.
     mapping(address strategy => RewardPool) rewardPools;
-
-    /// @notice Info of each user that stakes tokens into strategy
-    mapping(address strategy => mapping(address user => UserRewardInfo)) userInfo;
 }
 
 library LibRewarder {
