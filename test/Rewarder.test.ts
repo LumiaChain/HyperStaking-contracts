@@ -1,18 +1,19 @@
 import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import hre from "hardhat";
-import { parseEther, parseUnits, ZeroAddress } from "ethers";
+import { Contract, parseEther, parseUnits, ZeroAddress } from "ethers";
 
 import HyperStakingModule from "../ignition/modules/HyperStaking";
 
 import * as shared from "./shared";
 
 describe("Rewarder", function () {
-  const REWARD_PRECISION = parseUnits("1", 36);
-
   async function deployHyperStaking() {
     const [owner, alice, bob] = await hre.ethers.getSigners();
     const { diamond, staking, vault, rewarder } = await hre.ignition.deploy(HyperStakingModule);
+
+    const REWARD_PRECISION = await rewarder.REWARD_PRECISION();
+    const REWARDS_PER_STRATEGY_LIMIT = await rewarder.REWARDS_PER_STRATEGY_LIMIT();
 
     const testWstETH = await shared.deloyTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
     const rewardToken = await shared.deloyTestERC20("Test Reward Token", "rERC");
@@ -43,11 +44,25 @@ describe("Rewarder", function () {
       ethPoolId, // ids
       reserveAssetPrice, reserveStrategyAssetSupply, // values
       nativeTokenAddress, owner, alice, bob, // addresses
+      REWARD_PRECISION, REWARDS_PER_STRATEGY_LIMIT, // constants
     };
     /* eslint-enable object-property-newline */
   }
 
-  describe("Notify distribution", function () {
+  async function deployTestTokens() {
+    const testTokens: Contract[] = [];
+
+    // deploy 6 test tokens
+    for (let i = 1; i <= 6; i++) {
+      const name = `TestToken${i}`;
+      const symbol = `tt${i}`;
+      testTokens.push(await shared.deloyTestERC20(name, symbol));
+    }
+
+    return { testTokens };
+  }
+
+  describe("Reward distribution", function () {
     it("Empty rewarder values", async function () {
       const { reserveStrategy, rewarder, alice } = await loadFixture(deployHyperStaking);
 
@@ -160,7 +175,9 @@ describe("Rewarder", function () {
     });
 
     it("Reward shouldn't be distribute after its end", async function () {
-      const { staking, rewarder, rewardToken, reserveStrategy, ethPoolId, alice } = await loadFixture(deployHyperStaking);
+      const {
+        staking, rewarder, rewardToken, reserveStrategy, ethPoolId, alice, REWARD_PRECISION,
+      } = await loadFixture(deployHyperStaking);
 
       const rewardIdx = 0;
       const rewardAmount = parseEther("100");
@@ -226,7 +243,9 @@ describe("Rewarder", function () {
     });
 
     it("Reward should be applied to current stakers too", async function () {
-      const { staking, rewarder, rewardToken, reserveStrategy, ethPoolId, alice } = await loadFixture(deployHyperStaking);
+      const {
+        staking, rewarder, rewardToken, reserveStrategy, ethPoolId, alice, REWARD_PRECISION,
+      } = await loadFixture(deployHyperStaking);
 
       const rewardIdx = 0;
       const rewardAmount = parseEther("50");
@@ -521,6 +540,81 @@ describe("Rewarder", function () {
         startTimestamp,
         distributionEnd,
       )).to.be.revertedWithCustomError(rewarder, "Stopped");
+    });
+  });
+
+  describe("Concurrent rewards", function () {
+    it("multiple rewards limitations", async function () {
+      const { rewarder, reserveStrategy, REWARDS_PER_STRATEGY_LIMIT } = await loadFixture(deployHyperStaking);
+
+      const { testTokens } = await deployTestTokens();
+
+      const rewardAmount = parseEther("100");
+
+      const startTimestamp = await time.latest() + 100;
+      const distributionEnd = startTimestamp + 1000;
+
+      for (let i = 0; i < REWARDS_PER_STRATEGY_LIMIT; i++) {
+        await testTokens[i].approve(rewarder, rewardAmount);
+        await rewarder.newRewardDistribution(
+          reserveStrategy,
+          testTokens[i],
+          rewardAmount,
+          startTimestamp,
+          distributionEnd,
+        );
+      }
+
+      await expect(rewarder.newRewardDistribution(
+        reserveStrategy,
+        testTokens[REWARDS_PER_STRATEGY_LIMIT].target,
+        rewardAmount,
+        startTimestamp,
+        distributionEnd,
+      )).to.be.revertedWithCustomError(rewarder, "ActiveRewardsLimitReached");
+    });
+
+    it("multiple rewards", async function () {
+      const { staking, rewarder, reserveStrategy, ethPoolId, alice, REWARDS_PER_STRATEGY_LIMIT } = await loadFixture(deployHyperStaking);
+      const { testTokens } = await deployTestTokens();
+
+      const stakeAmount = parseEther("1");
+      await staking.connect(alice).stakeDeposit(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
+
+      const baseRewardAmount = parseEther("100");
+
+      const startTimestamp = await time.latest() + 100;
+      const distributionDuration = 10000;
+      const distributionEnd = startTimestamp + distributionDuration;
+
+      // create many rewards distribution for the same strategy
+      for (let i = 0; i < REWARDS_PER_STRATEGY_LIMIT; i++) {
+        const rewardAmount = baseRewardAmount * BigInt(i + 1);
+        await testTokens[i].approve(rewarder, rewardAmount);
+        await rewarder.newRewardDistribution(
+          reserveStrategy,
+          testTokens[i],
+          rewardAmount,
+          startTimestamp,
+          distributionEnd,
+        );
+      }
+
+      // finish all distributions
+      await time.increase(distributionDuration + 100);
+
+      for (let i = 0; i < REWARDS_PER_STRATEGY_LIMIT; i++) {
+        const rewardAmount = baseRewardAmount * BigInt(i + 1);
+        expect(await rewarder.pendingReward(reserveStrategy, i, alice.address)).to.eq(rewardAmount);
+      }
+
+      // claim all rewards
+      const tx = rewarder.connect(alice).claimAll(reserveStrategy, alice.address);
+
+      for (let i = 0; i < REWARDS_PER_STRATEGY_LIMIT; i++) {
+        const rewardAmount = baseRewardAmount * BigInt(i + 1);
+        await expect(tx).to.changeTokenBalances(testTokens[i], [alice, rewarder], [rewardAmount, -rewardAmount]);
+      }
     });
   });
 });

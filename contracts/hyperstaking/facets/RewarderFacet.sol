@@ -195,7 +195,7 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
         }
     }
 
-    /* ========== VIEW ========== */
+    /* ========== View ========== */
 
     /**
      * @notice View function to get balance of reward token.
@@ -276,6 +276,18 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
     function rewardPool(address strategy, uint256 idx) external view returns (RewardPool memory) {
         StrategyReward storage reward = _getStrategyReward(strategy, idx);
         return reward.pool;
+    }
+
+    /* ========== Constans  ========== */
+
+    // solhint-disable-next-line func-name-mixedcase
+    function REWARD_PRECISION() external pure returns (uint256) {
+        return LibRewarder.REWARD_PRECISION;
+    }
+
+    // solhint-disable-next-line func-name-mixedcase
+    function REWARDS_PER_STRATEGY_LIMIT() external pure returns (uint8) {
+        return LibRewarder.REWARDS_PER_STRATEGY_LIMIT;
     }
 
     //============================================================================================//
@@ -393,8 +405,19 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
             return reward.stopped;
         }
 
-        return uint64(block.timestamp) > reward.pool.distributionEnd
-            ? reward.pool.distributionEnd : uint64(block.timestamp);
+        uint64 timeNow = uint64(block.timestamp);
+
+        // distribution didn't starter yet
+        if (timeNow < reward.pool.distributionStart) {
+            return reward.pool.distributionStart;
+        }
+
+        // distribution is already finished
+        if (timeNow > reward.pool.distributionEnd) {
+            return reward.pool.distributionEnd;
+        }
+
+        return timeNow;
     }
 
     /**

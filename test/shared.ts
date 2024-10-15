@@ -3,7 +3,7 @@ import { Contract } from "ethers";
 import TestERC20Module from "../ignition/modules/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
 
-export async function deloyTestERC20(name: string, symbol: string) {
+export async function deloyTestERC20(name: string, symbol: string): Promise<Contract> {
   const { testERC20 } = await ignition.deploy(TestERC20Module, {
     parameters: {
       TestERC20Module: {

@@ -127,4 +127,11 @@ interface IRewarder {
     ) external view returns (UserRewardInfo memory);
 
     function rewardPool(address strategy, uint256 idx) external view returns (RewardPool memory);
+
+    /* ========== Constans  ========== */
+
+    // solhint-disable-next-line func-name-mixedcase
+    function REWARD_PRECISION() external view returns (uint256);
+    // solhint-disable-next-line func-name-mixedcase
+    function REWARDS_PER_STRATEGY_LIMIT() external view returns (uint8);
 }
