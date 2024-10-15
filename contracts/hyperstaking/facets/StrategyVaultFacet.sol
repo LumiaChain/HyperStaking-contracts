@@ -30,9 +30,7 @@ contract StrategyVaultFacet is IStrategyVault {
      * updating them.
      */
     modifier updateRewards(address strategy, address user) {
-        if (IRewarder(address(this)).rewarderExist(strategy)) {
-            IRewarder(address(this)).updateUser(strategy, user);
-        }
+        IRewarder(address(this)).updateActivePools(strategy, user);
         _;
     }
 
