@@ -38,14 +38,14 @@ struct RewardPool {
  * @notice Represents reward distribution data for a specific staking strategy
  * @dev Combines information on reward, user-specific reward details, and the reward pool state
  * @param rewardToken The address of the reward token
- * @param stopped Timestamp when the distribution was stopped (0 if active)
+ * @param finalized Timestamp when the distribution was finalized (0 if active)
  * @param info Contains reward distribution information for the strategy
  * @param user Holds reward data for each user staking tokens in the strategy
  * @param pool Tracks the reward pool's state for the strategy
  */
 struct StrategyReward {
     IERC20 rewardToken;
-    uint64 stopped;
+    uint64 finalized;
     mapping(address user => UserRewardInfo) users;
     RewardPool pool;
 }

@@ -32,7 +32,7 @@ interface IRewarder {
         uint256 amount
     );
 
-    event Stop(address sender, address strategy, uint256 idx, uint64 timestamp);
+    event Finalize(address sender, address strategy, uint256 idx, uint64 timestamp);
     event RewardClaim(address indexed strategy, uint256 idx, address indexed user, uint256 amount);
 
     //============================================================================================//
@@ -43,8 +43,8 @@ interface IRewarder {
     error NoActiveRewardFound();
     error ActiveRewardsLimitReached();
 
-    error Stopped();
-    error NotStopped();
+    error Finalized();
+    error NotFinalized();
 
     error RewardNotFound();
     error RateTooHigh();
@@ -87,7 +87,7 @@ interface IRewarder {
         uint64 distributionEnd
     ) external;
 
-    function stop(address strategy, uint256 idx) external;
+    function finalize(address strategy, uint256 idx) external;
 
     function withdrawRemaining(address strategy, uint256 idx, address receiver) external;
 
@@ -118,7 +118,7 @@ interface IRewarder {
     function strategyRewardInfo(
         address strategy,
         uint256 idx
-    ) external view returns (IERC20 rewardToken, uint64 stopped);
+    ) external view returns (IERC20 rewardToken, uint64 finalized);
 
     function userRewardInfo(
         address strategy,

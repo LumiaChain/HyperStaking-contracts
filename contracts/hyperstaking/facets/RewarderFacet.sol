@@ -28,15 +28,15 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
     //                                         Modifiers                                          //
     //============================================================================================//
 
-    modifier onlyStopped(address strategy, uint256 idx) {
+    modifier onlyFinalized(address strategy, uint256 idx) {
         StrategyReward storage reward = _getStrategyReward(strategy, idx);
-        require(reward.stopped > 0, NotStopped());
+        require(reward.finalized > 0, NotFinalized());
         _;
     }
 
-    modifier onlyNotStopped(address strategy, uint256 idx) {
+    modifier onlyNotFinalized(address strategy, uint256 idx) {
         StrategyReward storage reward = _getStrategyReward(strategy, idx);
-        require(reward.stopped == 0, Stopped());
+        require(reward.finalized == 0, Finalized());
         _;
     }
 
@@ -150,34 +150,34 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
         uint256 rewardAmount,
         uint64 startTimestamp,
         uint64 distributionEnd
-    ) external onlyNotStopped(strategy, idx) nonReentrant {
+    ) external onlyNotFinalized(strategy, idx) nonReentrant {
         require(isRewardActive(strategy, idx) == true, NoActiveRewardFound());
 
         _notifyReward(strategy, idx, rewardAmount, startTimestamp, distributionEnd, false);
     }
 
     // TODO ACL
-    function stop(address strategy, uint256 idx) external onlyNotStopped(strategy, idx) {
+    function finalize(address strategy, uint256 idx) external onlyNotFinalized(strategy, idx) {
         updatePool(strategy, idx);
 
         StrategyReward storage reward = _getStrategyReward(strategy, idx);
 
-        // determine the stop timestamp, defaulting to the current block timestamp
+        // determine the finalized timestamp, defaulting to the current block timestamp
         // but capping it at the distribution end timestamp if the end has been reached
-        uint64 stopped = uint64(block.timestamp);
+        uint64 finalized = uint64(block.timestamp);
         if (block.timestamp >= reward.pool.distributionEnd) {
-            stopped = reward.pool.distributionEnd;
+            finalized = reward.pool.distributionEnd;
         }
 
         _deactivateReward(strategy, idx);
-        reward.stopped = stopped;
+        reward.finalized = finalized;
 
-        emit Stop(msg.sender, strategy, idx, stopped);
+        emit Finalize(msg.sender, strategy, idx, finalized);
     }
 
     /**
      * @notice Retrieves remaining reward tokens.
-     * @dev only when rewarder is stopped.
+     * @dev only when rewarder is finalized.
      *
      * TODO ACL
      */
@@ -185,7 +185,7 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
         address strategy,
         uint256 idx,
         address receiver
-    ) external onlyStopped(strategy, idx) {
+    ) external onlyFinalized(strategy, idx) {
         StrategyReward storage reward = _getStrategyReward(strategy, idx);
 
         uint256 amount = balance(strategy, idx);
@@ -205,10 +205,10 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
         StrategyReward storage reward = _getStrategyReward(strategy, idx);
 
         // timestamp to evaluate balance, set to the current block timestamp
-        // or to the stop timestamp if distribution has stopped.
+        // or to the finalized timestamp if distribution has finalized.
         uint64 evaluationTimestamp = uint64(block.timestamp);
-        if (reward.stopped != 0) {
-            evaluationTimestamp = reward.stopped;
+        if (reward.finalized != 0) {
+            evaluationTimestamp = reward.finalized;
         }
 
         if (evaluationTimestamp >= reward.pool.distributionEnd) {
@@ -257,11 +257,11 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
     function strategyRewardInfo(
         address strategy,
         uint256 idx
-    ) external view returns (IERC20 rewardToken, uint64 stopped) {
+    ) external view returns (IERC20 rewardToken, uint64 finalized) {
         StrategyReward storage reward = _getStrategyReward(strategy, idx);
 
         rewardToken = reward.rewardToken;
-        stopped = reward.stopped;
+        finalized = reward.finalized;
     }
 
     function userRewardInfo(
@@ -401,8 +401,8 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
     function _lastTimeRewardApplicable(address strategy, uint256 idx) internal view returns (uint64) {
         StrategyReward storage reward = _getStrategyReward(strategy, idx);
 
-        if (reward.stopped > 0) {
-            return reward.stopped;
+        if (reward.finalized > 0) {
+            return reward.finalized;
         }
 
         uint64 timeNow = uint64(block.timestamp);

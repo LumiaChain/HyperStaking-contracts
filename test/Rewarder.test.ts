@@ -101,7 +101,7 @@ describe("Rewarder", function () {
       await expect(rewarder.rewardPool(reserveStrategy, badRewardIdx))
         .to.be.revertedWithCustomError(rewarder, "RewardNotFound");
 
-      await expect(rewarder.stop(reserveStrategy, badRewardIdx))
+      await expect(rewarder.finalize(reserveStrategy, badRewardIdx))
         .to.be.revertedWithCustomError(rewarder, "RewardNotFound");
     });
 
@@ -476,7 +476,7 @@ describe("Rewarder", function () {
     });
 
     // TODO add ACL
-    it("It should be possible to stop rewarder and claim remaining tokens", async function () {
+    it("It should be possible to finalize rewarder and claim remaining tokens", async function () {
       const { staking, rewarder, rewardToken, reserveStrategy, ethPoolId, owner, alice } = await loadFixture(deployHyperStaking);
 
       const rewardIdx = 0;
@@ -504,20 +504,20 @@ describe("Rewarder", function () {
       await staking.stakeDeposit(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
 
       await expect(rewarder.withdrawRemaining(reserveStrategy, rewardIdx, owner))
-        .to.revertedWithCustomError(rewarder, "NotStopped");
+        .to.revertedWithCustomError(rewarder, "NotFinalized");
 
-      // stop in 1/3 of the distributionDuration
-      const stopTimestamp = startTimestamp + distributionDuration / 3;
-      await time.setNextBlockTimestamp(stopTimestamp);
+      // finalize in 1/3 of the distributionDuration
+      const finalizeTimestamp = startTimestamp + distributionDuration / 3;
+      await time.setNextBlockTimestamp(finalizeTimestamp);
 
-      // stop rewarder
-      await expect(rewarder.stop(reserveStrategy, rewardIdx))
-        .to.emit(rewarder, "Stop")
-        .withArgs(owner.address, reserveStrategy, rewardIdx, stopTimestamp);
+      // finalize rewarder
+      await expect(rewarder.finalize(reserveStrategy, rewardIdx))
+        .to.emit(rewarder, "Finalize")
+        .withArgs(owner.address, reserveStrategy, rewardIdx, finalizeTimestamp);
 
       const rewardInfo = await rewarder.strategyRewardInfo(reserveStrategy, rewardIdx);
       expect(rewardInfo.rewardToken).to.eq(rewardToken);
-      expect(rewardInfo.stopped).to.eq(stopTimestamp);
+      expect(rewardInfo.finalized).to.eq(finalizeTimestamp);
 
       expect(await rewarder.isRewardActive(reserveStrategy, rewardIdx)).to.be.eq(false);
       const expectedRewarderBalance = rewardAmount * 2n / 3n;
@@ -532,14 +532,14 @@ describe("Rewarder", function () {
           [expectedRewarderBalance, -expectedRewarderBalance],
         );
 
-      // should not be possible to notify new distribution on stopped rewarder
+      // should not be possible to notify new distribution on finalized rewarder
       await expect(rewarder.notifyRewardDistribution(
         reserveStrategy,
         rewardIdx,
         rewardAmount,
         startTimestamp,
         distributionEnd,
-      )).to.be.revertedWithCustomError(rewarder, "Stopped");
+      )).to.be.revertedWithCustomError(rewarder, "Finalized");
     });
   });
 
