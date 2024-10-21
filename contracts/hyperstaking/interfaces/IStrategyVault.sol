@@ -3,6 +3,8 @@ pragma solidity =0.8.27;
 
 import {UserVaultInfo, VaultInfo, VaultAsset} from "../libraries/LibStrategyVault.sol";
 
+import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+
 /**
  * @title IStrategyVault
  */
@@ -31,7 +33,8 @@ interface IStrategyVault {
         address indexed from,
         uint256 indexed poolId,
         address strategy,
-        address token
+        address assert,
+        address vaultToken
     );
 
     //============================================================================================//
@@ -46,7 +49,7 @@ interface IStrategyVault {
     //============================================================================================//
 
     /// @notice Adds a new strategy and assigns it to the specified staking pool // TODO ACL
-    function addStrategy(uint256 poolId, address strategy, address vaultToken) external;
+    function addStrategy(uint256 poolId, address strategy, IERC20Metadata asset) external;
 
     function deposit(address strategy, uint256 amount, address user) external payable;
 

@@ -5,13 +5,16 @@ import {IStrategyVault} from "../interfaces/IStrategyVault.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 import {IRewarder} from "../interfaces/IRewarder.sol";
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {LibStaking, StakingStorage, UserPoolInfo} from "../libraries/LibStaking.sol";
 import {
     LibStrategyVault, StrategyVaultStorage, UserVaultInfo, VaultInfo, VaultAsset
 } from "../libraries/LibStrategyVault.sol";
+
+import { LiquidVaultToken } from "../LiquidVaultToken.sol";
 
 /**
  * @title StrategyVaultFacet
@@ -42,9 +45,9 @@ contract StrategyVaultFacet is IStrategyVault {
     function addStrategy(
         uint256 poolId,
         address strategy,
-        address token
+        IERC20Metadata asset
     ) external {
-        _createVault(poolId, strategy, VaultAsset({ token: token, totalShares: 0 }));
+        _createVault( poolId, strategy, asset);
     }
 
     // TODO add non reentrant
@@ -70,7 +73,7 @@ contract StrategyVaultFacet is IStrategyVault {
 
         // fetch shares to this vault
         asset.totalShares += shares;
-        IERC20(asset.token).safeTransferFrom(strategy, address(this), shares);
+        IERC20(asset.asset).safeTransferFrom(strategy, address(this), shares);
 
         emit Deposit(vault.poolId, strategy, user, amount, shares);
     }
@@ -96,7 +99,7 @@ contract StrategyVaultFacet is IStrategyVault {
         vault.totalStakeLocked -= amount;
         userPool.stakeLocked -= amount;
 
-        IERC20(asset.token).safeIncreaseAllowance(strategy, shares);
+        IERC20(asset.asset).safeIncreaseAllowance(strategy, shares);
         withdrawAmount = IStrategy(strategy).exit(shares, user);
 
         emit Withdraw(vault.poolId, strategy, user, amount, shares);
@@ -159,11 +162,26 @@ contract StrategyVaultFacet is IStrategyVault {
     //                                     Internal Functions                                     //
     //============================================================================================//
 
+    function _deployVaultToken(IERC20Metadata asset) internal returns (IERC4626 vaultToken) {
+        string memory sharesName = _concat("Lumia Liquid ", asset.name());
+        string memory sharesSymbol = _concat("ll", asset.symbol());
+        vaultToken = new LiquidVaultToken(
+            address(this),
+            IERC20(asset),
+            sharesName,
+            sharesSymbol
+        );
+    }
 
-    function _createVault(uint256 poolId, address strategy, VaultAsset memory asset) internal {
+
+
+    function _createVault(uint256 poolId, address strategy, IERC20Metadata asset) internal {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
 
         require(v.vaultInfo[strategy].poolId == 0, VaultAlreadyExist());
+
+        // deploy vaultToken which represent shares to this strategy vault
+        IERC4626 vaultToken = _deployVaultToken(asset);
 
         // create a new VaultInfo and store it in storage
         v.vaultInfo[strategy] = VaultInfo({
@@ -173,8 +191,25 @@ contract StrategyVaultFacet is IStrategyVault {
         });
 
         // save VaultAsset for this strategy
-        v.vaultAssetInfo[strategy] = asset;
+        v.vaultAssetInfo[strategy] = VaultAsset({
+            asset: asset,
+            vaultToken: vaultToken,
+            totalShares: 0
+        });
 
-        emit VaultCreate(msg.sender, poolId, strategy, asset.token);
+        emit VaultCreate(
+            msg.sender,
+            poolId,
+            strategy,
+            address(asset),
+            address(vaultToken)
+        );
+    }
+
+    // ========= Pure ========= //
+
+    /// @notice Helper function for string concatenation
+    function _concat(string memory a, string memory b) internal pure returns (string memory){
+        return string(abi.encodePacked(a, b));
     }
 }

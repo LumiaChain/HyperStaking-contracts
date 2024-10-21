@@ -112,7 +112,7 @@ describe("Strategy", function () {
       expect((await vault.vaultInfo(reserveStrategy)).poolId).to.equal(ethPoolId);
       expect((await vault.vaultInfo(reserveStrategy)).totalStakeLocked).to.equal(ownerAmount + aliceAmount);
       // AssetInfo
-      expect((await vault.vaultAssetInfo(reserveStrategy)).token).to.equal(testWstETH.target);
+      expect((await vault.vaultAssetInfo(reserveStrategy)).asset).to.equal(testWstETH.target);
       expect((await vault.vaultAssetInfo(reserveStrategy)).totalShares)
         .to.equal((ownerAmount + aliceAmount) * parseEther("1") / reserveAssetPrice);
 
@@ -148,7 +148,7 @@ describe("Strategy", function () {
       // VaultInfo
       expect((await vault.vaultInfo(reserveStrategy)).totalStakeLocked).to.equal(diffAmount);
       // AssetInfo
-      expect((await vault.vaultAssetInfo(reserveStrategy)).token).to.equal(testWstETH.target);
+      expect((await vault.vaultAssetInfo(reserveStrategy)).asset).to.equal(testWstETH.target);
 
       expect((await vault.vaultAssetInfo(reserveStrategy)).totalShares)
         .to.equal(diffAmount * parseEther("1") / reserveAssetPrice);
@@ -164,7 +164,7 @@ describe("Strategy", function () {
       // VaultInfo
       expect((await vault.vaultInfo(reserveStrategy)).totalStakeLocked).to.equal(0);
       // AssetInfo
-      expect((await vault.vaultAssetInfo(reserveStrategy)).token).to.equal(testWstETH.target);
+      expect((await vault.vaultAssetInfo(reserveStrategy)).asset).to.equal(testWstETH.target);
       expect((await vault.vaultAssetInfo(reserveStrategy)).totalShares).to.equal(0);
       expect(await testWstETH.balanceOf(vault.target)).to.equal(0);
     });
@@ -212,7 +212,7 @@ describe("Strategy", function () {
       expect((await staking.userPoolInfo(ethPoolId, owner)).staked).to.equal(stakeAmount);
 
       expect((await vault.vaultInfo(dineroStrategy)).totalStakeLocked).to.equal(stakeAmount);
-      expect((await vault.vaultAssetInfo(dineroStrategy)).token).to.equal(autoPxEth.target);
+      expect((await vault.vaultAssetInfo(dineroStrategy)).asset).to.equal(autoPxEth.target);
       expect((await vault.vaultAssetInfo(dineroStrategy)).totalShares).to.equal(stakeAmount);
 
       expect(await autoPxEth.balanceOf(vault.target)).to.equal(stakeAmount);
@@ -232,7 +232,7 @@ describe("Strategy", function () {
 
       expect((await vault.userVaultInfo(dineroStrategy, owner.address)).stakeLocked).to.equal(0);
       expect((await vault.vaultInfo(dineroStrategy)).totalStakeLocked).to.equal(0);
-      expect((await vault.vaultAssetInfo(dineroStrategy)).token).to.equal(autoPxEth.target);
+      expect((await vault.vaultAssetInfo(dineroStrategy)).asset).to.equal(autoPxEth.target);
       expect((await vault.vaultAssetInfo(dineroStrategy)).totalShares).to.equal(0);
 
       expect(await autoPxEth.balanceOf(vault.target)).to.equal(0);
