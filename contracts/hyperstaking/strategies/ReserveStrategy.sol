@@ -3,8 +3,10 @@ pragma solidity =0.8.27;
 
 import {IStrategy} from "../interfaces/IStrategy.sol";
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
+import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 
 /**
  * @title ReserveStrategy
@@ -12,7 +14,8 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
  *
  * @dev Contract used mainly in tests
  */
-contract ReserveStrategy is IStrategy {
+contract ReserveStrategy is IStrategy, Ownable {
+    using CurrencyHandler for Currency;
     using SafeERC20 for IERC20;
 
     uint256 constant internal PRECISSION_FACTOR = 1e18;
@@ -20,8 +23,11 @@ contract ReserveStrategy is IStrategy {
     /// Diamond deployment address
     address public immutable DIAMOND;
 
-    /// Managed address
-    address public immutable ASSET;
+    /// Currency used as stake receiving during allocation
+    Currency public stake;
+
+    /// Token used as revenue asset sent in exchange for the stake
+    IERC20 public asset;
 
     /// Price of the asset
     uint256 public assetPrice;
@@ -75,11 +81,13 @@ contract ReserveStrategy is IStrategy {
     //============================================================================================//
     constructor(
         address diamond_,
-        address asset_,
+        Currency memory stake_,
+        IERC20 asset_,
         uint256 assetPrice_
-    ) {
+    ) Ownable(msg.sender) {
         DIAMOND = diamond_;
-        ASSET = asset_;
+        stake = stake_;
+        asset = asset_;
         assetPrice = assetPrice_;
         assetReserve = 0;
     }
@@ -90,58 +98,54 @@ contract ReserveStrategy is IStrategy {
 
     /// @inheritdoc IStrategy
     function allocate(
-        uint256 amount_,
+        uint256 stakeAmount_,
         address user_
     ) external payable onlyLumiaDiamond() returns (uint256 allocation) {
-        require(amount_ == msg.value, BadAllocationValue());
+        allocation = stakeAmount_ * PRECISSION_FACTOR / assetPrice;
+        assetReserve -= allocation;
 
-        allocation = amount_ * PRECISSION_FACTOR / assetPrice;
+        stake.transferFrom(DIAMOND, address(this), stakeAmount_);
+        asset.safeIncreaseAllowance(DIAMOND, allocation);
 
-        emit Allocate(user_, amount_, allocation);
+        emit Allocate(user_, stakeAmount_, allocation);
     }
 
 
     /// @inheritdoc IStrategy
     function exit(
-        uint256 shares_,
+        uint256 assetAllocation_,
         address user_
     ) external onlyLumiaDiamond() returns (uint256 exitAmount) {
-        exitAmount = shares_ * assetPrice / PRECISSION_FACTOR;
+        exitAmount = assetAllocation_ * assetPrice / PRECISSION_FACTOR;
+        assetReserve += exitAmount;
 
-        IERC20(ASSET).transferFrom(DIAMOND, address(this), shares_);
+        asset.transferFrom(DIAMOND, address(this), assetAllocation_);
+        stake.transfer(DIAMOND, exitAmount);
 
-        // transfer the native coin back
-        (bool success, ) = DIAMOND.call{value: exitAmount}("");
-        if (!success) revert FailedExitCall();
-
-        emit Exit(user_, shares_, exitAmount);
+        emit Exit(user_, assetAllocation_, exitAmount);
     }
 
     // ========= Admin ========= //
 
-    // TODO ACL
-    function supplyRevenueAsset(uint256 amount_) external {
+    function supplyRevenueAsset(uint256 amount_) external onlyOwner {
         assetReserve += amount_;
 
-        IERC20(ASSET).transferFrom(msg.sender, address(this), amount_);
-        IERC20(ASSET).approve(DIAMOND, assetReserve);
+        asset.safeTransferFrom(msg.sender, address(this), amount_);
 
-        emit RevenueAssetSupply(msg.sender, ASSET, amount_);
+        emit RevenueAssetSupply(msg.sender, address(asset), amount_);
     }
 
-    // TODO ACL
-    function withdrawRevenueAsset(uint256 amount_) external {
+    function withdrawRevenueAsset(uint256 amount_) external onlyOwner {
         assetReserve -= amount_;
 
-        IERC20(ASSET).transfer(msg.sender, amount_);
+        asset.transfer(msg.sender, amount_);
 
-        emit RevenueAssetWithdraw(msg.sender, ASSET, amount_);
+        emit RevenueAssetWithdraw(msg.sender, address(asset), amount_);
     }
 
-    // TODO ACL
-    function setAssetPrice(uint256 assetPrice_) external {
+    function setAssetPrice(uint256 assetPrice_) external onlyOwner {
         assetPrice = assetPrice_;
 
-        emit AssetPriceSet(msg.sender, ASSET, assetPrice_);
+        emit AssetPriceSet(msg.sender, address(asset), assetPrice_);
     }
 }

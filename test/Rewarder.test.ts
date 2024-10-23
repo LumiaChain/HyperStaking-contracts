@@ -26,7 +26,10 @@ describe("Rewarder", function () {
 
     // strategy asset price to eth 2:1
     const reserveAssetPrice = parseEther("2");
-    const reserveStrategy = await shared.createReserveStrategy(diamond, testWstETH, reserveAssetPrice);
+
+    const reserveStrategy = await shared.createReserveStrategy(
+      diamond, nativeTokenAddress, await testWstETH.getAddress(), parseEther("1"),
+    );
 
     const reserveStrategyAssetSupply = parseEther("55");
     await testWstETH.approve(reserveStrategy.target, reserveStrategyAssetSupply);

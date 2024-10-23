@@ -13,13 +13,13 @@ interface IStrategy {
 
     event Allocate(
         address indexed user,
-        uint256 amount,
-        uint256 allocation
+        uint256 stakeAmount,
+        uint256 assetAllocation
     );
 
     event Exit(
         address indexed user,
-        uint256 shares,
+        uint256 assetAllocation,
         uint256 exitAmount
     );
 
@@ -33,17 +33,17 @@ interface IStrategy {
 
     /**
      * @notice Allocates a specified amount of the stake to the strategy
-     * @param amount_ The amount of the asset to allocate
+     * @param stakeAmount_ The amount of stake received for allocation
      * @param user_ The address of the user making the allocation
      * @return allocation The amount successfully allocated
      */
-    function allocate(uint256 amount_, address user_) external payable returns (uint256 allocation);
+    function allocate(uint256 stakeAmount_, address user_) external payable returns (uint256 allocation);
 
     /**
      * @notice Exits a specified amount of the strategy shares to the vault
-     * @param shares_ The amount of the strategy-specific asset (shares) to withdraw
+     * @param assetAllocation_ The amount of the strategy-specific asset (shares) to withdraw
      * @param user_ The address of the user requesting the exit
-     * @return exitAmount The amount successfully exited
+     * @return exitAmount The amount of stake successfully exited
      */
-    function exit(uint256 shares_, address user_) external returns (uint256 exitAmount);
+    function exit(uint256 assetAllocation_, address user_) external returns (uint256 exitAmount);
 }

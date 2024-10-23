@@ -38,7 +38,10 @@ describe("Strategy", function () {
 
     // strategy asset price to eth 2:1
     const reserveAssetPrice = parseEther("2");
-    const reserveStrategy = await shared.createReserveStrategy(diamond, testWstETH, reserveAssetPrice);
+
+    const reserveStrategy = await shared.createReserveStrategy(
+      diamond, nativeTokenAddress, await testWstETH.getAddress(), reserveAssetPrice,
+    );
 
     const reserveStrategyAssetSupply = parseEther("55");
     await testWstETH.approve(reserveStrategy.target, reserveStrategyAssetSupply);
@@ -82,10 +85,15 @@ describe("Strategy", function () {
       const ownerAmount = parseEther("2");
       const aliceAmount = parseEther("8");
 
+      expect(await testWstETH.balanceOf(vault.target)).to.equal(0);
+      expect(await reserveStrategy.assetPrice()).to.equal(parseEther("2"));
+
       // event
       await expect(staking.stakeDeposit(ethPoolId, reserveStrategy, ownerAmount, owner, { value: ownerAmount }))
         .to.emit(reserveStrategy, "Allocate")
         .withArgs(owner.address, ownerAmount, ownerAmount * parseEther("1") / reserveAssetPrice);
+
+      expect(await testWstETH.balanceOf(vault.target)).to.equal(ownerAmount * parseEther("1") / reserveAssetPrice);
 
       // event
       await expect(staking.stakeDeposit(

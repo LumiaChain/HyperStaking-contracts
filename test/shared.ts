@@ -1,7 +1,8 @@
 import { ignition } from "hardhat";
-import { Contract } from "ethers";
+import { Contract, ZeroAddress } from "ethers";
 import TestERC20Module from "../ignition/modules/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
+import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/facets/StakingFacet";
 
 export async function deloyTestERC20(name: string, symbol: string): Promise<Contract> {
   const { testERC20 } = await ignition.deploy(TestERC20Module, {
@@ -16,27 +17,36 @@ export async function deloyTestERC20(name: string, symbol: string): Promise<Cont
 }
 
 export async function createNativeStakingPool(staking: Contract) {
-  const nativeTokenAddress = await staking.nativeTokenAddress();
-  await staking.createStakingPool(nativeTokenAddress);
-  const ethPoolId = await staking.generatePoolId(nativeTokenAddress, 0);
+  const nativeTokenAddress = ZeroAddress;
+  const currency = { token: nativeTokenAddress } as CurrencyStruct;
+
+  await staking.createStakingPool(currency);
+  const ethPoolId = await staking.generatePoolId(currency, 0);
 
   return { nativeTokenAddress, ethPoolId };
 }
 
 export async function createStakingPool(staking: Contract, token: Contract) {
-  await staking.createStakingPool(token);
-  const poolCount = await staking.stakeTokenPoolCount(token);
-  const poolId = await staking.generatePoolId(token, poolCount - 1n);
+  const currency = { token } as CurrencyStruct;
+  await staking.createStakingPool(currency);
+  const poolCount = await staking.stakeTokenPoolCount(currency);
+  const poolId = await staking.generatePoolId(currency, poolCount - 1n);
 
   return poolId;
 }
 
-export async function createReserveStrategy(diamond: Contract, asset: Contract, assetPrice: bigint) {
+export async function createReserveStrategy(
+  diamond: Contract,
+  stakeTokenAddress: string,
+  assetAddress: string,
+  assetPrice: bigint,
+) {
   const { reserveStrategy } = await ignition.deploy(ReserveStrategyModule, {
     parameters: {
       ReserveStrategyModule: {
         diamond: await diamond.getAddress(),
-        asset: await asset.getAddress(),
+        stake: stakeTokenAddress,
+        asset: assetAddress,
         assetPrice,
       },
     },

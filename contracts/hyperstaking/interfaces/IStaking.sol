@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
+import {Currency} from "../libraries/CurrencyHandler.sol";
 import {UserPoolInfo, StakingPoolInfo} from "../libraries/LibStaking.sol";
 
 /**
@@ -40,15 +41,6 @@ interface IStaking {
     //                                          Errors                                            //
     //============================================================================================//
 
-    /// @notice Thrown when the provided eth value is incorrect
-    error DepositBadValue();
-
-    /// @dev TODO remove
-    error Unsupported();
-
-    /// @notice Thrown when failed to transfer ETH value (with call)
-    error WithdrawFailedCall();
-
     /// @notice Thrown when attempting to access a non-existent staking pool
     error PoolDoesNotExist();
 
@@ -61,10 +53,12 @@ interface IStaking {
 
     /**
      * @notice Create new staking pool for given token address
-     * @param stakeToken address of the token for which the pool will be created
+     * @param currency The currency for which the pool will be created
      * @dev nativeTokenAddress() for native coin.
      */
-    function createStakingPool(address stakeToken) external returns (uint256 poolId);
+    function createStakingPool(
+        Currency calldata currency
+    ) external returns (uint256 poolId);
 
     /**
      * @notice Deposits a specified amount into a staking pool with a chosen strategy
@@ -115,10 +109,12 @@ interface IStaking {
 
      /**
      * @notice Returns the number of staking pools available for a given token
-     * @param stakeToken The address of the token for which to count the staking pools
+     * @param currency The currency for which to count the staking pools
      * @return The total number of staking pools for the specified token
      */
-    function stakeTokenPoolCount(address stakeToken) external view returns (uint96);
+    function stakeTokenPoolCount(
+        Currency calldata currency
+    ) external view returns (uint96);
 
     /**
      * @notice Returns information about a specific staking pool
@@ -137,17 +133,13 @@ interface IStaking {
     function userPoolShare(uint256 poolId, address user) external view returns (uint256);
 
     /**
-     * @notice Returns the address of the native token
-     * @dev For internal use, an address is generated, e.g., for ETH
-     * @return The address of the native token
-     */
-    function nativeTokenAddress() external pure returns (address);
-
-    /**
      * @notice Generates a unique pool ID for a specific staking token and pool index
-     * @param stakeToken The address of the token being staked
+     * @param currency The currency being staked
      * @param idx The index of the pool for that token (starting from 0)
      * @return The unique ID for the pool
      */
-    function generatePoolId(address stakeToken, uint96 idx) external pure returns (uint256);
+    function generatePoolId(
+        Currency calldata currency,
+        uint96 idx
+    ) external pure returns (uint256);
 }

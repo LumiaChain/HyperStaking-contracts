@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
+import {Currency} from "../libraries/CurrencyHandler.sol";
+
 //================================================================================================//
 //                                            Types                                               //
 //================================================================================================//
-
-// TODO stakeToken to abstract Currency (which supports both native and erc20), or use WETH
 
 /**
  * @notice Info of each user
@@ -19,14 +19,12 @@ struct UserPoolInfo {
 
 /**
  * @notice Info of each pool
- * @param native Eth
- * @param stakeToken Address of the token that users stake in this pool
+ * @param currency The currency being staked in this pool
  * @param totalStake
  */
-struct StakingPoolInfo { // TODO consider again this struct fields
+struct StakingPoolInfo {
     uint256 poolId; // used for validation
-    bool native; // hmm
-    address stakeToken;
+    Currency currency;
     uint256 totalStake;
 }
 

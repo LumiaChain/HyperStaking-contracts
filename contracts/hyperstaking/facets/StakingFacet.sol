@@ -4,11 +4,13 @@ pragma solidity =0.8.27;
 import {IStaking} from "../interfaces/IStaking.sol";
 import {IStrategyVault} from "../interfaces/IStrategyVault.sol";
 
+import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
     LibStaking, StakingStorage, UserPoolInfo, StakingPoolInfo
 } from "../libraries/LibStaking.sol";
 
 import {LibStrategyVault, StrategyVaultStorage} from "../libraries/LibStrategyVault.sol";
+
 
 /**
  * @title StakingFacet
@@ -20,6 +22,8 @@ import {LibStrategyVault, StrategyVaultStorage} from "../libraries/LibStrategyVa
  * @dev This contract is a facet of Diamond Proxy.
  */
 contract StakingFacet is IStaking {
+    using CurrencyHandler for Currency;
+
     //============================================================================================//
     //                                         Modifiers                                          //
     //============================================================================================//
@@ -39,8 +43,10 @@ contract StakingFacet is IStaking {
     //============================================================================================//
 
     /// TODO ACL
-    function createStakingPool(address stakeToken) public returns (uint256 poolId) {
-        poolId = _createStakingPool(stakeToken);
+    function createStakingPool(
+        Currency calldata currency
+    ) public returns (uint256 poolId) {
+        poolId = _createStakingPool(currency);
     }
 
     //============================================================================================//
@@ -60,11 +66,11 @@ contract StakingFacet is IStaking {
         StakingPoolInfo storage pool = s.poolInfo[poolId];
         UserPoolInfo storage userPool = s.userInfo[poolId][to];
 
-        if (pool.native) {
-            if (msg.value != amount) revert DepositBadValue();
-        } else {
-            revert Unsupported();
-        }
+        pool.currency.transferFrom(
+            msg.sender,
+            address(this),
+            amount
+        );
 
         pool.totalStake += amount;
         userPool.staked += amount;
@@ -94,12 +100,10 @@ contract StakingFacet is IStaking {
         pool.totalStake -= amount;
         userPool.staked -= amount;
 
-        if (pool.native) {
-            (bool success, ) = to.call{value: withdrawAmount}("");
-            if (!success) revert WithdrawFailedCall();
-        } else {
-            revert Unsupported();
-        }
+        pool.currency.transfer(
+            to,
+            withdrawAmount
+        );
 
         emit StakeWithdraw(msg.sender, to, poolId, strategy, amount, withdrawAmount);
     }
@@ -116,9 +120,11 @@ contract StakingFacet is IStaking {
     }
 
     /// @inheritdoc IStaking
-    function stakeTokenPoolCount(address stakeToken) external view returns (uint96) {
+    function stakeTokenPoolCount(
+        Currency calldata currency
+    ) external view returns (uint96) {
         StakingStorage storage s = LibStaking.diamondStorage();
-        return s.stakeTokenPoolCount[stakeToken];
+        return s.stakeTokenPoolCount[currency.token];
     }
 
     function poolInfo(uint256 poolId) external view returns (StakingPoolInfo memory) {
@@ -136,19 +142,14 @@ contract StakingFacet is IStaking {
         return userPool.staked * LibStaking.PRECISION_FACTOR / pool.totalStake;
     }
 
-    function nativeTokenAddress() public pure returns (address) {
-        return address(uint160(uint256(
-            keccak256(
-                abi.encodePacked("native")
-            )
-        )));
-    }
-
     /// @inheritdoc IStaking
-    function generatePoolId(address stakeToken, uint96 idx) public pure returns (uint256) {
+    function generatePoolId(
+        Currency calldata currency,
+        uint96 idx
+    ) public pure returns (uint256) {
         return uint256(keccak256(
             abi.encodePacked(
-                stakeToken,
+                currency.token,
                 idx
             )
         ));
@@ -158,28 +159,25 @@ contract StakingFacet is IStaking {
     //                                     Internal Functions                                     //
     //============================================================================================//
 
-    function _createStakingPool(address stakeToken) internal returns (uint256 poolId) {
+    function _createStakingPool(
+        Currency calldata currency
+    ) internal returns (uint256 poolId) {
         StakingStorage storage s = LibStaking.diamondStorage();
 
         // use current count as idx
-        uint96 idx = s.stakeTokenPoolCount[stakeToken];
-        poolId = generatePoolId(stakeToken, idx);
+        uint96 idx = s.stakeTokenPoolCount[currency.token];
+        poolId = generatePoolId(currency, idx);
 
         // increment pool count
-        s.stakeTokenPoolCount[stakeToken]++;
-
-        bool native = false;
-        if(stakeToken == nativeTokenAddress())
-            native = true;
+        s.stakeTokenPoolCount[currency.token]++;
 
         // save test pool in the storage
         s.poolInfo[poolId] = StakingPoolInfo({
             poolId: poolId,
-            native: native,
-            stakeToken: stakeToken,
+            currency: currency,
             totalStake: 0
         });
 
-        emit StakingPoolCreate(msg.sender, stakeToken, idx, poolId);
+        emit StakingPoolCreate(msg.sender, currency.token, idx, poolId);
     }
 }

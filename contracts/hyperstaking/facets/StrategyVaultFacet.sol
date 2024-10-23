@@ -5,11 +5,12 @@ import {IStrategyVault} from "../interfaces/IStrategyVault.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 import {IRewarder} from "../interfaces/IRewarder.sol";
 
+import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
-import {LibStaking, StakingStorage, UserPoolInfo} from "../libraries/LibStaking.sol";
+import {LibStaking, StakingStorage, UserPoolInfo, StakingPoolInfo} from "../libraries/LibStaking.sol";
 import {
     LibStrategyVault, StrategyVaultStorage, UserVaultInfo, VaultInfo, VaultAsset
 } from "../libraries/LibStrategyVault.sol";
@@ -20,8 +21,10 @@ import { LiquidVaultToken } from "../LiquidVaultToken.sol";
  * @title StrategyVaultFacet
  *
  * @dev This contract is a facet of Diamond Proxy.
+ * TODO ACL (or internal diamond)
  */
 contract StrategyVaultFacet is IStrategyVault {
+    using CurrencyHandler for Currency;
     using SafeERC20 for IERC20;
 
     //============================================================================================//
@@ -57,23 +60,31 @@ contract StrategyVaultFacet is IStrategyVault {
         address user
     ) external updateRewards(strategy, user) payable {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-        StakingStorage storage s = LibStaking.diamondStorage();
-
         UserVaultInfo storage userVault = v.userInfo[strategy][user];
         VaultInfo storage vault = v.vaultInfo[strategy];
         VaultAsset storage asset = v.vaultAssetInfo[strategy];
+
+        StakingStorage storage s = LibStaking.diamondStorage();
         UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
+        StakingPoolInfo storage pool = s.poolInfo[vault.poolId];
 
         userVault.stakeLocked += amount;
         vault.totalStakeLocked += amount;
         userPool.stakeLocked += amount;
 
         // allocate stake amount in strategy
-        uint256 shares = IStrategy(strategy).allocate{value: amount}(amount, user);
+        // and receive shares
+        uint256 shares;
+        if (pool.currency.isNativeCoin()) {
+            shares = IStrategy(strategy).allocate{value: amount}(amount, user);
+        } else {
+            pool.currency.approve(strategy, amount);
+            shares = IStrategy(strategy).allocate(amount, user);
+        }
 
         // fetch shares to this vault
         asset.totalShares += shares;
-        IERC20(asset.asset).safeTransferFrom(strategy, address(this), shares);
+        asset.asset.safeTransferFrom(strategy, address(this), shares);
 
         emit Deposit(vault.poolId, strategy, user, amount, shares);
     }
@@ -85,11 +96,11 @@ contract StrategyVaultFacet is IStrategyVault {
         address user
     ) external updateRewards(strategy, user) returns (uint256 withdrawAmount) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-        StakingStorage storage s = LibStaking.diamondStorage();
-
         UserVaultInfo storage userVault = v.userInfo[strategy][user];
         VaultInfo storage vault = v.vaultInfo[strategy];
         VaultAsset storage asset = v.vaultAssetInfo[strategy];
+
+        StakingStorage storage s = LibStaking.diamondStorage();
         UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
         uint256 shares = convertToShares(strategy, amount);
@@ -99,7 +110,7 @@ contract StrategyVaultFacet is IStrategyVault {
         vault.totalStakeLocked -= amount;
         userPool.stakeLocked -= amount;
 
-        IERC20(asset.asset).safeIncreaseAllowance(strategy, shares);
+        asset.asset.safeIncreaseAllowance(strategy, shares);
         withdrawAmount = IStrategy(strategy).exit(shares, user);
 
         emit Withdraw(vault.poolId, strategy, user, amount, shares);
@@ -172,8 +183,6 @@ contract StrategyVaultFacet is IStrategyVault {
             sharesSymbol
         );
     }
-
-
 
     function _createVault(uint256 poolId, address strategy, IERC20Metadata asset) internal {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
