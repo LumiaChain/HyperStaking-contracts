@@ -78,8 +78,9 @@ export class SelectorArray extends Array<string> {
   }
 
   // Method to push new selector strings into the instance array
-  add(selector: string) {
-    this.push(selector); // Directly use `push` since we're extending Array
+  add(selectors: string[]): SelectorArray {
+    this.push(...selectors); // Directly use `push` since we're extending Array
+    return this;
   }
 }
 

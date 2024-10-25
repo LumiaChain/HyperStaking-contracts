@@ -8,6 +8,9 @@ import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 import {
     ReentrancyGuardUpgradeable
 } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import {
+    PausableUpgradeable
+} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
@@ -25,7 +28,8 @@ import {LibStrategyVault, StrategyVaultStorage} from "../libraries/LibStrategyVa
  *
  * @dev This contract is a facet of Diamond Proxy.
  */
-contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable {
+contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, PausableUpgradeable {
+
     using CurrencyHandler for Currency;
 
     //============================================================================================//
@@ -43,16 +47,6 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable {
     }
 
     //============================================================================================//
-    //                                     TEST INIT                                              //
-    //============================================================================================//
-
-    function createStakingPool (
-        Currency calldata currency
-    ) public onlyStakingManager nonReentrant returns (uint256 poolId) {
-        poolId = _createStakingPool(currency);
-    }
-
-    //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
 
@@ -63,7 +57,8 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable {
         address strategy,
         uint256 amount,
         address to
-    ) public payable validate(poolId, strategy) nonReentrant {
+    ) public payable nonReentrant whenNotPaused validate(poolId, strategy)
+    {
         StakingStorage storage s = LibStaking.diamondStorage();
 
         StakingPoolInfo storage pool = s.poolInfo[poolId];
@@ -91,7 +86,8 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable {
         address strategy,
         uint256 amount,
         address to
-    ) public validate(poolId, strategy) nonReentrant returns (uint256 withdrawAmount) {
+    ) public nonReentrant whenNotPaused validate(poolId, strategy)
+    returns (uint256 withdrawAmount) {
         StakingStorage storage s = LibStaking.diamondStorage();
 
         StakingPoolInfo storage pool = s.poolInfo[poolId];
@@ -109,6 +105,24 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable {
         );
 
         emit StakeWithdraw(msg.sender, to, poolId, strategy, amount, withdrawAmount);
+    }
+
+    /* ========== ACL  ========== */
+
+    function createStakingPool (
+        Currency calldata currency
+    ) public onlyStakingManager nonReentrant returns (uint256 poolId) {
+        poolId = _createStakingPool(currency);
+    }
+
+    /// @notice Pauses stake functionalities.
+    function pauseStaking() external onlyStakingManager whenNotPaused {
+        _pause();
+    }
+
+    /// @notice Resumes stake functionalities.
+    function unpauseStaking() external onlyStakingManager whenPaused {
+        _unpause();
     }
 
     // ========= View ========= //
