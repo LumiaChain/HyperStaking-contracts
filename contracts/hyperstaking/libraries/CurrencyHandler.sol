@@ -30,7 +30,7 @@ library CurrencyHandler {
      * @param currency The Currency struct (token address or native coin)
      */
     function isNativeCoin(Currency memory currency) internal pure returns (bool) {
-        return currency.token == address(0); // TODO CHECK gas
+        return currency.token == address(0);
     }
 
     /**

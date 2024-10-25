@@ -1,7 +1,7 @@
 import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import hre from "hardhat";
-import { Contract, parseEther, parseUnits, ZeroAddress } from "ethers";
+import { Addressable, Contract, parseEther, parseUnits, ZeroAddress } from "ethers";
 
 import HyperStakingModule from "../ignition/modules/HyperStaking";
 
@@ -9,7 +9,9 @@ import * as shared from "./shared";
 
 describe("Rewarder", function () {
   async function deployHyperStaking() {
-    const [owner, alice, bob] = await hre.ethers.getSigners();
+    const [
+      owner, stakingManager, strategyVaultManager, rewardsManager, alice, bob,
+    ] = await hre.ethers.getSigners();
     const { diamond, staking, vault, rewarder } = await hre.ignition.deploy(HyperStakingModule);
 
     const REWARD_PRECISION = await rewarder.REWARD_PRECISION();
@@ -17,6 +19,7 @@ describe("Rewarder", function () {
 
     const testWstETH = await shared.deloyTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
     const rewardToken = await shared.deloyTestERC20("Test Reward Token", "rERC");
+    await rewardToken.transfer(rewardsManager.address, parseEther("10000000"));
 
     // ------------------ Create Staking Pools ------------------
 
@@ -35,7 +38,7 @@ describe("Rewarder", function () {
     await testWstETH.approve(reserveStrategy.target, reserveStrategyAssetSupply);
     await reserveStrategy.supplyRevenueAsset(reserveStrategyAssetSupply);
 
-    await vault.addStrategy(ethPoolId, reserveStrategy, testWstETH);
+    await vault.connect(strategyVaultManager).addStrategy(ethPoolId, reserveStrategy, testWstETH);
 
     // -------------------- Add Rewarder --------------------
 
@@ -45,21 +48,23 @@ describe("Rewarder", function () {
       staking, vault, rewarder, // diamond facets
       testWstETH, rewardToken, reserveStrategy, // test contracts
       ethPoolId, // ids
-      reserveAssetPrice, reserveStrategyAssetSupply, // values
-      nativeTokenAddress, owner, alice, bob, // addresses
+      reserveAssetPrice, reserveStrategyAssetSupply, nativeTokenAddress, // values
+      owner, stakingManager, strategyVaultManager, rewardsManager, alice, bob, // addresses
       REWARD_PRECISION, REWARDS_PER_STRATEGY_LIMIT, // constants
     };
     /* eslint-enable object-property-newline */
   }
 
-  async function deployTestTokens() {
+  async function deployTestTokens(to: Addressable) {
     const testTokens: Contract[] = [];
 
     // deploy 6 test tokens
     for (let i = 1; i <= 6; i++) {
       const name = `TestToken${i}`;
       const symbol = `tt${i}`;
-      testTokens.push(await shared.deloyTestERC20(name, symbol));
+      const token = await shared.deloyTestERC20(name, symbol);
+      token.mint(to, parseEther("1000000"));
+      testTokens.push(token);
     }
 
     return { testTokens };
@@ -67,7 +72,7 @@ describe("Rewarder", function () {
 
   describe("Reward distribution", function () {
     it("Empty rewarder values", async function () {
-      const { reserveStrategy, rewarder, alice } = await loadFixture(deployHyperStaking);
+      const { reserveStrategy, rewarder, alice, rewardsManager } = await loadFixture(deployHyperStaking);
 
       const badRewardIdx = 0;
       expect(await rewarder.isRewardActive(reserveStrategy, badRewardIdx)).to.be.eq(false);
@@ -104,15 +109,12 @@ describe("Rewarder", function () {
       await expect(rewarder.rewardPool(reserveStrategy, badRewardIdx))
         .to.be.revertedWithCustomError(rewarder, "RewardNotFound");
 
-      await expect(rewarder.finalize(reserveStrategy, badRewardIdx))
+      await expect(rewarder.connect(rewardsManager).finalize(reserveStrategy, badRewardIdx))
         .to.be.revertedWithCustomError(rewarder, "RewardNotFound");
     });
 
-    // TODO
-    // it("Only RewardsManager should be able to notify new distribution", async function ()
-
-    it("Create new reward distribution", async function () {
-      const { rewardToken, reserveStrategy, rewarder, owner } = await loadFixture(deployHyperStaking);
+    it("Only RewardsManager should be able to execute protected fucntions", async function () {
+      const { rewardToken, reserveStrategy, rewarder } = await loadFixture(deployHyperStaking);
 
       const rewardAmount = parseEther("100");
       await rewardToken.approve(rewarder, rewardAmount);
@@ -121,24 +123,49 @@ describe("Rewarder", function () {
       await time.setNextBlockTimestamp(startTimestamp);
       const distributionEnd = Math.floor(startTimestamp + 1000);
 
-      const rewardIdx = 0;
       await expect(rewarder.newRewardDistribution(
         reserveStrategy,
         rewardToken,
         rewardAmount,
         0, // - now (startTimestamp)
         distributionEnd,
+      )).to.be.reverted;
+
+      await expect(rewarder.finalize(reserveStrategy, 0))
+        .to.be.reverted;
+
+      await expect(rewarder.withdrawRemaining(reserveStrategy, 0, ZeroAddress))
+        .to.be.reverted;
+    });
+
+    it("Create new reward distribution", async function () {
+      const { rewardToken, reserveStrategy, rewarder, rewardsManager } = await loadFixture(deployHyperStaking);
+
+      const rewardAmount = parseEther("100");
+      await rewardToken.connect(rewardsManager).approve(rewarder, rewardAmount);
+
+      const startTimestamp = Math.floor(Date.now() / 1000) + 100;
+      await time.setNextBlockTimestamp(startTimestamp);
+      const distributionEnd = Math.floor(startTimestamp + 1000);
+
+      const rewardIdx = 0;
+      await expect(rewarder.connect(rewardsManager).newRewardDistribution(
+        reserveStrategy,
+        rewardToken,
+        rewardAmount,
+        0, // - now (startTimestamp)
+        distributionEnd,
       )).to.emit(rewarder, "RewardNotify")
-        .withArgs(owner.address, reserveStrategy, rewardIdx, rewardAmount, 0, startTimestamp, distributionEnd, true);
+        .withArgs(rewardsManager.address, reserveStrategy, rewardIdx, rewardAmount, 0, startTimestamp, distributionEnd, true);
 
       const rewardPool = await rewarder.rewardPool(reserveStrategy, rewardIdx);
       expect(rewardPool.tokensPerSecond).to.eq(rewardAmount * parseUnits("1", 36) / BigInt(distributionEnd - startTimestamp));
     });
 
     it("Reward creation should revert in some cases", async function () {
-      const { rewardToken, reserveStrategy, rewarder } = await loadFixture(deployHyperStaking);
+      const { rewardToken, reserveStrategy, rewarder, rewardsManager } = await loadFixture(deployHyperStaking);
 
-      await expect(rewarder.newRewardDistribution(
+      await expect(rewarder.connect(rewardsManager).newRewardDistribution(
         reserveStrategy,
         ZeroAddress,
         0,
@@ -148,7 +175,7 @@ describe("Rewarder", function () {
 
       let startTimestamp = Math.floor(Date.now() / 1000) - 100;
 
-      await expect(rewarder.newRewardDistribution(
+      await expect(rewarder.connect(rewardsManager).newRewardDistribution(
         reserveStrategy,
         rewardToken,
         0,
@@ -158,7 +185,7 @@ describe("Rewarder", function () {
 
       startTimestamp = Math.floor(Date.now() / 1000) + 100;
 
-      await expect(rewarder.newRewardDistribution(
+      await expect(rewarder.connect(rewardsManager).newRewardDistribution(
         reserveStrategy,
         rewardToken,
         0,
@@ -168,7 +195,7 @@ describe("Rewarder", function () {
 
       const rewardAmount = parseUnits("1", 30) + 1n;
 
-      await expect(rewarder.newRewardDistribution(
+      await expect(rewarder.connect(rewardsManager).newRewardDistribution(
         reserveStrategy,
         rewardToken,
         rewardAmount, // too big value
@@ -179,12 +206,12 @@ describe("Rewarder", function () {
 
     it("Reward shouldn't be distribute after its end", async function () {
       const {
-        staking, rewarder, rewardToken, reserveStrategy, ethPoolId, alice, REWARD_PRECISION,
+        staking, rewarder, rewardToken, reserveStrategy, ethPoolId, alice, rewardsManager, REWARD_PRECISION,
       } = await loadFixture(deployHyperStaking);
 
       const rewardIdx = 0;
       const rewardAmount = parseEther("100");
-      await rewardToken.approve(rewarder, rewardAmount);
+      await rewardToken.connect(rewardsManager).approve(rewarder, rewardAmount);
 
       const startTimestamp = Math.floor(Date.now() / 1000) + 100;
       const distributionDuration = 1000; // seconds
@@ -193,7 +220,7 @@ describe("Rewarder", function () {
       await time.setNextBlockTimestamp(startTimestamp - 1);
 
       // notify when there are no stakers yet
-      await rewarder.newRewardDistribution(
+      await rewarder.connect(rewardsManager).newRewardDistribution(
         reserveStrategy,
         rewardToken,
         rewardAmount,
@@ -247,12 +274,12 @@ describe("Rewarder", function () {
 
     it("Reward should be applied to current stakers too", async function () {
       const {
-        staking, rewarder, rewardToken, reserveStrategy, ethPoolId, alice, REWARD_PRECISION,
+        staking, rewarder, rewardToken, reserveStrategy, ethPoolId, alice, rewardsManager, REWARD_PRECISION,
       } = await loadFixture(deployHyperStaking);
 
       const rewardIdx = 0;
       const rewardAmount = parseEther("50");
-      await rewardToken.approve(rewarder, rewardAmount);
+      await rewardToken.connect(rewardsManager).approve(rewarder, rewardAmount);
 
       const stakeAmount = parseEther("1");
       await staking.connect(alice).stakeDeposit(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
@@ -263,7 +290,7 @@ describe("Rewarder", function () {
       await time.setNextBlockTimestamp(startTimestamp);
 
       // notify when there are already stakers
-      await rewarder.newRewardDistribution(
+      await rewarder.connect(rewardsManager).newRewardDistribution(
         reserveStrategy,
         rewardToken,
         rewardAmount,
@@ -309,11 +336,13 @@ describe("Rewarder", function () {
     });
 
     it("Check calculations for more than one staker", async function () {
-      const { staking, rewarder, rewardToken, reserveStrategy, ethPoolId, alice, bob } = await loadFixture(deployHyperStaking);
+      const {
+        staking, rewarder, rewardToken, reserveStrategy, ethPoolId, rewardsManager, alice, bob,
+      } = await loadFixture(deployHyperStaking);
 
       const rewardIdx = 0;
       const rewardAmount = parseEther("6000");
-      await rewardToken.approve(rewarder, rewardAmount);
+      await rewardToken.connect(rewardsManager).approve(rewarder, rewardAmount);
 
       // alice stakes first
       const stakeAmount = parseEther("1");
@@ -325,7 +354,7 @@ describe("Rewarder", function () {
       await time.setNextBlockTimestamp(startTimestamp);
 
       // notify when there are already stakers
-      await rewarder.newRewardDistribution(
+      await rewarder.connect(rewardsManager).newRewardDistribution(
         reserveStrategy,
         rewardToken,
         rewardAmount,
@@ -366,12 +395,14 @@ describe("Rewarder", function () {
     });
 
     it("extending reward distribution should be possible, leftover", async function () {
-      const { staking, rewarder, rewardToken, reserveStrategy, ethPoolId, alice, bob } = await loadFixture(deployHyperStaking);
+      const {
+        staking, rewarder, rewardToken, reserveStrategy, ethPoolId, rewardsManager, alice, bob,
+      } = await loadFixture(deployHyperStaking);
 
       const rewardIdx = 0;
       const rewardAmount1 = parseEther("2000");
       const rewardAmount2 = parseEther("4000");
-      await rewardToken.approve(rewarder, rewardAmount1);
+      await rewardToken.connect(rewardsManager).approve(rewarder, rewardAmount1);
 
       // alice stakes
       const stakeAmount = parseEther("1");
@@ -383,7 +414,7 @@ describe("Rewarder", function () {
       await time.setNextBlockTimestamp(startTimestamp);
 
       // notify rewardAmount1
-      await rewarder.newRewardDistribution(
+      await rewarder.connect(rewardsManager).newRewardDistribution(
         reserveStrategy,
         rewardToken,
         rewardAmount1,
@@ -404,8 +435,8 @@ describe("Rewarder", function () {
       expect(await rewarder.pendingReward(reserveStrategy, rewardIdx, bob.address)).to.eq(0);
 
       // notify second reward distribution when first didnt finish yet - rewardAmount2
-      await rewardToken.approve(rewarder, rewardAmount2);
-      await rewarder.notifyRewardDistribution(
+      await rewardToken.connect(rewardsManager).approve(rewarder, rewardAmount2);
+      await rewarder.connect(rewardsManager).notifyRewardDistribution(
         reserveStrategy,
         rewardIdx,
         rewardAmount2,
@@ -435,7 +466,7 @@ describe("Rewarder", function () {
       await time.increase(distributionDuration * 5);
 
       const rewardAmount3 = parseEther("10000");
-      await rewardToken.approve(rewarder, rewardAmount3);
+      await rewardToken.connect(rewardsManager).approve(rewarder, rewardAmount3);
 
       const start3 = await time.latest() + 1;
       const duration3 = 100; // seconds
@@ -443,7 +474,7 @@ describe("Rewarder", function () {
       await time.setNextBlockTimestamp(start3);
 
       // notify rewardAmount3
-      await rewarder.notifyRewardDistribution(
+      await rewarder.connect(rewardsManager).notifyRewardDistribution(
         reserveStrategy,
         rewardIdx,
         rewardAmount3,
@@ -478,13 +509,14 @@ describe("Rewarder", function () {
         );
     });
 
-    // TODO add ACL
     it("It should be possible to finalize rewarder and claim remaining tokens", async function () {
-      const { staking, rewarder, rewardToken, reserveStrategy, ethPoolId, owner, alice } = await loadFixture(deployHyperStaking);
+      const {
+        staking, rewarder, rewardToken, reserveStrategy, ethPoolId, rewardsManager, owner, alice,
+      } = await loadFixture(deployHyperStaking);
 
       const rewardIdx = 0;
       const rewardAmount = parseEther("6000");
-      await rewardToken.approve(rewarder, rewardAmount);
+      await rewardToken.connect(rewardsManager).approve(rewarder, rewardAmount);
 
       const startTimestamp = await time.latest() + 1;
       const distributionDuration = 1500; // seconds
@@ -492,7 +524,7 @@ describe("Rewarder", function () {
       await time.setNextBlockTimestamp(startTimestamp);
 
       // notify when there are already stakers
-      await rewarder.newRewardDistribution(
+      await rewarder.connect(rewardsManager).newRewardDistribution(
         reserveStrategy,
         rewardToken,
         rewardAmount,
@@ -506,7 +538,7 @@ describe("Rewarder", function () {
       const stakeAmount = parseEther("1");
       await staking.stakeDeposit(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
 
-      await expect(rewarder.withdrawRemaining(reserveStrategy, rewardIdx, owner))
+      await expect(rewarder.connect(rewardsManager).withdrawRemaining(reserveStrategy, rewardIdx, owner))
         .to.revertedWithCustomError(rewarder, "NotFinalized");
 
       // finalize in 1/3 of the distributionDuration
@@ -514,9 +546,9 @@ describe("Rewarder", function () {
       await time.setNextBlockTimestamp(finalizeTimestamp);
 
       // finalize rewarder
-      await expect(rewarder.finalize(reserveStrategy, rewardIdx))
+      await expect(rewarder.connect(rewardsManager).finalize(reserveStrategy, rewardIdx))
         .to.emit(rewarder, "Finalize")
-        .withArgs(owner.address, reserveStrategy, rewardIdx, finalizeTimestamp);
+        .withArgs(rewardsManager.address, reserveStrategy, rewardIdx, finalizeTimestamp);
 
       const rewardInfo = await rewarder.strategyRewardInfo(reserveStrategy, rewardIdx);
       expect(rewardInfo.rewardToken).to.eq(rewardToken);
@@ -529,14 +561,14 @@ describe("Rewarder", function () {
       // should not change the withdraw balance
       await time.increase(1000);
 
-      await expect(rewarder.withdrawRemaining(reserveStrategy, rewardIdx, owner))
+      await expect(rewarder.connect(rewardsManager).withdrawRemaining(reserveStrategy, rewardIdx, owner))
         .to.changeTokenBalances(rewardToken,
           [owner, rewarder],
           [expectedRewarderBalance, -expectedRewarderBalance],
         );
 
       // should not be possible to notify new distribution on finalized rewarder
-      await expect(rewarder.notifyRewardDistribution(
+      await expect(rewarder.connect(rewardsManager).notifyRewardDistribution(
         reserveStrategy,
         rewardIdx,
         rewardAmount,
@@ -548,9 +580,9 @@ describe("Rewarder", function () {
 
   describe("Concurrent rewards", function () {
     it("multiple rewards limitations", async function () {
-      const { rewarder, reserveStrategy, REWARDS_PER_STRATEGY_LIMIT } = await loadFixture(deployHyperStaking);
+      const { rewarder, reserveStrategy, rewardsManager, REWARDS_PER_STRATEGY_LIMIT } = await loadFixture(deployHyperStaking);
 
-      const { testTokens } = await deployTestTokens();
+      const { testTokens } = await deployTestTokens(rewardsManager);
 
       const rewardAmount = parseEther("100");
 
@@ -558,8 +590,8 @@ describe("Rewarder", function () {
       const distributionEnd = startTimestamp + 1000;
 
       for (let i = 0; i < REWARDS_PER_STRATEGY_LIMIT; i++) {
-        await testTokens[i].approve(rewarder, rewardAmount);
-        await rewarder.newRewardDistribution(
+        await testTokens[i].connect(rewardsManager).approve(rewarder, rewardAmount);
+        await rewarder.connect(rewardsManager).newRewardDistribution(
           reserveStrategy,
           testTokens[i],
           rewardAmount,
@@ -568,7 +600,7 @@ describe("Rewarder", function () {
         );
       }
 
-      await expect(rewarder.newRewardDistribution(
+      await expect(rewarder.connect(rewardsManager).newRewardDistribution(
         reserveStrategy,
         testTokens[REWARDS_PER_STRATEGY_LIMIT].target,
         rewardAmount,
@@ -578,8 +610,10 @@ describe("Rewarder", function () {
     });
 
     it("multiple rewards", async function () {
-      const { staking, rewarder, reserveStrategy, ethPoolId, alice, REWARDS_PER_STRATEGY_LIMIT } = await loadFixture(deployHyperStaking);
-      const { testTokens } = await deployTestTokens();
+      const {
+        staking, rewarder, reserveStrategy, ethPoolId, rewardsManager, alice, REWARDS_PER_STRATEGY_LIMIT,
+      } = await loadFixture(deployHyperStaking);
+      const { testTokens } = await deployTestTokens(rewardsManager);
 
       const stakeAmount = parseEther("1");
       await staking.connect(alice).stakeDeposit(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
@@ -593,8 +627,8 @@ describe("Rewarder", function () {
       // create many rewards distribution for the same strategy
       for (let i = 0; i < REWARDS_PER_STRATEGY_LIMIT; i++) {
         const rewardAmount = baseRewardAmount * BigInt(i + 1);
-        await testTokens[i].approve(rewarder, rewardAmount);
-        await rewarder.newRewardDistribution(
+        await testTokens[i].connect(rewardsManager).approve(rewarder, rewardAmount);
+        await rewarder.connect(rewardsManager).newRewardDistribution(
           reserveStrategy,
           testTokens[i],
           rewardAmount,

@@ -4,26 +4,33 @@ pragma solidity =0.8.27;
 import {IStrategyVault} from "../interfaces/IStrategyVault.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 import {IRewarder} from "../interfaces/IRewarder.sol";
+import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
-import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {
+    IERC20, IERC20Metadata
+} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {
+    ReentrancyGuardUpgradeable
+} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
-import {LibStaking, StakingStorage, UserPoolInfo, StakingPoolInfo} from "../libraries/LibStaking.sol";
+import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
+import {
+    LibStaking, StakingStorage, UserPoolInfo, StakingPoolInfo
+} from "../libraries/LibStaking.sol";
 import {
     LibStrategyVault, StrategyVaultStorage, UserVaultInfo, VaultInfo, VaultAsset
 } from "../libraries/LibStrategyVault.sol";
 
-import { LiquidVaultToken } from "../LiquidVaultToken.sol";
+import {LiquidVaultToken} from "../LiquidVaultToken.sol";
 
 /**
  * @title StrategyVaultFacet
  *
  * @dev This contract is a facet of Diamond Proxy.
- * TODO ACL (or internal diamond)
  */
-contract StrategyVaultFacet is IStrategyVault {
+contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardUpgradeable {
     using CurrencyHandler for Currency;
     using SafeERC20 for IERC20;
 
@@ -44,21 +51,19 @@ contract StrategyVaultFacet is IStrategyVault {
     //                                      Public Functions                                      //
     //============================================================================================//
 
-    // TODO ACL
     function addStrategy(
         uint256 poolId,
         address strategy,
         IERC20Metadata asset
-    ) external {
+    ) external onlyStrategyVaultManager nonReentrant {
         _createVault( poolId, strategy, asset);
     }
 
-    // TODO add non reentrant
     function deposit(
         address strategy,
         uint256 amount,
         address user
-    ) external updateRewards(strategy, user) payable {
+    ) external payable diamondInternal updateRewards(strategy, user) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         UserVaultInfo storage userVault = v.userInfo[strategy][user];
         VaultInfo storage vault = v.vaultInfo[strategy];
@@ -89,12 +94,11 @@ contract StrategyVaultFacet is IStrategyVault {
         emit Deposit(vault.poolId, strategy, user, amount, shares);
     }
 
-    // TODO add non reentrant
     function withdraw(
         address strategy,
         uint256 amount,
         address user
-    ) external updateRewards(strategy, user) returns (uint256 withdrawAmount) {
+    ) external diamondInternal updateRewards(strategy, user) returns (uint256 withdrawAmount) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         UserVaultInfo storage userVault = v.userInfo[strategy][user];
         VaultInfo storage vault = v.vaultInfo[strategy];

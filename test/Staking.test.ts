@@ -2,7 +2,7 @@ import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import hre from "hardhat";
-import { parseEther } from "ethers";
+import { parseEther, ZeroAddress } from "ethers";
 
 import DiamondModule from "../ignition/modules/Diamond";
 import HyperStakingModule from "../ignition/modules/HyperStaking";
@@ -21,7 +21,7 @@ describe("Staking", function () {
   }
 
   async function deployHyperStaking() {
-    const [owner, alice] = await hre.ethers.getSigners();
+    const [owner, stakingManager, strategyVaultManager, alice, bob] = await hre.ethers.getSigners();
     const { diamond, staking, vault } = await hre.ignition.deploy(HyperStakingModule);
 
     // --------------------- Deploy Tokens --------------------
@@ -51,10 +51,10 @@ describe("Staking", function () {
     await reserveStrategy2.supplyRevenueAsset(reserveStrategyAssetSupply);
 
     // strategy with neutral to eth 1:1 asset price
-    await vault.addStrategy(ethPoolId, reserveStrategy1, testWstETH);
+    await vault.connect(strategyVaultManager).addStrategy(ethPoolId, reserveStrategy1, testWstETH);
 
     // strategy with erc20 staking token and 2:1 asset price
-    await vault.addStrategy(erc20PoolId, reserveStrategy2, testWstETH);
+    await vault.connect(strategyVaultManager).addStrategy(erc20PoolId, reserveStrategy2, testWstETH);
 
     /* eslint-disable object-property-newline */
     return {
@@ -62,7 +62,7 @@ describe("Staking", function () {
       staking, vault, // diamond facets
       testERC20, testWstETH, reserveStrategy1, reserveStrategy2, // test contracts
       ethPoolId, erc20PoolId, // ids
-      nativeTokenAddress, owner, alice, // addresses
+      nativeTokenAddress, owner, stakingManager, strategyVaultManager, alice, bob, // addresses
     };
     /* eslint-enable object-property-newline */
   }
@@ -82,9 +82,14 @@ describe("Staking", function () {
     });
   });
 
-  // TODO ERC20 staking pools
-
   describe("Staking", function () {
+    it("creating pools should be restricted ", async function () {
+      const { staking, bob } = await loadFixture(deployHyperStaking);
+
+      await expect(staking.connect(bob).createStakingPool({ token: ZeroAddress }))
+        .to.be.reverted;
+    });
+
     it("should be able to deposit stake", async function () {
       const { staking, ethPoolId, reserveStrategy1, owner, alice } = await loadFixture(deployHyperStaking);
 
@@ -244,8 +249,6 @@ describe("Staking", function () {
         await expect(staking.stakeWithdraw(ethPoolId, reserveStrategy1, stakeAmount, revertingContract))
           .to.be.revertedWith("Transfer call failed");
       });
-
-      // TODO "Transfer insufficient balance"
 
       it("PoolDoesNotExist", async function () {
         const { staking, reserveStrategy1, owner } = await loadFixture(deployHyperStaking);

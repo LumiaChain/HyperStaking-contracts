@@ -1,4 +1,4 @@
-import { ignition } from "hardhat";
+import { ignition, ethers } from "hardhat";
 import { Contract, ZeroAddress } from "ethers";
 import TestERC20Module from "../ignition/modules/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
@@ -17,18 +17,22 @@ export async function deloyTestERC20(name: string, symbol: string): Promise<Cont
 }
 
 export async function createNativeStakingPool(staking: Contract) {
+  const stakingManager = (await ethers.getSigners())[1];
+
   const nativeTokenAddress = ZeroAddress;
   const currency = { token: nativeTokenAddress } as CurrencyStruct;
 
-  await staking.createStakingPool(currency);
+  await staking.connect(stakingManager).createStakingPool(currency);
   const ethPoolId = await staking.generatePoolId(currency, 0);
 
   return { nativeTokenAddress, ethPoolId };
 }
 
 export async function createStakingPool(staking: Contract, token: Contract) {
+  const stakingManager = (await ethers.getSigners())[1];
   const currency = { token } as CurrencyStruct;
-  await staking.createStakingPool(currency);
+
+  await staking.connect(stakingManager).createStakingPool(currency);
   const poolCount = await staking.stakeTokenPoolCount(currency);
   const poolId = await staking.generatePoolId(currency, poolCount - 1n);
 

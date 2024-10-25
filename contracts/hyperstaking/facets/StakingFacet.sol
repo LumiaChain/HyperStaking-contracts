@@ -3,6 +3,11 @@ pragma solidity =0.8.27;
 
 import {IStaking} from "../interfaces/IStaking.sol";
 import {IStrategyVault} from "../interfaces/IStrategyVault.sol";
+import {HyperStakingAcl} from "../HyperStakingAcl.sol";
+
+import {
+    ReentrancyGuardUpgradeable
+} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
@@ -10,7 +15,6 @@ import {
 } from "../libraries/LibStaking.sol";
 
 import {LibStrategyVault, StrategyVaultStorage} from "../libraries/LibStrategyVault.sol";
-
 
 /**
  * @title StakingFacet
@@ -21,7 +25,7 @@ import {LibStrategyVault, StrategyVaultStorage} from "../libraries/LibStrategyVa
  *
  * @dev This contract is a facet of Diamond Proxy.
  */
-contract StakingFacet is IStaking {
+contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable {
     using CurrencyHandler for Currency;
 
     //============================================================================================//
@@ -42,10 +46,9 @@ contract StakingFacet is IStaking {
     //                                     TEST INIT                                              //
     //============================================================================================//
 
-    /// TODO ACL
-    function createStakingPool(
+    function createStakingPool (
         Currency calldata currency
-    ) public returns (uint256 poolId) {
+    ) public onlyStakingManager nonReentrant returns (uint256 poolId) {
         poolId = _createStakingPool(currency);
     }
 
@@ -60,7 +63,7 @@ contract StakingFacet is IStaking {
         address strategy,
         uint256 amount,
         address to
-    ) public payable validate(poolId, strategy) {
+    ) public payable validate(poolId, strategy) nonReentrant {
         StakingStorage storage s = LibStaking.diamondStorage();
 
         StakingPoolInfo storage pool = s.poolInfo[poolId];
@@ -88,7 +91,7 @@ contract StakingFacet is IStaking {
         address strategy,
         uint256 amount,
         address to
-    ) public validate(poolId, strategy) returns (uint256 withdrawAmount) {
+    ) public validate(poolId, strategy) nonReentrant returns (uint256 withdrawAmount) {
         StakingStorage storage s = LibStaking.diamondStorage();
 
         StakingPoolInfo storage pool = s.poolInfo[poolId];

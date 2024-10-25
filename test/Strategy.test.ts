@@ -2,7 +2,7 @@ import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import hre, { ethers } from "hardhat";
-import { parseEther } from "ethers";
+import { parseEther, ZeroAddress } from "ethers";
 
 import HyperStakingModule from "../ignition/modules/HyperStaking";
 import PirexMockModule from "../ignition/modules/PirexMock";
@@ -23,7 +23,7 @@ describe("Strategy", function () {
   }
 
   async function deployHyperStaking() {
-    const [owner, alice] = await hre.ethers.getSigners();
+    const [owner, stakingManager, strategyVaultManager, alice, bob] = await hre.ethers.getSigners();
     const { diamond, staking, vault } = await hre.ignition.deploy(HyperStakingModule);
 
     // --------------------- Deploy Tokens ----------------------
@@ -47,7 +47,7 @@ describe("Strategy", function () {
     await testWstETH.approve(reserveStrategy.target, reserveStrategyAssetSupply);
     await reserveStrategy.supplyRevenueAsset(reserveStrategyAssetSupply);
 
-    await vault.addStrategy(ethPoolId, reserveStrategy, testWstETH);
+    await vault.connect(strategyVaultManager).addStrategy(ethPoolId, reserveStrategy, testWstETH);
 
     const { pxEth, upxEth, pirexEth, autoPxEth } = await loadFixture(getMockedPirex);
     const { dineroStrategy } = await hre.ignition.deploy(DineroStrategyModule, {
@@ -61,7 +61,7 @@ describe("Strategy", function () {
       },
     });
 
-    await vault.addStrategy(ethPoolId, dineroStrategy, autoPxEth);
+    await vault.connect(strategyVaultManager).addStrategy(ethPoolId, dineroStrategy, autoPxEth);
 
     /* eslint-disable object-property-newline */
     return {
@@ -71,7 +71,7 @@ describe("Strategy", function () {
       testWstETH, reserveStrategy, dineroStrategy, // test contracts
       ethPoolId, // ids
       reserveAssetPrice, reserveStrategyAssetSupply, // values
-      nativeTokenAddress, owner, alice, // addresses
+      nativeTokenAddress, owner, stakingManager, strategyVaultManager, alice, bob, // addresses
     };
     /* eslint-enable object-property-newline */
   }
@@ -178,6 +178,17 @@ describe("Strategy", function () {
     });
 
     describe("Errors", function () {
+      it("OnlyStrategyVaultManager", async function () {
+        const { vault, ethPoolId, reserveStrategy, alice } = await loadFixture(deployHyperStaking);
+
+        await expect(vault.addStrategy(ethPoolId, reserveStrategy, ZeroAddress))
+          .to.be.reverted;
+
+        await expect(vault.connect(alice).addStrategy(ethPoolId, reserveStrategy, ZeroAddress))
+          // .to.be.revertedWithCustomError(vault, "OnlyStrategyVaultManager");
+          .to.be.reverted;
+      });
+
       it("VaultDoesNotExist", async function () {
         const { staking, ethPoolId, owner } = await loadFixture(deployHyperStaking);
 
@@ -188,11 +199,11 @@ describe("Strategy", function () {
       });
 
       it("VaultAlreadyExist", async function () {
-        const { vault, ethPoolId, reserveStrategy } = await loadFixture(deployHyperStaking);
+        const { vault, strategyVaultManager, ethPoolId, reserveStrategy } = await loadFixture(deployHyperStaking);
 
         const randomToken = "0x8Da05a7A689c2C054246B186bEe1C75fcD1df0bC";
 
-        await expect(vault.addStrategy(ethPoolId, reserveStrategy, randomToken))
+        await expect(vault.connect(strategyVaultManager).addStrategy(ethPoolId, reserveStrategy, randomToken))
           .to.be.revertedWithCustomError(vault, "VaultAlreadyExist");
       });
     });

@@ -2,7 +2,8 @@
 pragma solidity =0.8.27;
 
 import {IRewarder} from "../interfaces/IRewarder.sol";
-import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {HyperStakingAcl} from "../HyperStakingAcl.sol";
+import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {
     LibStrategyVault, StrategyVaultStorage, UserVaultInfo, VaultInfo
@@ -21,7 +22,7 @@ import {
  *
  * @dev This contract is a facet of Diamond Proxy.
  */
-contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
+contract RewarderFacet is IRewarder, HyperStakingAcl, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
     //============================================================================================//
@@ -118,16 +119,13 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
 
     /* ========== ACL  ========== */
 
-    /**
-     * TODO ACL
-     */
     function newRewardDistribution(
         address strategy,
         IERC20 rewardToken,
         uint256 rewardAmount,
         uint64 startTimestamp,
         uint64 distributionEnd
-    ) external nonReentrant returns (uint256 idx) {
+    ) external onlyRewardsManager nonReentrant returns (uint256 idx) {
         require(address(rewardToken) != address(0), TokenZeroAddress());
 
         idx = _newIdx(strategy);
@@ -142,7 +140,6 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
     /**
      * @notice Function which transfrFrom reward tokens from the sender and starts updates
      *         reward distribution.
-     * TODO ACL
      */
     function notifyRewardDistribution(
         address strategy,
@@ -150,14 +147,16 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
         uint256 rewardAmount,
         uint64 startTimestamp,
         uint64 distributionEnd
-    ) external onlyNotFinalized(strategy, idx) nonReentrant {
+    ) external onlyRewardsManager onlyNotFinalized(strategy, idx) nonReentrant {
         require(isRewardActive(strategy, idx) == true, NoActiveRewardFound());
 
         _notifyReward(strategy, idx, rewardAmount, startTimestamp, distributionEnd, false);
     }
 
-    // TODO ACL
-    function finalize(address strategy, uint256 idx) external onlyNotFinalized(strategy, idx) {
+    function finalize(
+        address strategy,
+        uint256 idx
+    ) external onlyRewardsManager onlyNotFinalized(strategy, idx) {
         updatePool(strategy, idx);
 
         StrategyReward storage reward = _getStrategyReward(strategy, idx);
@@ -178,14 +177,12 @@ contract RewarderFacet is IRewarder, ReentrancyGuardUpgradeable {
     /**
      * @notice Retrieves remaining reward tokens.
      * @dev only when rewarder is finalized.
-     *
-     * TODO ACL
      */
     function withdrawRemaining(
         address strategy,
         uint256 idx,
         address receiver
-    ) external onlyFinalized(strategy, idx) {
+    ) external onlyRewardsManager onlyFinalized(strategy, idx) {
         StrategyReward storage reward = _getStrategyReward(strategy, idx);
 
         uint256 amount = balance(strategy, idx);
