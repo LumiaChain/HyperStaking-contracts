@@ -3,7 +3,6 @@ pragma solidity =0.8.27;
 
 import {IStrategyVault} from "../interfaces/IStrategyVault.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
-import {IRewarder} from "../interfaces/IRewarder.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -35,19 +34,6 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
     using SafeERC20 for IERC20;
 
     //============================================================================================//
-    //                                         Modifiers                                          //
-    //============================================================================================//
-
-    /**
-     * @dev Rewarder calculations depends on the stake values and should be called before
-     * updating them.
-     */
-    modifier updateRewards(address strategy, address user) {
-        IRewarder(address(this)).updateActivePools(strategy, user);
-        _;
-    }
-
-    //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
 
@@ -63,7 +49,7 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
         address strategy,
         uint256 amount,
         address user
-    ) external payable diamondInternal updateRewards(strategy, user) {
+    ) external payable diamondInternal {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         UserVaultInfo storage userVault = v.userInfo[strategy][user];
         VaultInfo storage vault = v.vaultInfo[strategy];
@@ -98,7 +84,7 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
         address strategy,
         uint256 amount,
         address user
-    ) external diamondInternal updateRewards(strategy, user) returns (uint256 withdrawAmount) {
+    ) external diamondInternal returns (uint256 withdrawAmount) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         UserVaultInfo storage userVault = v.userInfo[strategy][user];
         VaultInfo storage vault = v.vaultInfo[strategy];

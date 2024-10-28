@@ -13,7 +13,6 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const owner = m.getAccount(0);
   const stakingManager = m.getAccount(1);
   const strategyVaultManager = m.getAccount(2);
-  const rewardsManager = m.getAccount(3);
 
   // --- facets
 
@@ -22,9 +21,6 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
 
   const vaultFacet = m.contract("StrategyVaultFacet");
   const vaultFacetInterface = getContractInterface("IStrategyVault");
-
-  const rewarderFacet = m.contract("RewarderFacet");
-  const rewarderFacetInterface = getContractInterface("IRewarder");
 
   const aclInterface = getContractInterface("HyperStakingAcl");
   const aclInterfaceSelectors = getSelectors(aclInterface).remove(["supportsInterface(bytes4)"]);
@@ -44,11 +40,6 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       action: FacetCutAction.Add,
       functionSelectors: getSelectors(vaultFacetInterface),
     },
-    {
-      facetAddress: rewarderFacet,
-      action: FacetCutAction.Add,
-      functionSelectors: getSelectors(rewarderFacetInterface),
-    },
   ];
 
   // --- cut init
@@ -64,7 +55,6 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
 
   const staking = m.contractAt("IStaking", diamond);
   const vault = m.contractAt("IStrategyVault", diamond);
-  const rewarder = m.contractAt("IRewarder", diamond);
 
   const roles = m.contractAt("IHyperStakingRoles", diamond);
   const acl = m.contractAt("HyperStakingAcl", diamond);
@@ -73,7 +63,6 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
 
   const STAKING_MANAGER_ROLE = m.staticCall(roles, "STAKING_MANAGER_ROLE", []);
   const STRATEGY_VAULT_MANAGER_ROLE = m.staticCall(roles, "STRATEGY_VAULT_MANAGER_ROLE", []);
-  const REWARDS_MANAGER_ROLE = m.staticCall(roles, "REWARDS_MANAGER_ROLE", []);
 
   m.call(
     acl,
@@ -89,16 +78,9 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
     { id: "grantRoleStrategyVaultManager" },
   );
 
-  m.call(
-    acl,
-    "grantRole",
-    [REWARDS_MANAGER_ROLE, rewardsManager],
-    { id: "grantRoleRewardsManager" },
-  );
-
   // --- return
 
-  return { diamond, staking, vault, rewarder };
+  return { diamond, staking, vault };
 });
 
 export default HyperStakingModule;
