@@ -206,6 +206,16 @@ describe("Strategy", function () {
         await expect(vault.connect(strategyVaultManager).addStrategy(ethPoolId, reserveStrategy, randomToken))
           .to.be.revertedWithCustomError(vault, "VaultAlreadyExist");
       });
+
+      it("Vault external functions not be accessible without staking", async function () {
+        const { vault, reserveStrategy, alice } = await loadFixture(deployHyperStaking);
+
+        await expect(vault.deposit(reserveStrategy, 1000, alice))
+          .to.be.reverted;
+
+        await expect(vault.withdraw(reserveStrategy, 1000, alice))
+          .to.be.reverted;
+      });
     });
   });
 

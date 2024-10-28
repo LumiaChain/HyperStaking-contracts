@@ -109,18 +109,19 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
     /* ========== ACL  ========== */
 
+    /// @inheritdoc IStaking
     function createStakingPool (
         Currency calldata currency
     ) public onlyStakingManager nonReentrant returns (uint256 poolId) {
         poolId = _createStakingPool(currency);
     }
 
-    /// @notice Pauses stake functionalities.
+    /// @inheritdoc IStaking
     function pauseStaking() external onlyStakingManager whenNotPaused {
         _pause();
     }
 
-    /// @notice Resumes stake functionalities.
+    /// @inheritdoc IStaking
     function unpauseStaking() external onlyStakingManager whenPaused {
         _unpause();
     }
@@ -144,6 +145,7 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         return s.stakeTokenPoolCount[currency.token];
     }
 
+    /// @inheritdoc IStaking
     function poolInfo(uint256 poolId) external view returns (StakingPoolInfo memory) {
         StakingStorage storage s = LibStaking.diamondStorage();
         return s.poolInfo[poolId];
@@ -176,6 +178,8 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     //                                     Internal Functions                                     //
     //============================================================================================//
 
+    /// @notice Main logic for initializing a new staking pool
+    /// @dev Internal function, called by higher-level functions
     function _createStakingPool(
         Currency calldata currency
     ) internal returns (uint256 poolId) {

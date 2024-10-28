@@ -90,6 +90,26 @@ describe("Staking", function () {
         .to.be.reverted;
     });
 
+    it("staking can be paused", async function () {
+      const { staking, ethPoolId, reserveStrategy1, stakingManager, bob } = await loadFixture(deployHyperStaking);
+
+      // pause
+      await expect(staking.connect(bob).pauseStaking()).to.be.reverted;
+      await expect(staking.connect(stakingManager).pauseStaking()).to.not.be.reverted;
+
+      await expect(staking.stakeDeposit(ethPoolId, reserveStrategy1, 100, bob, { value: 100 }))
+        .to.be.reverted;
+
+      await expect(staking.connect(bob).stakeWithdraw(ethPoolId, reserveStrategy1, 100, bob)).to.be.reverted;
+
+      // unpause
+      await expect(staking.connect(bob).unpauseStaking()).to.be.reverted;
+      await expect(staking.connect(stakingManager).unpauseStaking()).to.not.be.reverted;
+
+      await staking.stakeDeposit(ethPoolId, reserveStrategy1, 100, bob, { value: 100 });
+      await staking.connect(bob).stakeWithdraw(ethPoolId, reserveStrategy1, 100, bob);
+    });
+
     it("should be able to deposit stake", async function () {
       const { staking, ethPoolId, reserveStrategy1, owner, alice } = await loadFixture(deployHyperStaking);
 

@@ -52,13 +52,23 @@ interface IStaking {
     //============================================================================================//
 
     /**
-     * @notice Create new staking pool for given token address
+     * @notice Create new staking pool for given currency
      * @param currency The currency for which the pool will be created
-     * @dev nativeTokenAddress() for native coin.
+     * @dev For native coin use currency with address(0) token.
      */
     function createStakingPool(
         Currency calldata currency
     ) external returns (uint256 poolId);
+
+    /**
+     * @notice Pauses stake functionalities
+     */
+    function pauseStaking() external;
+
+    /**
+     * @notice Resumes stake functionalities
+     */
+    function unpauseStaking() external;
 
     /**
      * @notice Deposits a specified amount into a staking pool with a chosen strategy
