@@ -51,9 +51,9 @@ interface IStrategyVault {
     /// @notice Adds a new strategy and assigns it to the specified staking pool
     function addStrategy(uint256 poolId, address strategy, IERC20Metadata asset) external;
 
-    function deposit(address strategy, uint256 amount, address user) external payable;
+    function deposit(address strategy, address user, uint256 amount) external payable;
 
-    function withdraw(address strategy, uint256 shares, address user) external returns (uint256);
+    function withdraw(address strategy, address user, uint256 shares) external returns (uint256);
 
     //============================================================================================//
     //                                           View                                             //

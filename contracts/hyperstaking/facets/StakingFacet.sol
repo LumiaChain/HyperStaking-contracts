@@ -74,7 +74,7 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         userPool.staked += amount;
 
         // will lock user stake
-        IStrategyVault(address(this)).deposit(strategy, amount, to);
+        IStrategyVault(address(this)).deposit(strategy, to, amount);
 
         emit StakeDeposit(msg.sender, to, poolId, strategy, amount);
     }
@@ -93,7 +93,7 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         StakingPoolInfo storage pool = s.poolInfo[poolId];
         UserPoolInfo storage userPool = s.userInfo[poolId][msg.sender];
 
-        withdrawAmount = IStrategyVault(address(this)).withdraw(strategy, amount, msg.sender);
+        withdrawAmount = IStrategyVault(address(this)).withdraw(strategy, msg.sender, amount);
 
         // stake should be unlocked at this point
         pool.totalStake -= amount;

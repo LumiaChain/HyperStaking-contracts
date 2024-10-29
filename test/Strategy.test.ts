@@ -210,10 +210,10 @@ describe("Strategy", function () {
       it("Vault external functions not be accessible without staking", async function () {
         const { vault, reserveStrategy, alice } = await loadFixture(deployHyperStaking);
 
-        await expect(vault.deposit(reserveStrategy, 1000, alice))
+        await expect(vault.deposit(reserveStrategy, alice, 1000))
           .to.be.reverted;
 
-        await expect(vault.withdraw(reserveStrategy, 1000, alice))
+        await expect(vault.withdraw(reserveStrategy, alice, 1000))
           .to.be.reverted;
       });
     });

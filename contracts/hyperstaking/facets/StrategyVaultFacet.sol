@@ -47,21 +47,22 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
 
     function deposit(
         address strategy,
-        uint256 amount,
-        address user
+        address user,
+        uint256 amount
     ) external payable diamondInternal {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-        UserVaultInfo storage userVault = v.userInfo[strategy][user];
         VaultInfo storage vault = v.vaultInfo[strategy];
         VaultAsset storage asset = v.vaultAssetInfo[strategy];
 
         StakingStorage storage s = LibStaking.diamondStorage();
-        UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
         StakingPoolInfo storage pool = s.poolInfo[vault.poolId];
 
-        userVault.stakeLocked += amount;
-        vault.totalStakeLocked += amount;
-        userPool.stakeLocked += amount;
+        {
+            UserVaultInfo storage userVault = v.userInfo[strategy][user];
+            UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
+
+            _lockUserStake(userPool, userVault, vault, amount);
+        }
 
         // allocate stake amount in strategy
         // and receive shares
@@ -82,23 +83,24 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
 
     function withdraw(
         address strategy,
-        uint256 amount,
-        address user
+        address user,
+        uint256 amount
     ) external diamondInternal returns (uint256 withdrawAmount) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-        UserVaultInfo storage userVault = v.userInfo[strategy][user];
         VaultInfo storage vault = v.vaultInfo[strategy];
         VaultAsset storage asset = v.vaultAssetInfo[strategy];
 
         StakingStorage storage s = LibStaking.diamondStorage();
-        UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
         uint256 shares = convertToShares(strategy, amount);
         asset.totalShares -= shares;
 
-        userVault.stakeLocked -= amount;
-        vault.totalStakeLocked -= amount;
-        userPool.stakeLocked -= amount;
+        {
+            UserVaultInfo storage userVault = v.userInfo[strategy][user];
+            UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
+
+            _unlockUserStake(userPool, userVault, vault, amount);
+        }
 
         asset.asset.safeIncreaseAllowance(strategy, shares);
         withdrawAmount = IStrategy(strategy).exit(shares, user);
@@ -162,6 +164,28 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
     //============================================================================================//
     //                                     Internal Functions                                     //
     //============================================================================================//
+
+    function _lockUserStake(
+        UserPoolInfo storage userPool,
+        UserVaultInfo storage userVault,
+        VaultInfo storage vault,
+        uint256 amount
+    ) internal {
+        userPool.stakeLocked += amount;
+        userVault.stakeLocked += amount;
+        vault.totalStakeLocked += amount;
+    }
+
+    function _unlockUserStake(
+        UserPoolInfo storage userPool,
+        UserVaultInfo storage userVault,
+        VaultInfo storage vault,
+        uint256 amount
+    ) internal {
+        userVault.stakeLocked -= amount;
+        vault.totalStakeLocked -= amount;
+        userPool.stakeLocked -= amount;
+    }
 
     function _deployVaultToken(IERC20Metadata asset) internal returns (IERC4626 vaultToken) {
         string memory sharesName = _concat("Lumia Liquid ", asset.name());
