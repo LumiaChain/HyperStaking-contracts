@@ -19,7 +19,7 @@ import {
     LibStaking, StakingStorage, UserPoolInfo, StakingPoolInfo
 } from "../libraries/LibStaking.sol";
 import {
-    LibStrategyVault, StrategyVaultStorage, UserVaultInfo, VaultInfo, VaultAsset
+    LibStrategyVault, StrategyVaultStorage, UserVaultInfo, VaultInfo, VaultTier1, VaultTier2
 } from "../libraries/LibStrategyVault.sol";
 
 import {LiquidVaultToken} from "../LiquidVaultToken.sol";
@@ -42,7 +42,7 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
         address strategy,
         IERC20Metadata asset
     ) external onlyStrategyVaultManager nonReentrant {
-        _createVault( poolId, strategy, asset);
+        _createVault(poolId, strategy, asset);
     }
 
     function deposit(
@@ -52,7 +52,7 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
     ) external payable diamondInternal {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
-        VaultAsset storage asset = v.vaultAssetInfo[strategy];
+        VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
 
         StakingStorage storage s = LibStaking.diamondStorage();
         StakingPoolInfo storage pool = s.poolInfo[vault.poolId];
@@ -61,24 +61,30 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
             UserVaultInfo storage userVault = v.userInfo[strategy][user];
             UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
-            _lockUserStake(userPool, userVault, vault, amount);
+            userVault.allocationPoint = _calculateNewAllocPoint(
+                userVault,
+                strategy,
+                amount
+            );
+
+            _lockUserStake(userPool, userVault, tier1, amount);
         }
 
         // allocate stake amount in strategy
-        // and receive shares
-        uint256 shares;
+        // and receive allocation
+        uint256 allocation;
         if (pool.currency.isNativeCoin()) {
-            shares = IStrategy(strategy).allocate{value: amount}(amount, user);
+            allocation = IStrategy(strategy).allocate{value: amount}(amount, user);
         } else {
             pool.currency.approve(strategy, amount);
-            shares = IStrategy(strategy).allocate(amount, user);
+            allocation = IStrategy(strategy).allocate(amount, user);
         }
 
-        // fetch shares to this vault
-        asset.totalShares += shares;
-        asset.asset.safeTransferFrom(strategy, address(this), shares);
+        // fetch allocation to this vault
+        tier1.assetAllocation += allocation;
+        vault.asset.safeTransferFrom(strategy, address(this), allocation);
 
-        emit Deposit(vault.poolId, strategy, user, amount, shares);
+        emit Deposit(vault.poolId, strategy, user, amount, allocation);
     }
 
     function withdraw(
@@ -88,24 +94,26 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
     ) external diamondInternal returns (uint256 withdrawAmount) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
-        VaultAsset storage asset = v.vaultAssetInfo[strategy];
+        VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
 
         StakingStorage storage s = LibStaking.diamondStorage();
 
-        uint256 shares = convertToShares(strategy, amount);
-        asset.totalShares -= shares;
+        uint256 allocation = _convertToTier1Allocation(tier1, amount);
+        tier1.assetAllocation -= allocation;
 
         {
             UserVaultInfo storage userVault = v.userInfo[strategy][user];
             UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
-            _unlockUserStake(userPool, userVault, vault, amount);
+            // withdraw does not change user allocation point
+
+            _unlockUserStake(userPool, userVault, tier1, amount);
         }
 
-        asset.asset.safeIncreaseAllowance(strategy, shares);
-        withdrawAmount = IStrategy(strategy).exit(shares, user);
+        vault.asset.safeIncreaseAllowance(strategy, allocation);
+        withdrawAmount = IStrategy(strategy).exit(allocation, user);
 
-        emit Withdraw(vault.poolId, strategy, user, amount, shares);
+        emit Withdraw(vault.poolId, strategy, user, amount, allocation);
     }
 
     // ========= View ========= //
@@ -126,25 +134,15 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
     }
 
     /// @inheritdoc IStrategyVault
-    function vaultAssetInfo(address strategy) external view returns (VaultAsset memory) {
+    function vaultTier1Info(address strategy) external view returns (VaultTier1 memory) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-        return v.vaultAssetInfo[strategy];
+        return v.vaultTier1Info[strategy];
     }
 
     /// @inheritdoc IStrategyVault
-    function convertToShares(
-        address strategy,
-        uint256 amount
-    ) public view returns (uint256) {
+    function vaultTier2Info(address strategy) external view returns (VaultTier2 memory) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-
-        VaultInfo memory vault = v.vaultInfo[strategy];
-        VaultAsset memory asset = v.vaultAssetInfo[strategy];
-
-        // amout ratio of the total stake locked in vault
-        uint256 amountRatio = (amount * LibStaking.PRECISION_FACTOR / vault.totalStakeLocked);
-
-        return amountRatio * asset.totalShares / LibStaking.PRECISION_FACTOR;
+        return v.vaultTier2Info[strategy];
     }
 
     /// @inheritdoc IStrategyVault
@@ -152,13 +150,13 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
 
         UserVaultInfo memory userVault = v.userInfo[strategy][user];
-        VaultInfo memory vault = v.vaultInfo[strategy];
+        VaultTier1 memory tier1 = v.vaultTier1Info[strategy];
 
-        if (userVault.stakeLocked == 0 || vault.totalStakeLocked == 0) {
+        if (userVault.stakeLocked == 0) {
             return 0;
         }
 
-        return userVault.stakeLocked * LibStaking.PRECISION_FACTOR / vault.totalStakeLocked;
+        return userVault.stakeLocked * LibStaking.PRECISION_FACTOR / tier1.totalStakeLocked;
     }
 
     //============================================================================================//
@@ -168,23 +166,23 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
     function _lockUserStake(
         UserPoolInfo storage userPool,
         UserVaultInfo storage userVault,
-        VaultInfo storage vault,
+        VaultTier1 storage tier1,
         uint256 amount
     ) internal {
         userPool.stakeLocked += amount;
         userVault.stakeLocked += amount;
-        vault.totalStakeLocked += amount;
+        tier1.totalStakeLocked += amount;
     }
 
     function _unlockUserStake(
         UserPoolInfo storage userPool,
         UserVaultInfo storage userVault,
-        VaultInfo storage vault,
+        VaultTier1 storage tier1,
         uint256 amount
     ) internal {
-        userVault.stakeLocked -= amount;
-        vault.totalStakeLocked -= amount;
         userPool.stakeLocked -= amount;
+        userVault.stakeLocked -= amount;
+        tier1.totalStakeLocked -= amount;
     }
 
     function _deployVaultToken(IERC20Metadata asset) internal returns (IERC4626 vaultToken) {
@@ -203,21 +201,26 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
 
         require(v.vaultInfo[strategy].poolId == 0, VaultAlreadyExist());
 
-        // deploy vaultToken which represent shares to this strategy vault
-        IERC4626 vaultToken = _deployVaultToken(asset);
-
         // create a new VaultInfo and store it in storage
         v.vaultInfo[strategy] = VaultInfo({
             poolId: poolId,
             strategy: strategy,
+            asset: asset
+        });
+
+        // init tier1
+        v.vaultTier1Info[strategy] = VaultTier1({
+            assetAllocation: 0,
             totalStakeLocked: 0
         });
 
-        // save VaultAsset for this strategy
-        v.vaultAssetInfo[strategy] = VaultAsset({
-            asset: asset,
-            vaultToken: vaultToken,
-            totalShares: 0
+        // init tier2
+
+        // deploy vaultToken which represent shares to this strategy vault
+        IERC4626 vaultToken = _deployVaultToken(asset);
+
+        v.vaultTier2Info[strategy] = VaultTier2({
+            vaultToken: vaultToken
         });
 
         emit VaultCreate(
@@ -227,6 +230,39 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
             address(asset),
             address(vaultToken)
         );
+    }
+
+    // ========= View ========= //
+
+    /**
+     * @notice Calculates the new allocation point
+     * @dev This function calculates a potential new allocation point for the given user and amount.
+     * @param userVault The user's current vault information, containing `stakeLocked` and `allocationPoint`.
+     * @param strategy The strategy contract address, used for converting `amount` to an allocation.
+     * @param amount The new amount being hypothetically added to the user's locked stake.
+     * @return The calculated allocation point based on the weighted average.
+     */
+    function _calculateNewAllocPoint(
+        UserVaultInfo storage userVault,
+        address strategy,
+        uint256 amount
+    ) internal view returns (uint256) {
+        uint256 newAllocation = IStrategy(strategy).convertToAllocation(amount);
+
+        // Weighted average calculation for the updated allocation point
+        return (
+            (userVault.stakeLocked * userVault.allocationPoint) + newAllocation
+        ) * LibStaking.PRECISION_FACTOR
+            / (userVault.stakeLocked + amount);
+    }
+
+    function _convertToTier1Allocation(
+        VaultTier1 storage tier1,
+        uint256 amount
+    ) internal view returns (uint256) {
+        // amout ratio of the total stake locked in vault
+        uint256 amountRatio = (amount * LibStaking.PRECISION_FACTOR / tier1.totalStakeLocked);
+        return amountRatio * tier1.assetAllocation / LibStaking.PRECISION_FACTOR;
     }
 
     // ========= Pure ========= //

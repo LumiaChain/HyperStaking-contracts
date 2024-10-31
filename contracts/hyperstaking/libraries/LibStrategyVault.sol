@@ -7,20 +7,30 @@ import {IERC20, IERC4626} from "@openzeppelin/contracts-upgradeable/token/ERC20/
 //                                            Types                                               //
 //================================================================================================//
 
+/**
+ * @notice Info of each user
+ * @param amount Token amount the user has provided
+ */
 struct UserVaultInfo {
     uint256 stakeLocked;
+    uint256 allocationPoint; // average asset price - maturity
+}
+
+struct VaultTier1 {
+    uint256 assetAllocation;
+    uint256 totalStakeLocked; // all users in this tier
+}
+
+// Users at Tier2 don't have stake stored in the pool anymore,
+// as it is represented by ERC4626 vault token, liquid shares
+struct VaultTier2 {
+    IERC4626 vaultToken;
 }
 
 struct VaultInfo {
     uint256 poolId;
     address strategy;
-    uint256 totalStakeLocked; // all users
-}
-
-struct VaultAsset {
     IERC20 asset;
-    IERC4626 vaultToken;
-    uint256 totalShares;
 }
 
 //================================================================================================//
@@ -34,8 +44,11 @@ struct StrategyVaultStorage {
     /// @notice Info of each vault
     mapping (address strategy => VaultInfo) vaultInfo;
 
-    /// @notice Info of revenue asset for each strategy
-    mapping (address strategy => VaultAsset) vaultAssetInfo;
+    /// @notice Info of vaults tier1
+    mapping (address strategy => VaultTier1) vaultTier1Info;
+
+    /// @notice Info of vaults tier2
+    mapping (address strategy => VaultTier2) vaultTier2Info;
 }
 
 library LibStrategyVault {

@@ -47,6 +47,12 @@ contract DineroStrategy is IStrategy, PirexIntegration {
         DIAMOND = diamond_;
     }
 
+    //============================================================================================//
+    //                                      Public Functions                                      //
+    //============================================================================================//
+
+    // ========= Diamond ========= //
+
     /// @inheritdoc IStrategy
     function allocate(
         uint256 amount_,
@@ -55,7 +61,7 @@ contract DineroStrategy is IStrategy, PirexIntegration {
         require(amount_ == msg.value, BadAllocationValue());
 
         // mint apx and allow Diamond (Vault) to fetch it
-        allocation = super.depositCompound(address(this));
+        allocation = depositCompound(address(this));
         IERC20(AUTO_PX_ETH).safeIncreaseAllowance(DIAMOND, allocation);
 
         emit Allocate(user_, amount_, allocation);
@@ -67,8 +73,20 @@ contract DineroStrategy is IStrategy, PirexIntegration {
         address user_
     ) external onlyLumiaDiamond() returns (uint256 exitAmount) {
         IERC20(AUTO_PX_ETH).transferFrom(DIAMOND, address(this), shares_);
-        exitAmount = super.redeem(shares_, DIAMOND); // transfer amount back to the Diamond
+        exitAmount = redeem(shares_, DIAMOND); // transfer amount back to the Diamond
 
         emit Exit(user_, shares_, exitAmount);
+    }
+
+    // ========= View ========= //
+
+    /// Return current stake to asset ratio (eth/apxEth price)
+    function convertToAllocation(uint256 stakeAmount_) public view returns (uint256) {
+        return _convertEthToApxEth(stakeAmount_);
+    }
+
+    /// Return current asset to stake ratio (apxEth/eth price)
+    function convertToStake(uint256 assetAllocation_) public view returns (uint256) {
+        return _convertApxEthToEth(assetAllocation_);
     }
 }

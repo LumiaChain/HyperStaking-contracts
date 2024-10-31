@@ -24,10 +24,6 @@ interface IStrategy {
     );
 
     //============================================================================================//
-    //                                          Errors                                            //
-    //============================================================================================//
-
-    //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
 
@@ -37,13 +33,26 @@ interface IStrategy {
      * @param user_ The address of the user making the allocation
      * @return allocation The amount successfully allocated
      */
-    function allocate(uint256 stakeAmount_, address user_) external payable returns (uint256 allocation);
+    function allocate(
+        uint256 stakeAmount_,
+        address user_
+    ) external payable returns (uint256 allocation);
 
     /**
      * @notice Exits a specified amount of the strategy shares to the vault
      * @param assetAllocation_ The amount of the strategy-specific asset (shares) to withdraw
      * @param user_ The address of the user requesting the exit
-     * @return exitAmount The amount of stake successfully exited
+     * @return exitAmount The amount successfully exited
      */
     function exit(uint256 assetAllocation_, address user_) external returns (uint256 exitAmount);
+
+    //============================================================================================//
+    //                                           View                                             //
+    //============================================================================================//
+
+    /// Return current stake to asset allocation ratio (price)
+    function convertToAllocation(uint256 stakeAmount_) external view returns (uint256);
+
+    /// Return current asset to stake ratio (price)
+    function convertToStake(uint256 assetAllocation_) external view returns (uint256);
 }

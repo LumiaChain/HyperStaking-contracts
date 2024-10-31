@@ -7,6 +7,8 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {PirexEth} from "../../external/pirex/PirexEth.sol";
 import {AutoPxEth} from "../../external/pirex/AutoPxEth.sol";
 
+import {DataTypes} from "../../external/pirex/libraries/DataTypes.sol";
+
 contract PirexIntegration {
     using SafeERC20 for IERC20;
 
@@ -73,17 +75,16 @@ contract PirexIntegration {
         require(receiver_ != address(0), ZeroAddress());
         require(msg.value > 0, ZeroAmount());
 
+        // Retrieve this value before making the compound deposit, as it will alter the vault ratio
+        apxEthReceived = _convertEthToApxEth(msg.value);
+
         bool compound = true;
-        uint256 postFeeAmount; // pxETH minted for the receiver
-        uint256 feeAmount; // distributed as fees
-        (postFeeAmount, feeAmount) = PirexEth(PIREX_ETH).deposit{
+        (uint256 postFeeAmount, uint256 feeAmount) = PirexEth(PIREX_ETH).deposit{
             value: msg.value
         }(
             receiver_,
             compound
         );
-
-        apxEthReceived = AutoPxEth(AUTO_PX_ETH).convertToShares(postFeeAmount);
 
         emit PirexDepositCompound(receiver_, msg.value, postFeeAmount, feeAmount, apxEthReceived);
     }
@@ -96,9 +97,8 @@ contract PirexIntegration {
         // apxEth -> pxEth
         uint256 pxEthReceived = AutoPxEth(AUTO_PX_ETH).redeem(shares_, address(this), address(this));
 
-        IERC20(PX_ETH).safeIncreaseAllowance(PIREX_ETH, pxEthReceived);
-
         // pxEth -> Eth
+        IERC20(PX_ETH).safeIncreaseAllowance(PIREX_ETH, pxEthReceived);
         uint256 feeAmount;
         (ethReceived, feeAmount) = PirexEth(PIREX_ETH).instantRedeemWithPxEth(
             pxEthReceived,
@@ -106,5 +106,55 @@ contract PirexIntegration {
         );
 
         emit PirexInstantEthRedeem(receiver_, shares_, pxEthReceived, ethReceived, feeAmount);
+    }
+
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
+    // ========= View ========= //
+
+    /// Return current eth to apxEth ratio (price)
+    function _convertEthToApxEth(uint256 amount_) internal view returns (uint256) {
+        (uint256 postFeeAmount,) = _computeAssetAmounts(
+            DataTypes.Fees.Deposit,
+            amount_
+        );
+
+        return AutoPxEth(AUTO_PX_ETH).previewDeposit(postFeeAmount);
+    }
+
+    /// Return current asset to stake ratio (price)
+    function _convertApxEthToEth(uint256 amount_) internal view returns (uint256) {
+        uint256 pxEthAmount = AutoPxEth(AUTO_PX_ETH).previewRedeem(amount_);
+
+        (uint256 postFeeAmount,) = _computeAssetAmounts(
+            DataTypes.Fees.InstantRedemption,
+            pxEthAmount
+        );
+
+        return postFeeAmount;
+    }
+
+    /**
+     * @notice This function calculates the Pirex post-fee asset amount and fee amount based on the
+               specified fee type and total assets.
+     * @dev Source:
+     *      https://github.com/dinero-protocol/pirex-eth-contracts/blob/master/src/PirexEth.sol#L545
+     *
+     * @param f_ representing the fee type.
+     * @param amount_ Total ETH or pxETH asset amount.
+     * @return postFeeAmount Post-fee asset amount (for mint/burn/claim/etc.).
+     * @return feeAmount Fee amount.
+     */
+    function _computeAssetAmounts(
+        DataTypes.Fees f_,
+        uint256 amount_
+    ) internal view returns (uint256 postFeeAmount, uint256 feeAmount) {
+        uint256 denominator = 1_000_000;
+        uint32 fee = PirexEth(PIREX_ETH).fees(f_);
+
+        feeAmount = (amount_ * fee) / denominator;
+        postFeeAmount = amount_ - feeAmount;
     }
 }

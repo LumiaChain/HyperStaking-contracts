@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {UserVaultInfo, VaultInfo, VaultAsset} from "../libraries/LibStrategyVault.sol";
+import {UserVaultInfo, VaultInfo, VaultTier1, VaultTier2} from "../libraries/LibStrategyVault.sol";
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -18,7 +18,7 @@ interface IStrategyVault {
         address indexed strategy,
         address indexed user,
         uint256 stake,
-        uint256 shares
+        uint256 allocation
     );
 
     event Withdraw(
@@ -26,7 +26,7 @@ interface IStrategyVault {
         address indexed strategy,
         address indexed user,
         uint256 amount,
-        uint256 shares
+        uint256 allocation
     );
 
     event VaultCreate(
@@ -53,7 +53,7 @@ interface IStrategyVault {
 
     function deposit(address strategy, address user, uint256 amount) external payable;
 
-    function withdraw(address strategy, address user, uint256 shares) external returns (uint256);
+    function withdraw(address strategy, address user, uint256 amount) external returns (uint256);
 
     //============================================================================================//
     //                                           View                                             //
@@ -66,9 +66,8 @@ interface IStrategyVault {
 
     function vaultInfo(address strategy) external view returns (VaultInfo memory);
 
-    function vaultAssetInfo(address strategy) external view returns (VaultAsset memory);
-
-    function convertToShares(address strategy, uint256 amount) external view returns (uint256);
+    function vaultTier1Info(address strategy) external view returns (VaultTier1 memory);
+    function vaultTier2Info(address strategy) external view returns (VaultTier2 memory);
 
     function userContribution(address strategy, address user) external view returns (uint256);
 }

@@ -86,45 +86,46 @@ describe("Strategy", function () {
       const aliceAmount = parseEther("8");
 
       expect(await testWstETH.balanceOf(vault.target)).to.equal(0);
-      expect(await reserveStrategy.assetPrice()).to.equal(parseEther("2"));
+      expect(await reserveStrategy.assetPrice()).to.equal(reserveAssetPrice);
 
       // event
       await expect(staking.stakeDeposit(ethPoolId, reserveStrategy, ownerAmount, owner, { value: ownerAmount }))
         .to.emit(reserveStrategy, "Allocate")
-        .withArgs(owner.address, ownerAmount, ownerAmount * parseEther("1") / reserveAssetPrice);
+        .withArgs(owner.address, ownerAmount, ownerAmount * reserveAssetPrice / parseEther("1"));
 
-      expect(await testWstETH.balanceOf(vault.target)).to.equal(ownerAmount * parseEther("1") / reserveAssetPrice);
+      expect(await testWstETH.balanceOf(vault.target)).to.equal(ownerAmount * reserveAssetPrice / parseEther("1"));
 
       // event
-      await expect(staking.stakeDeposit(
-        ethPoolId, reserveStrategy, aliceAmount, alice, { value: aliceAmount }),
-      )
+      await expect(staking.stakeDeposit(ethPoolId, reserveStrategy, aliceAmount, alice, { value: aliceAmount }))
         .to.emit(reserveStrategy, "Allocate")
-        .withArgs(alice.address, aliceAmount, aliceAmount * parseEther("1") / reserveAssetPrice);
+        .withArgs(alice.address, aliceAmount, aliceAmount * reserveAssetPrice / parseEther("1"));
 
-      // UserInfo
-      expect(
-        (await vault.userVaultInfo(reserveStrategy, owner.address)).stakeLocked,
-      ).to.equal(ownerAmount);
+      // Owner UserInfo
+      expect((await staking.userPoolInfo(ethPoolId, owner)).staked).to.equal(ownerAmount);
+      expect((await staking.userPoolInfo(ethPoolId, owner)).stakeLocked).to.equal(ownerAmount);
+      expect((await vault.userVaultInfo(reserveStrategy, owner)).stakeLocked).to.equal(ownerAmount);
+      expect((await vault.userVaultInfo(reserveStrategy, owner)).allocationPoint).to.equal(reserveAssetPrice);
+      expect(await vault.userContribution(reserveStrategy, owner)).to.equal(parseEther("0.2"));
 
-      // UserInfo
-      expect((await staking.userPoolInfo(ethPoolId, owner.address)).staked).to.equal(ownerAmount);
-      expect((await vault.userVaultInfo(reserveStrategy, owner.address)).stakeLocked).to.equal(ownerAmount);
-      expect(await vault.userContribution(reserveStrategy, owner.address)).to.equal(parseEther("0.2"));
-      // ---
-      expect((await staking.userPoolInfo(ethPoolId, alice.address)).staked).to.equal(aliceAmount);
-      expect((await vault.userVaultInfo(reserveStrategy, alice.address)).stakeLocked).to.equal(aliceAmount);
-      expect(await vault.userContribution(reserveStrategy, alice.address)).to.equal(parseEther("0.8")); // 80%
+      // Alice UserInfo
+      expect((await staking.userPoolInfo(ethPoolId, alice)).staked).to.equal(aliceAmount);
+      expect((await staking.userPoolInfo(ethPoolId, alice)).stakeLocked).to.equal(aliceAmount);
+      expect((await vault.userVaultInfo(reserveStrategy, alice)).stakeLocked).to.equal(aliceAmount);
+      expect((await vault.userVaultInfo(reserveStrategy, alice)).allocationPoint).to.equal(reserveAssetPrice);
+      expect(await vault.userContribution(reserveStrategy, alice)).to.equal(parseEther("0.8")); // 80%
+
       // VaultInfo
       expect((await vault.vaultInfo(reserveStrategy)).strategy).to.equal(reserveStrategy);
       expect((await vault.vaultInfo(reserveStrategy)).poolId).to.equal(ethPoolId);
-      expect((await vault.vaultInfo(reserveStrategy)).totalStakeLocked).to.equal(ownerAmount + aliceAmount);
-      // AssetInfo
-      expect((await vault.vaultAssetInfo(reserveStrategy)).asset).to.equal(testWstETH.target);
-      expect((await vault.vaultAssetInfo(reserveStrategy)).totalShares)
-        .to.equal((ownerAmount + aliceAmount) * parseEther("1") / reserveAssetPrice);
+      expect((await vault.vaultInfo(reserveStrategy)).asset).to.equal(testWstETH);
 
-      expect(await testWstETH.balanceOf(vault.target)).to.equal((ownerAmount + aliceAmount) * parseEther("1") / reserveAssetPrice);
+      // TiersInfo
+      expect((await vault.vaultTier1Info(reserveStrategy)).assetAllocation).to.equal((ownerAmount + aliceAmount) * reserveAssetPrice / parseEther("1"));
+      expect((await vault.vaultTier1Info(reserveStrategy)).totalStakeLocked).to.equal(ownerAmount + aliceAmount);
+
+      expect((await vault.vaultTier2Info(reserveStrategy)).vaultToken).to.not.equal(ZeroAddress);
+
+      expect(await testWstETH.balanceOf(vault.target)).to.equal((ownerAmount + aliceAmount) * reserveAssetPrice / parseEther("1"));
     });
 
     it("check state after exit", async function () {
@@ -141,39 +142,37 @@ describe("Strategy", function () {
       // event
       await expect(staking.stakeWithdraw(ethPoolId, reserveStrategy, withdrawAmount, owner))
         .to.emit(reserveStrategy, "Exit")
-        .withArgs(owner.address, withdrawAmount * parseEther("1") / reserveAssetPrice, withdrawAmount);
+        .withArgs(owner.address, withdrawAmount * reserveAssetPrice / parseEther("1"), withdrawAmount);
 
       // UserInfo
-      expect((await staking.userPoolInfo(ethPoolId, owner.address)).staked).to.equal(diffAmount);
-      expect((await vault.userVaultInfo(reserveStrategy, owner.address)).stakeLocked).to.equal(diffAmount);
+      expect((await staking.userPoolInfo(ethPoolId, owner)).staked).to.equal(diffAmount);
+      expect((await staking.userPoolInfo(ethPoolId, owner)).stakeLocked).to.equal(diffAmount);
 
-      expect(await vault.userContribution(reserveStrategy, owner.address)).to.equal(parseEther("1"));
+      expect((await vault.userVaultInfo(reserveStrategy, owner)).stakeLocked).to.equal(diffAmount);
+      expect((await vault.userVaultInfo(reserveStrategy, owner)).allocationPoint).to.equal(reserveAssetPrice);
+      expect(await vault.userContribution(reserveStrategy, owner)).to.equal(parseEther("1"));
 
-      // UserInfo
-      expect((await staking.userPoolInfo(ethPoolId, owner.address)).staked).to.equal(diffAmount);
-      expect((await vault.userVaultInfo(reserveStrategy, owner.address)).stakeLocked).to.equal(diffAmount);
-      expect(await vault.userContribution(reserveStrategy, owner.address)).to.equal(parseEther("1"));
-      // VaultInfo
-      expect((await vault.vaultInfo(reserveStrategy)).totalStakeLocked).to.equal(diffAmount);
-      // AssetInfo
-      expect((await vault.vaultAssetInfo(reserveStrategy)).asset).to.equal(testWstETH.target);
+      // TiersInfo
+      expect((await vault.vaultTier1Info(reserveStrategy)).assetAllocation).to.equal(diffAmount * reserveAssetPrice / parseEther("1"));
+      expect((await vault.vaultTier1Info(reserveStrategy)).totalStakeLocked).to.equal(diffAmount);
 
-      expect((await vault.vaultAssetInfo(reserveStrategy)).totalShares)
-        .to.equal(diffAmount * parseEther("1") / reserveAssetPrice);
-      expect(await testWstETH.balanceOf(vault.target)).to.equal(diffAmount * parseEther("1") / reserveAssetPrice);
+      expect(await testWstETH.balanceOf(vault.target)).to.equal(diffAmount * reserveAssetPrice / parseEther("1"));
 
       // withdraw all
       await staking.stakeWithdraw(ethPoolId, reserveStrategy, diffAmount, owner);
 
       // UserInfo
-      expect((await staking.userPoolInfo(ethPoolId, owner.address)).staked).to.equal(0);
-      expect((await vault.userVaultInfo(reserveStrategy, owner.address)).stakeLocked).to.equal(0);
-      expect(await vault.userContribution(reserveStrategy, owner.address)).to.equal(0);
-      // VaultInfo
-      expect((await vault.vaultInfo(reserveStrategy)).totalStakeLocked).to.equal(0);
-      // AssetInfo
-      expect((await vault.vaultAssetInfo(reserveStrategy)).asset).to.equal(testWstETH.target);
-      expect((await vault.vaultAssetInfo(reserveStrategy)).totalShares).to.equal(0);
+      expect((await staking.userPoolInfo(ethPoolId, owner)).staked).to.equal(0);
+      expect((await staking.userPoolInfo(ethPoolId, owner)).stakeLocked).to.equal(0);
+
+      expect((await vault.userVaultInfo(reserveStrategy, owner)).stakeLocked).to.equal(0);
+      expect((await vault.userVaultInfo(reserveStrategy, owner)).allocationPoint).to.equal(reserveAssetPrice);
+      expect(await vault.userContribution(reserveStrategy, owner)).to.equal(0);
+
+      // TiersInfo
+      expect((await vault.vaultTier1Info(reserveStrategy)).assetAllocation).to.equal(0);
+      expect((await vault.vaultTier1Info(reserveStrategy)).totalStakeLocked).to.equal(0);
+
       expect(await testWstETH.balanceOf(vault.target)).to.equal(0);
     });
 
@@ -224,6 +223,7 @@ describe("Strategy", function () {
       const { staking, vault, autoPxEth, ethPoolId, dineroStrategy, owner } = await loadFixture(deployHyperStaking);
 
       const stakeAmount = parseEther("8");
+      const apxEthPrice = parseEther("1");
 
       const expectedFee = 0n;
       const expectedAsset = stakeAmount - expectedFee;
@@ -239,30 +239,32 @@ describe("Strategy", function () {
         );
 
       expect((await staking.userPoolInfo(ethPoolId, owner)).staked).to.equal(stakeAmount);
+      expect((await vault.vaultInfo(dineroStrategy)).asset).to.equal(autoPxEth.target);
 
-      expect((await vault.vaultInfo(dineroStrategy)).totalStakeLocked).to.equal(stakeAmount);
-      expect((await vault.vaultAssetInfo(dineroStrategy)).asset).to.equal(autoPxEth.target);
-      expect((await vault.vaultAssetInfo(dineroStrategy)).totalShares).to.equal(stakeAmount);
+      expect((await vault.vaultTier1Info(dineroStrategy)).assetAllocation).to.equal(stakeAmount * apxEthPrice / parseEther("1"));
+      expect((await vault.vaultTier1Info(dineroStrategy)).totalStakeLocked).to.equal(stakeAmount);
 
-      expect(await autoPxEth.balanceOf(vault.target)).to.equal(stakeAmount);
+      expect(await autoPxEth.balanceOf(vault.target)).to.equal(stakeAmount * apxEthPrice / parseEther("1"));
     });
 
     it("unstaking from to dinero strategy should exchange apxEth back to eth", async function () {
       const { staking, vault, autoPxEth, ethPoolId, dineroStrategy, owner } = await loadFixture(deployHyperStaking);
 
       const stakeAmount = parseEther("3");
+      const apxEthPrice = parseEther("1");
+
       await staking.stakeDeposit(ethPoolId, dineroStrategy, stakeAmount, owner, { value: stakeAmount });
 
       await expect(staking.stakeWithdraw(ethPoolId, dineroStrategy, stakeAmount, owner))
         .to.emit(dineroStrategy, "Exit")
-        .withArgs(owner.address, stakeAmount, anyValue);
+        .withArgs(owner.address, stakeAmount * apxEthPrice / parseEther("1"), anyValue);
 
       expect((await staking.userPoolInfo(ethPoolId, owner.address)).staked).to.equal(0);
-
       expect((await vault.userVaultInfo(dineroStrategy, owner.address)).stakeLocked).to.equal(0);
-      expect((await vault.vaultInfo(dineroStrategy)).totalStakeLocked).to.equal(0);
-      expect((await vault.vaultAssetInfo(dineroStrategy)).asset).to.equal(autoPxEth.target);
-      expect((await vault.vaultAssetInfo(dineroStrategy)).totalShares).to.equal(0);
+      expect((await vault.vaultInfo(dineroStrategy)).asset).to.equal(autoPxEth.target);
+
+      expect((await vault.vaultTier1Info(dineroStrategy)).assetAllocation).to.equal(0);
+      expect((await vault.vaultTier1Info(dineroStrategy)).totalStakeLocked).to.equal(0);
 
       expect(await autoPxEth.balanceOf(vault.target)).to.equal(0);
     });
