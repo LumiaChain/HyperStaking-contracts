@@ -48,12 +48,21 @@ interface IStrategyVault {
     //                                          Mutable                                           //
     //============================================================================================//
 
-    /// @notice Adds a new strategy and assigns it to the specified staking pool
-    function addStrategy(uint256 poolId, address strategy, IERC20Metadata asset) external;
-
     function deposit(address strategy, address user, uint256 amount) external payable;
 
     function withdraw(address strategy, address user, uint256 amount) external returns (uint256);
+
+    // ========= Managed ========= //
+
+    /// @notice Adds a new strategy and assigns it to the specified staking pool
+    function addStrategy(
+        uint256 poolId,
+        address strategy,
+        IERC20Metadata asset,
+        uint256 tier1RevenueFee
+    ) external;
+
+    function setTier1RevenueFee(address strategy, uint256 revenueFee) external;
 
     //============================================================================================//
     //                                           View                                             //
@@ -70,4 +79,13 @@ interface IStrategyVault {
     function vaultTier2Info(address strategy) external view returns (VaultTier2 memory);
 
     function userContribution(address strategy, address user) external view returns (uint256);
+
+    /**
+     * @notice Returns the revenue for a user based on the current allocation price of a strategy
+     * @dev Returns 0 if the allocation price has not increased
+     * @param strategy The strategy address
+     * @param user The user's address
+     * @return revenue The calculated revenue for the user
+     */
+    function userRevenue(address strategy, address user) external view returns (uint256 revenue);
 }

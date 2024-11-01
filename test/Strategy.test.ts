@@ -36,6 +36,8 @@ describe("Strategy", function () {
 
     // -------------------- Apply Strategies --------------------
 
+    const defaultRevenueFee = parseEther("0"); // 0% fee
+
     // strategy asset price to eth 2:1
     const reserveAssetPrice = parseEther("2");
 
@@ -47,7 +49,12 @@ describe("Strategy", function () {
     await testWstETH.approve(reserveStrategy.target, reserveStrategyAssetSupply);
     await reserveStrategy.supplyRevenueAsset(reserveStrategyAssetSupply);
 
-    await vault.connect(strategyVaultManager).addStrategy(ethPoolId, reserveStrategy, testWstETH);
+    await vault.connect(strategyVaultManager).addStrategy(
+      ethPoolId,
+      reserveStrategy,
+      testWstETH,
+      defaultRevenueFee,
+    );
 
     const { pxEth, upxEth, pirexEth, autoPxEth } = await loadFixture(getMockedPirex);
     const { dineroStrategy } = await hre.ignition.deploy(DineroStrategyModule, {
@@ -61,7 +68,12 @@ describe("Strategy", function () {
       },
     });
 
-    await vault.connect(strategyVaultManager).addStrategy(ethPoolId, dineroStrategy, autoPxEth);
+    await vault.connect(strategyVaultManager).addStrategy(
+      ethPoolId,
+      dineroStrategy,
+      autoPxEth,
+      defaultRevenueFee,
+    );
 
     /* eslint-disable object-property-newline */
     return {
@@ -70,7 +82,7 @@ describe("Strategy", function () {
       pxEth, upxEth, pirexEth, autoPxEth, // pirex mock
       testWstETH, reserveStrategy, dineroStrategy, // test contracts
       ethPoolId, // ids
-      reserveAssetPrice, reserveStrategyAssetSupply, // values
+      defaultRevenueFee, reserveAssetPrice, reserveStrategyAssetSupply, // values
       nativeTokenAddress, owner, stakingManager, strategyVaultManager, alice, bob, // addresses
     };
     /* eslint-enable object-property-newline */
@@ -122,6 +134,7 @@ describe("Strategy", function () {
       // TiersInfo
       expect((await vault.vaultTier1Info(reserveStrategy)).assetAllocation).to.equal((ownerAmount + aliceAmount) * reserveAssetPrice / parseEther("1"));
       expect((await vault.vaultTier1Info(reserveStrategy)).totalStakeLocked).to.equal(ownerAmount + aliceAmount);
+      expect((await vault.vaultTier1Info(reserveStrategy)).revenueFee).to.equal(0);
 
       expect((await vault.vaultTier2Info(reserveStrategy)).vaultToken).to.not.equal(ZeroAddress);
 
@@ -176,14 +189,82 @@ describe("Strategy", function () {
       expect(await testWstETH.balanceOf(vault.target)).to.equal(0);
     });
 
+    it("allocation point should depend on weighted price", async function () {
+      const {
+        staking, vault, ethPoolId, reserveStrategy, owner,
+      } = await loadFixture(deployHyperStaking);
+
+      const price1 = parseEther("1");
+      const price2 = parseEther("2");
+      const price3 = parseEther("3.5");
+
+      const stakeAmount1 = parseEther("2.0");
+      const stakeAmount2 = parseEther("2.0");
+      const stakeAmount3 = parseEther("9.0");
+
+      await reserveStrategy.setAssetPrice(price1);
+      await staking.stakeDeposit(ethPoolId, reserveStrategy, stakeAmount1, owner, { value: stakeAmount1 });
+
+      // just the same as price1
+      expect((await vault.userVaultInfo(reserveStrategy, owner)).allocationPoint).to.equal(price1);
+
+      await reserveStrategy.setAssetPrice(price2);
+      await staking.stakeDeposit(ethPoolId, reserveStrategy, stakeAmount2, owner, { value: stakeAmount2 });
+
+      // average of price1 and price2 (price2 == 2 * price1, but stakeAmount1 == stakeAmount2)
+      expect((await vault.userVaultInfo(reserveStrategy, owner)).allocationPoint)
+        .to.equal((price1 + price2) / 2n);
+
+      await reserveStrategy.setAssetPrice(price3);
+      await staking.stakeDeposit(ethPoolId, reserveStrategy, stakeAmount3, owner, { value: stakeAmount3 });
+
+      const expectedPrice = // weighted average
+        (price1 * stakeAmount1 + price2 * stakeAmount2 + price3 * stakeAmount3) /
+        (stakeAmount1 + stakeAmount2 + stakeAmount3);
+
+      expect((await vault.userVaultInfo(reserveStrategy, owner)).allocationPoint)
+        .to.equal(expectedPrice);
+    });
+
+    it.only("user generates revenue when asset increases in price", async function () {
+      const {
+        staking, vault, ethPoolId, reserveStrategy, alice,
+      } = await loadFixture(deployHyperStaking);
+
+      const price1 = parseEther("3");
+      const price2 = parseEther("5");
+
+      const stakeAmount = parseEther("2.0");
+
+      await reserveStrategy.setAssetPrice(price1);
+      await staking.stakeDeposit(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
+
+      // increase price
+      await reserveStrategy.setAssetPrice(price2);
+
+      const expectedRevenue = stakeAmount * (price2 - price1) / price2;
+
+      expect(await vault.userRevenue(reserveStrategy, alice)).to.equal(expectedRevenue);
+    });
+
+    it("revenue should decrease proportionaly to withdraw", async function () {
+    });
+
     describe("Errors", function () {
       it("OnlyStrategyVaultManager", async function () {
-        const { vault, ethPoolId, reserveStrategy, alice } = await loadFixture(deployHyperStaking);
+        const {
+          vault, ethPoolId, reserveStrategy, alice, defaultRevenueFee,
+        } = await loadFixture(deployHyperStaking);
 
-        await expect(vault.addStrategy(ethPoolId, reserveStrategy, ZeroAddress))
+        await expect(vault.addStrategy(ethPoolId, reserveStrategy, ZeroAddress, defaultRevenueFee))
           .to.be.reverted;
 
-        await expect(vault.connect(alice).addStrategy(ethPoolId, reserveStrategy, ZeroAddress))
+        await expect(vault.connect(alice).addStrategy(
+          ethPoolId,
+          reserveStrategy,
+          ZeroAddress,
+          defaultRevenueFee,
+        ))
           // .to.be.revertedWithCustomError(vault, "OnlyStrategyVaultManager");
           .to.be.reverted;
       });
@@ -198,11 +279,18 @@ describe("Strategy", function () {
       });
 
       it("VaultAlreadyExist", async function () {
-        const { vault, strategyVaultManager, ethPoolId, reserveStrategy } = await loadFixture(deployHyperStaking);
+        const {
+          vault, strategyVaultManager, ethPoolId, reserveStrategy, defaultRevenueFee,
+        } = await loadFixture(deployHyperStaking);
 
         const randomToken = "0x8Da05a7A689c2C054246B186bEe1C75fcD1df0bC";
 
-        await expect(vault.connect(strategyVaultManager).addStrategy(ethPoolId, reserveStrategy, randomToken))
+        await expect(vault.connect(strategyVaultManager).addStrategy(
+          ethPoolId,
+          reserveStrategy,
+          randomToken,
+          defaultRevenueFee,
+        ))
           .to.be.revertedWithCustomError(vault, "VaultAlreadyExist");
       });
 

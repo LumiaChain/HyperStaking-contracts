@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {IERC20, IERC4626} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
+import {IERC4626} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 //================================================================================================//
 //                                            Types                                               //
@@ -19,6 +20,7 @@ struct UserVaultInfo {
 struct VaultTier1 {
     uint256 assetAllocation;
     uint256 totalStakeLocked; // all users in this tier
+    uint256 revenueFee; // 18 dec precision
 }
 
 // Users at Tier2 don't have stake stored in the pool anymore,
@@ -30,7 +32,7 @@ struct VaultTier2 {
 struct VaultInfo {
     uint256 poolId;
     address strategy;
-    IERC20 asset;
+    IERC20Metadata asset;
 }
 
 //================================================================================================//

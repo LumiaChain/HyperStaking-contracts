@@ -31,19 +31,11 @@ import {LiquidVaultToken} from "../LiquidVaultToken.sol";
  */
 contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardUpgradeable {
     using CurrencyHandler for Currency;
-    using SafeERC20 for IERC20;
+    using SafeERC20 for IERC20Metadata;
 
     //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
-
-    function addStrategy(
-        uint256 poolId,
-        address strategy,
-        IERC20Metadata asset
-    ) external onlyStrategyVaultManager nonReentrant {
-        _createVault(poolId, strategy, asset);
-    }
 
     function deposit(
         address strategy,
@@ -116,6 +108,22 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
         emit Withdraw(vault.poolId, strategy, user, amount, allocation);
     }
 
+    // ========= Managed ========= //
+
+    function addStrategy(
+        uint256 poolId,
+        address strategy,
+        IERC20Metadata asset,
+        uint256 tier1RevenueFee
+    ) external onlyStrategyVaultManager nonReentrant {
+        _createVault(poolId, strategy, asset, tier1RevenueFee);
+    }
+
+    function setTier1RevenueFee(address strategy, uint256 revenueFee) external onlyStrategyVaultManager nonReentrant {
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+        v.vaultTier1Info[strategy].revenueFee = revenueFee;
+    }
+
     // ========= View ========= //
 
     /// @inheritdoc IStrategyVault
@@ -159,6 +167,31 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
         return userVault.stakeLocked * LibStaking.PRECISION_FACTOR / tier1.totalStakeLocked;
     }
 
+    /// TODO try to simplify calculations
+    /// @inheritdoc IStrategyVault
+    function userRevenue(address strategy, address user) external view returns (uint256 revenue) {
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+
+        // current allocation price
+        uint8 assetDecimals = v.vaultInfo[strategy].asset.decimals();
+        uint256 allocationPrice = IStrategy(strategy).convertToAllocation(10 ** assetDecimals);
+
+        UserVaultInfo storage userVault = v.userInfo[strategy][user];
+
+        // allocation price hasn't increased, no revenue is generated
+        if (userVault.allocationPoint >= allocationPrice) {
+            return 0;
+        }
+
+        // asset price difference multiplied by locked stake
+        uint256 assetRevenue =
+            (allocationPrice - userVault.allocationPoint) * userVault.stakeLocked
+            / LibStaking.PRECISION_FACTOR;
+
+        // revenue represented in stake
+        revenue = IStrategy(strategy).convertToStake(assetRevenue);
+    }
+
     //============================================================================================//
     //                                     Internal Functions                                     //
     //============================================================================================//
@@ -196,7 +229,12 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
         );
     }
 
-    function _createVault(uint256 poolId, address strategy, IERC20Metadata asset) internal {
+    function _createVault(
+        uint256 poolId,
+        address strategy,
+        IERC20Metadata asset,
+        uint256 tier1RevenueFee
+    ) internal {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
 
         require(v.vaultInfo[strategy].poolId == 0, VaultAlreadyExist());
@@ -211,7 +249,8 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
         // init tier1
         v.vaultTier1Info[strategy] = VaultTier1({
             assetAllocation: 0,
-            totalStakeLocked: 0
+            totalStakeLocked: 0,
+            revenueFee: tier1RevenueFee
         });
 
         // init tier2
@@ -236,11 +275,11 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
 
     /**
      * @notice Calculates the new allocation point
-     * @dev This function calculates a potential new allocation point for the given user and amount.
-     * @param userVault The user's current vault information, containing `stakeLocked` and `allocationPoint`.
-     * @param strategy The strategy contract address, used for converting `amount` to an allocation.
-     * @param amount The new amount being hypothetically added to the user's locked stake.
-     * @return The calculated allocation point based on the weighted average.
+     * @dev This function calculates a potential new allocation point for the given user and amount
+     * @param userVault The user's current vault information
+     * @param strategy The strategy contract address, used for converting `amount` to an allocation
+     * @param amount The new amount being hypothetically added to the user's locked stake
+     * @return The calculated allocation point based on the weighted average
      */
     function _calculateNewAllocPoint(
         UserVaultInfo storage userVault,
@@ -251,9 +290,9 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
 
         // Weighted average calculation for the updated allocation point
         return (
-            (userVault.stakeLocked * userVault.allocationPoint) + newAllocation
-        ) * LibStaking.PRECISION_FACTOR
-            / (userVault.stakeLocked + amount);
+            userVault.stakeLocked * userVault.allocationPoint
+            + newAllocation * LibStaking.PRECISION_FACTOR
+        ) / (userVault.stakeLocked + amount);
     }
 
     function _convertToTier1Allocation(
@@ -268,7 +307,7 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
     // ========= Pure ========= //
 
     /// @notice Helper function for string concatenation
-    function _concat(string memory a, string memory b) internal pure returns (string memory){
+    function _concat(string memory a, string memory b) internal pure returns (string memory) {
         return string(abi.encodePacked(a, b));
     }
 }

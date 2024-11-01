@@ -36,6 +36,8 @@ describe("Staking", function () {
 
     // -------------------- Apply Strategies --------------------
 
+    const defaultRevenueFee = parseEther("0"); // 0% fee
+
     const reserveStrategy1 = await shared.createReserveStrategy(
       diamond, nativeTokenAddress, await testWstETH.getAddress(), parseEther("1"),
     );
@@ -51,10 +53,20 @@ describe("Staking", function () {
     await reserveStrategy2.supplyRevenueAsset(reserveStrategyAssetSupply);
 
     // strategy with neutral to eth 1:1 asset price
-    await vault.connect(strategyVaultManager).addStrategy(ethPoolId, reserveStrategy1, testWstETH);
+    await vault.connect(strategyVaultManager).addStrategy(
+      ethPoolId,
+      reserveStrategy1,
+      testWstETH,
+      defaultRevenueFee,
+    );
 
     // strategy with erc20 staking token and 2:1 asset price
-    await vault.connect(strategyVaultManager).addStrategy(erc20PoolId, reserveStrategy2, testWstETH);
+    await vault.connect(strategyVaultManager).addStrategy(
+      erc20PoolId,
+      reserveStrategy2,
+      testWstETH,
+      defaultRevenueFee,
+    );
 
     /* eslint-disable object-property-newline */
     return {

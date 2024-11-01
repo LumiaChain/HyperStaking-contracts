@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
@@ -98,5 +99,17 @@ library CurrencyHandler {
         }
 
         IERC20(currency.token).approve(spender, amount);
+    }
+
+    /**
+     * @notice Gets the decimals for a given currency.
+     * @param currency The Currency struct, containing the token address.
+     * @return The number of decimals used by the currency. Returns 18 for native coin.
+     */
+    function decimals(Currency memory currency) internal view returns (uint8) {
+        if (currency.token == address(0)) {
+            return 18; // Assume native tokens have 18 decimals
+        }
+        return IERC20Metadata(currency.token).decimals();
     }
 }
