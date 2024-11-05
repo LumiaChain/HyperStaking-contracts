@@ -158,7 +158,7 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         StakingPoolInfo storage pool = s.poolInfo[poolId];
         UserPoolInfo storage userPool = s.userInfo[poolId][user];
 
-        return userPool.staked * LibStaking.PRECISION_FACTOR / pool.totalStake;
+        return userPool.staked * LibStaking.TOKEN_PRECISION_FACTOR / pool.totalStake;
     }
 
     /// @inheritdoc IStaking
@@ -184,6 +184,8 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         Currency calldata currency
     ) internal returns (uint256 poolId) {
         StakingStorage storage s = LibStaking.diamondStorage();
+
+        require(currency.decimals() == 18, BadCurrencyDecimals());
 
         // use current count as idx
         uint96 idx = s.stakeTokenPoolCount[currency.token];

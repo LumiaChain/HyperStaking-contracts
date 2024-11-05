@@ -1,8 +1,9 @@
 import { ignition, ethers } from "hardhat";
-import { Contract, ZeroAddress } from "ethers";
+import { Contract, ZeroAddress, parseEther } from "ethers";
 import TestERC20Module from "../ignition/modules/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/facets/StakingFacet";
+import { IERC20 } from "../typechain-types";
 
 export async function deloyTestERC20(name: string, symbol: string): Promise<Contract> {
   const { testERC20 } = await ignition.deploy(TestERC20Module, {
@@ -54,6 +55,18 @@ export async function createReserveStrategy(
         assetPrice,
       },
     },
+  });
+
+  const reserveStrategySupply = parseEther("30");
+  const asset = (await ethers.getContractAt("IERC20", assetAddress)) as IERC20;
+
+  await asset.approve(reserveStrategy.target, reserveStrategySupply);
+  await reserveStrategy.supplyRevenueAsset(reserveStrategySupply);
+
+  const [owner] = await ethers.getSigners();
+  await owner.sendTransaction({
+    to: reserveStrategy,
+    value: reserveStrategySupply,
   });
 
   return reserveStrategy;

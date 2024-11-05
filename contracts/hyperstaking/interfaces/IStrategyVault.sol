@@ -26,7 +26,8 @@ interface IStrategyVault {
         address indexed strategy,
         address indexed user,
         uint256 amount,
-        uint256 allocation
+        uint256 allocation,
+        uint256 revenueFee
     );
 
     event VaultCreate(
@@ -41,8 +42,12 @@ interface IStrategyVault {
     //                                          Errors                                            //
     //============================================================================================//
 
-        /// @notice Thrown when attempting to create a vault using the same strategy
-        error VaultAlreadyExist();
+    /// @notice Thrown when attempting to create a vault using the same strategy
+    error VaultAlreadyExist();
+
+    /// @notice Thrown when attempting to set invalid revenue fee value for tier1
+    error InvalidRevenueFeeValue();
+
 
     //============================================================================================//
     //                                          Mutable                                           //

@@ -18,5 +18,5 @@
   "exclude": [
     "node_modules"
   ],
-  "include": ["./ignition", "./scripts", "./test", "*.ts", "**/*.ts"]
+  "include": ["./ignition", "./scripts", "./test", "./typechain-types", "*.ts", "**/*.ts"]
 }

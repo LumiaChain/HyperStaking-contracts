@@ -90,6 +90,12 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
 
         StakingStorage storage s = LibStaking.diamondStorage();
 
+        uint256 revenueFeeAmount = _calcTier1RevenueFee(
+            strategy,
+            user,
+            amount
+        );
+
         uint256 allocation = _convertToTier1Allocation(tier1, amount);
         tier1.assetAllocation -= allocation;
 
@@ -98,14 +104,15 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
             UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
             // withdraw does not change user allocation point
-
             _unlockUserStake(userPool, userVault, tier1, amount);
         }
 
         vault.asset.safeIncreaseAllowance(strategy, allocation);
-        withdrawAmount = IStrategy(strategy).exit(allocation, user);
+        uint256 exitAmount = IStrategy(strategy).exit(allocation, user);
 
-        emit Withdraw(vault.poolId, strategy, user, amount, allocation);
+        withdrawAmount = exitAmount - revenueFeeAmount;
+
+        emit Withdraw(vault.poolId, strategy, user, amount, allocation, revenueFeeAmount);
     }
 
     // ========= Managed ========= //
@@ -120,6 +127,8 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
     }
 
     function setTier1RevenueFee(address strategy, uint256 revenueFee) external onlyStrategyVaultManager nonReentrant {
+        require(revenueFee <= 20e16, InvalidRevenueFeeValue()); // 20e16 == 20%
+
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         v.vaultTier1Info[strategy].revenueFee = revenueFee;
     }
@@ -164,32 +173,29 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
             return 0;
         }
 
-        return userVault.stakeLocked * LibStaking.PRECISION_FACTOR / tier1.totalStakeLocked;
+        return userVault.stakeLocked * LibStaking.TOKEN_PRECISION_FACTOR / tier1.totalStakeLocked;
     }
 
-    /// TODO try to simplify calculations
     /// @inheritdoc IStrategyVault
-    function userRevenue(address strategy, address user) external view returns (uint256 revenue) {
+    function userRevenue(address strategy, address user) public view returns (uint256 revenue) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
 
-        // current allocation price
+        // current allocation price (stake to asset)
         uint8 assetDecimals = v.vaultInfo[strategy].asset.decimals();
-        uint256 allocationPrice = IStrategy(strategy).convertToAllocation(10 ** assetDecimals);
+        uint256 currentAllocationPrice = IStrategy(strategy).convertToAllocation(10 ** assetDecimals);
 
         UserVaultInfo storage userVault = v.userInfo[strategy][user];
 
         // allocation price hasn't increased, no revenue is generated
-        if (userVault.allocationPoint >= allocationPrice) {
+        if (currentAllocationPrice > userVault.allocationPoint) {
             return 0;
         }
 
-        // asset price difference multiplied by locked stake
-        uint256 assetRevenue =
-            (allocationPrice - userVault.allocationPoint) * userVault.stakeLocked
-            / LibStaking.PRECISION_FACTOR;
+        // calc the total amount to withdraw based on asset price and allocation point
+        uint256 totalWithdraw = (userVault.allocationPoint * userVault.stakeLocked) / currentAllocationPrice;
 
-        // revenue represented in stake
-        revenue = IStrategy(strategy).convertToStake(assetRevenue);
+        // difference between total withdrawable amount and locked stake
+        revenue = totalWithdraw - userVault.stakeLocked;
     }
 
     //============================================================================================//
@@ -291,7 +297,7 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
         // Weighted average calculation for the updated allocation point
         return (
             userVault.stakeLocked * userVault.allocationPoint
-            + newAllocation * LibStaking.PRECISION_FACTOR
+            + newAllocation * LibStaking.TOKEN_PRECISION_FACTOR
         ) / (userVault.stakeLocked + amount);
     }
 
@@ -300,8 +306,32 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
         uint256 amount
     ) internal view returns (uint256) {
         // amout ratio of the total stake locked in vault
-        uint256 amountRatio = (amount * LibStaking.PRECISION_FACTOR / tier1.totalStakeLocked);
-        return amountRatio * tier1.assetAllocation / LibStaking.PRECISION_FACTOR;
+        uint256 amountRatio = amount * LibStaking.TOKEN_PRECISION_FACTOR / tier1.totalStakeLocked;
+        return amountRatio * tier1.assetAllocation / LibStaking.TOKEN_PRECISION_FACTOR;
+    }
+
+    /**
+     * @notice Calculates the revenue fee for a Tier 1 user based on their withdrawal amount
+     * @dev Computes a proportional revenue fee amunt by adjusting the user's revenue according to
+     *      the withdrawal amount and applying the strategy’s Tier 1 fee rate.
+     * @param strategy The strategy from which the user is exiting.
+     * @param user The address of the user.
+     * @param amount The amount the user wishes to withdraw.
+     * @return revenueFeeAmount The calculated revenue fee amount.
+     */
+    function _calcTier1RevenueFee(
+        address strategy,
+        address user,
+        uint256 amount
+    ) internal view returns (uint256 revenueFeeAmount) {
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+        UserVaultInfo storage userVault = v.userInfo[strategy][user];
+        VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
+
+        uint256 withdrawRatio = amount * LibStaking.TOKEN_PRECISION_FACTOR / userVault.stakeLocked;
+        uint256 revenue = userRevenue(strategy, user);
+        uint256 revenuePart = revenue * withdrawRatio / LibStaking.TOKEN_PRECISION_FACTOR;
+        revenueFeeAmount = revenuePart * tier1.revenueFee / LibStaking.TOKEN_PRECISION_FACTOR;
     }
 
     // ========= Pure ========= //

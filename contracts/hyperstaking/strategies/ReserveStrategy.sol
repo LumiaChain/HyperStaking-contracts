@@ -58,6 +58,11 @@ contract ReserveStrategy is IStrategy, Ownable {
         uint256 newAssetPrice
     );
 
+    event Received(
+        address indexed from,
+        uint256 value
+    );
+
     //============================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
@@ -132,16 +137,20 @@ contract ReserveStrategy is IStrategy, Ownable {
         emit Exit(user_, assetAllocation_, exitAmount);
     }
 
+    receive() external payable {
+        emit Received(msg.sender, msg.value);
+    }
+
     // ========= View ========= //
 
     /// Return current stake to asset conversion (amount * price)
     function convertToAllocation(uint256 stakeAmount_) public view returns (uint256) {
-        return stakeAmount_ * assetPrice / PRECISSION_FACTOR;
+        return stakeAmount_ * PRECISSION_FACTOR / assetPrice;
     }
 
     /// Return current asset to stake conversion (amount / price)
     function convertToStake(uint256 assetAllocation_) public view returns (uint256) {
-        return assetAllocation_ * PRECISSION_FACTOR / assetPrice;
+        return assetAllocation_ * assetPrice / PRECISSION_FACTOR;
     }
 
     // ========= Admin ========= //

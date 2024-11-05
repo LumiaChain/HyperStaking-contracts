@@ -45,13 +45,6 @@ describe("Staking", function () {
       diamond, await testERC20.getAddress(), await testWstETH.getAddress(), parseEther("2"),
     );
 
-    const reserveStrategyAssetSupply = parseEther("55");
-    await testWstETH.approve(reserveStrategy1.target, reserveStrategyAssetSupply);
-    await reserveStrategy1.supplyRevenueAsset(reserveStrategyAssetSupply);
-
-    await testWstETH.approve(reserveStrategy2.target, reserveStrategyAssetSupply);
-    await reserveStrategy2.supplyRevenueAsset(reserveStrategyAssetSupply);
-
     // strategy with neutral to eth 1:1 asset price
     await vault.connect(strategyVaultManager).addStrategy(
       ethPoolId,
