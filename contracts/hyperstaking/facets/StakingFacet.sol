@@ -2,7 +2,7 @@
 pragma solidity =0.8.27;
 
 import {IStaking} from "../interfaces/IStaking.sol";
-import {IStrategyVault} from "../interfaces/IStrategyVault.sol";
+import {ITier1Vault} from "../interfaces/ITier1Vault.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {
@@ -29,7 +29,6 @@ import {LibStrategyVault, StrategyVaultStorage} from "../libraries/LibStrategyVa
  * @dev This contract is a facet of Diamond Proxy.
  */
 contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, PausableUpgradeable {
-
     using CurrencyHandler for Currency;
 
     //============================================================================================//
@@ -74,7 +73,7 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         userPool.staked += amount;
 
         // will lock user stake
-        IStrategyVault(address(this)).deposit(strategy, to, amount);
+        ITier1Vault(address(this)).joinTier1(strategy, to, amount);
 
         emit StakeDeposit(msg.sender, to, poolId, strategy, amount);
     }
@@ -93,7 +92,7 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         StakingPoolInfo storage pool = s.poolInfo[poolId];
         UserPoolInfo storage userPool = s.userInfo[poolId][msg.sender];
 
-        withdrawAmount = IStrategyVault(address(this)).withdraw(strategy, msg.sender, amount);
+        withdrawAmount = ITier1Vault(address(this)).leaveTier1(strategy, msg.sender, amount);
 
         // stake should be unlocked at this point
         pool.totalStake -= amount;

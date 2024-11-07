@@ -22,6 +22,9 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const vaultFacet = m.contract("StrategyVaultFacet");
   const vaultFacetInterface = getContractInterface("IStrategyVault");
 
+  const tier1Facet = m.contract("Tier1VaultFacet");
+  const tier1FacetInterface = getContractInterface("ITier1Vault");
+
   const aclInterface = getContractInterface("HyperStakingAcl");
   const aclInterfaceSelectors = getSelectors(aclInterface).remove(["supportsInterface(bytes4)"]);
   ;
@@ -40,6 +43,11 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       action: FacetCutAction.Add,
       functionSelectors: getSelectors(vaultFacetInterface),
     },
+    {
+      facetAddress: tier1Facet,
+      action: FacetCutAction.Add,
+      functionSelectors: getSelectors(tier1FacetInterface),
+    },
   ];
 
   // --- cut init
@@ -55,6 +63,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
 
   const staking = m.contractAt("IStaking", diamond);
   const vault = m.contractAt("IStrategyVault", diamond);
+  const tier1 = m.contractAt("ITier1Vault", diamond);
 
   const roles = m.contractAt("IHyperStakingRoles", diamond);
   const acl = m.contractAt("HyperStakingAcl", diamond);
@@ -80,7 +89,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
 
   // --- return
 
-  return { diamond, staking, vault };
+  return { diamond, staking, vault, tier1 };
 });
 
 export default HyperStakingModule;
