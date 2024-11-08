@@ -22,7 +22,7 @@ describe("Staking", function () {
 
   async function deployHyperStaking() {
     const [owner, stakingManager, strategyVaultManager, alice, bob] = await hre.ethers.getSigners();
-    const { diamond, staking, vault } = await hre.ignition.deploy(HyperStakingModule);
+    const { diamond, staking, factory } = await hre.ignition.deploy(HyperStakingModule);
 
     // --------------------- Deploy Tokens --------------------
 
@@ -46,7 +46,7 @@ describe("Staking", function () {
     );
 
     // strategy with neutral to eth 1:1 asset price
-    await vault.connect(strategyVaultManager).addStrategy(
+    await factory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
       reserveStrategy1,
       testWstETH,
@@ -54,7 +54,7 @@ describe("Staking", function () {
     );
 
     // strategy with erc20 staking token and 2:1 asset price
-    await vault.connect(strategyVaultManager).addStrategy(
+    await factory.connect(strategyVaultManager).addStrategy(
       erc20PoolId,
       reserveStrategy2,
       testWstETH,
@@ -64,7 +64,7 @@ describe("Staking", function () {
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      staking, vault, // diamond facets
+      staking, factory, // diamond facets
       testERC20, testWstETH, reserveStrategy1, reserveStrategy2, // test contracts
       ethPoolId, erc20PoolId, // ids
       nativeTokenAddress, owner, stakingManager, strategyVaultManager, alice, bob, // addresses

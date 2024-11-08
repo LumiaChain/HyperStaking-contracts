@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {IStrategyVault} from "../interfaces/IStrategyVault.sol";
+import {IVaultFactory} from "../interfaces/IVaultFactory.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -20,11 +20,11 @@ import {
 import {LiquidVaultToken} from "../LiquidVaultToken.sol";
 
 /**
- * @title StrategyVaultFacet
+ * @title VaultFactoryFacet
  *
  * @dev This contract is a facet of Diamond Proxy.
  */
-contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardUpgradeable {
+contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20Metadata;
 
     //============================================================================================//
@@ -33,7 +33,7 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
 
     // ========= Managed ========= //
 
-    /// @inheritdoc IStrategyVault
+    /// @inheritdoc IVaultFactory
     function addStrategy(
         uint256 poolId,
         address strategy,
@@ -46,7 +46,7 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
     // ========= View ========= //
 
     // TODO move to Tier1?
-    /// @inheritdoc IStrategyVault
+    /// @inheritdoc IVaultFactory
     function userVaultInfo(
         address strategy,
         address user
@@ -55,7 +55,7 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
         return v.userInfo[strategy][user];
     }
 
-    /// @inheritdoc IStrategyVault
+    /// @inheritdoc IVaultFactory
     function vaultInfo(address strategy) external view returns (VaultInfo memory) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         return v.vaultInfo[strategy];

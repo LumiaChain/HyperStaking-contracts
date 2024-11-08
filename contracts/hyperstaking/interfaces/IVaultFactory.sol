@@ -6,9 +6,9 @@ import {UserVaultInfo, VaultInfo} from "../libraries/LibStrategyVault.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 /**
- * @title IStrategyVault
+ * @title IVaultFactory
  */
-interface IStrategyVault {
+interface IVaultFactory {
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
