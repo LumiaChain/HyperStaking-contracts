@@ -37,7 +37,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     function joinTier1(
         address strategy,
         address user,
-        uint256 amount
+        uint256 stake
     ) external payable diamondInternal {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
@@ -53,34 +53,34 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
             userVault.allocationPoint = _calculateNewAllocPoint(
                 userVault,
                 strategy,
-                amount
+                stake
             );
 
-            _lockUserStake(userPool, userVault, tier1, amount);
+            _lockUserStake(userPool, userVault, tier1, stake);
         }
 
         // allocate stake amount in strategy
         // and receive allocation
         uint256 allocation;
         if (pool.currency.isNativeCoin()) {
-            allocation = IStrategy(strategy).allocate{value: amount}(amount, user);
+            allocation = IStrategy(strategy).allocate{value: stake}(stake, user);
         } else {
-            pool.currency.approve(strategy, amount);
-            allocation = IStrategy(strategy).allocate(amount, user);
+            pool.currency.approve(strategy, stake);
+            allocation = IStrategy(strategy).allocate(stake, user);
         }
 
         // fetch allocation to this vault
         tier1.assetAllocation += allocation;
         vault.asset.safeTransferFrom(strategy, address(this), allocation);
 
-        emit Tier1Join(vault.poolId, strategy, user, amount, allocation);
+        emit Tier1Join(vault.poolId, strategy, user, stake, allocation);
     }
 
     /// @inheritdoc ITier1Vault
     function leaveTier1(
         address strategy,
         address user,
-        uint256 amount
+        uint256 stake
     ) external diamondInternal returns (uint256 withdrawAmount) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
@@ -91,10 +91,10 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         uint256 revenueFeeAmount = _calcTier1RevenueFee(
             strategy,
             user,
-            amount
+            stake
         );
 
-        uint256 allocation = _convertToTier1Allocation(tier1, amount);
+        uint256 allocation = _convertToTier1Allocation(tier1, stake);
         tier1.assetAllocation -= allocation;
 
         {
@@ -102,7 +102,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
             UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
             // withdraw does not change user allocation point
-            _unlockUserStake(userPool, userVault, tier1, amount);
+            _unlockUserStake(userPool, userVault, tier1, stake);
         }
 
         vault.asset.safeIncreaseAllowance(strategy, allocation);
@@ -110,7 +110,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
 
         withdrawAmount = exitAmount - revenueFeeAmount;
 
-        emit Tier1Leave(vault.poolId, strategy, user, amount, allocation, revenueFeeAmount);
+        emit Tier1Leave(vault.poolId, strategy, user, stake, allocation, revenueFeeAmount);
     }
 
     // ========= Managed ========= //
@@ -182,17 +182,17 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
      * @param userPool The user's pool info where locked stake is tracked
      * @param userVault The user's vault info where locked stake is tracked
      * @param tier1 The Tier 1 vault tracking total locked stake
-     * @param amount The amount of stake to lock
+     * @param stake The amount of stake to lock
      */
     function _lockUserStake(
         UserPoolInfo storage userPool,
         UserVaultInfo storage userVault,
         VaultTier1 storage tier1,
-        uint256 amount
+        uint256 stake
     ) internal {
-        userPool.stakeLocked += amount;
-        userVault.stakeLocked += amount;
-        tier1.totalStakeLocked += amount;
+        userPool.stakeLocked += stake;
+        userVault.stakeLocked += stake;
+        tier1.totalStakeLocked += stake;
     }
 
     /**
@@ -201,17 +201,17 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
      * @param userPool The user's pool info where locked stake is tracked
      * @param userVault The user's vault info where locked stake is tracked
      * @param tier1 The Tier 1 vault tracking total locked stake
-     * @param amount The amount of stake to unlock
+     * @param stake The amount of stake to unlock
      */
     function _unlockUserStake(
         UserPoolInfo storage userPool,
         UserVaultInfo storage userVault,
         VaultTier1 storage tier1,
-        uint256 amount
+        uint256 stake
     ) internal {
-        userPool.stakeLocked -= amount;
-        userVault.stakeLocked -= amount;
-        tier1.totalStakeLocked -= amount;
+        userPool.stakeLocked -= stake;
+        userVault.stakeLocked -= stake;
+        tier1.totalStakeLocked -= stake;
     }
 
     // ========= View ========= //
@@ -220,38 +220,38 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
      * @notice Calculates the new allocation point
      * @dev This function calculates a potential new allocation point for the given user and amount
      * @param userVault The user's current vault information
-     * @param strategy The strategy contract address, used for converting `amount` to an allocation
-     * @param amount The new amount being hypothetically added to the user's locked stake
+     * @param strategy The strategy contract address, used for converting `stake` to an allocation
+     * @param stake The new amount being hypothetically added to the user's locked stake
      * @return The calculated allocation point based on the weighted average
      */
     function _calculateNewAllocPoint(
         UserVaultInfo storage userVault,
         address strategy,
-        uint256 amount
+        uint256 stake
     ) internal view returns (uint256) {
-        uint256 newAllocation = IStrategy(strategy).convertToAllocation(amount);
+        uint256 newAllocation = IStrategy(strategy).convertToAllocation(stake);
 
         // Weighted average calculation for the updated allocation point
         return (
             userVault.stakeLocked * userVault.allocationPoint
             + newAllocation * LibStaking.TOKEN_PRECISION_FACTOR
-        ) / (userVault.stakeLocked + amount);
+        ) / (userVault.stakeLocked + stake);
     }
 
     /**
      * @notice Converts stake amount to its Tier 1 allocation based on the total locked stake
-     * @dev Calculates the allocation ratio of `amount` relative to `totalStakeLocked` and
+     * @dev Calculates the allocation ratio of `stake` relative to `totalStakeLocked` and
      *      applies it to `assetAllocation`
      * @param tier1 The Tier 1 vault information, containing total locked stake and allocation
-     * @param amount The amount to convert to Tier 1 allocation
-     * @return The calculated Tier 1 allocation for the given amount
+     * @param stake The stake amount to convert to Tier 1 allocation
+     * @return The calculated Tier 1 allocation for the given stake amount
      */
     function _convertToTier1Allocation(
         VaultTier1 storage tier1,
-        uint256 amount
+        uint256 stake
     ) internal view returns (uint256) {
         // amout ratio of the total stake locked in vault
-        uint256 amountRatio = amount * LibStaking.TOKEN_PRECISION_FACTOR / tier1.totalStakeLocked;
+        uint256 amountRatio = stake * LibStaking.TOKEN_PRECISION_FACTOR / tier1.totalStakeLocked;
         return amountRatio * tier1.assetAllocation / LibStaking.TOKEN_PRECISION_FACTOR;
     }
 
@@ -261,19 +261,19 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
      *      the withdrawal amount and applying the strategy’s Tier 1 fee rate
      * @param strategy The strategy from which the user is exiting
      * @param user The address of the user
-     * @param amount The amount the user wishes to withdraw
+     * @param stake The stake amount the user wishes to withdraw
      * @return revenueFeeAmount The calculated revenue fee amount
      */
     function _calcTier1RevenueFee(
         address strategy,
         address user,
-        uint256 amount
+        uint256 stake
     ) internal view returns (uint256 revenueFeeAmount) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         UserVaultInfo storage userVault = v.userInfo[strategy][user];
         VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
 
-        uint256 withdrawRatio = amount * LibStaking.TOKEN_PRECISION_FACTOR / userVault.stakeLocked;
+        uint256 withdrawRatio = stake * LibStaking.TOKEN_PRECISION_FACTOR / userVault.stakeLocked;
         uint256 revenue = userRevenue(strategy, user);
         uint256 revenuePart = revenue * withdrawRatio / LibStaking.TOKEN_PRECISION_FACTOR;
         revenueFeeAmount = revenuePart * tier1.revenueFee / LibStaking.TOKEN_PRECISION_FACTOR;

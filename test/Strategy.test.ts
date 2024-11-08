@@ -24,7 +24,7 @@ describe("Strategy", function () {
 
   async function deployHyperStaking() {
     const [owner, stakingManager, strategyVaultManager, bob, alice] = await hre.ethers.getSigners();
-    const { diamond, staking, vault, tier1 } = await hre.ignition.deploy(HyperStakingModule);
+    const { diamond, staking, vault, tier1, tier2 } = await hre.ignition.deploy(HyperStakingModule);
 
     // --------------------- Deploy Tokens ----------------------
 
@@ -74,7 +74,7 @@ describe("Strategy", function () {
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      staking, vault, tier1, // diamond facets
+      staking, vault, tier1, tier2, // diamond facets
       pxEth, upxEth, pirexEth, autoPxEth, // pirex mock
       testWstETH, reserveStrategy, dineroStrategy, // test contracts
       ethPoolId, // ids
@@ -87,7 +87,7 @@ describe("Strategy", function () {
   describe("ReserveStrategy", function () {
     it("check state after allocation", async function () {
       const {
-        staking, vault, tier1, testWstETH, ethPoolId, reserveStrategy, reserveAssetPrice, owner, alice,
+        staking, vault, tier1, tier2, testWstETH, ethPoolId, reserveStrategy, reserveAssetPrice, owner, alice,
       } = await loadFixture(deployHyperStaking);
 
       const ownerAmount = parseEther("2");
@@ -134,7 +134,7 @@ describe("Strategy", function () {
       expect((await tier1.vaultTier1Info(reserveStrategy)).totalStakeLocked).to.equal(ownerAmount + aliceAmount);
       expect((await tier1.vaultTier1Info(reserveStrategy)).revenueFee).to.equal(0);
 
-      expect((await vault.vaultTier2Info(reserveStrategy)).vaultToken).to.not.equal(ZeroAddress);
+      expect((await tier2.vaultTier2Info(reserveStrategy)).vaultToken).to.not.equal(ZeroAddress);
 
       expect(await testWstETH.balanceOf(vault.target)).to.equal((ownerAmount + aliceAmount) * parseEther("1") / reserveAssetPrice);
     });

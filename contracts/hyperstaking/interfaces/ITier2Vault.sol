@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity =0.8.27;
+
+import {VaultTier2} from "../libraries/LibStrategyVault.sol";
+
+/**
+ * @title ITierVault
+ * @dev Interface for Tier1VaultFacet
+ */
+interface ITier2Vault {
+    //============================================================================================//
+    //                                          Events                                            //
+    //============================================================================================//
+
+    event Tier2Join(
+        uint256 indexed poolId,
+        address indexed strategy,
+        address indexed user,
+        uint256 stake,
+        uint256 allocation
+    );
+
+    event Tier2Leave(
+        uint256 indexed poolId,
+        address indexed strategy,
+        address indexed user,
+        uint256 stake,
+        uint256 allocation
+    );
+
+    //============================================================================================//
+    //                                          Mutable                                           //
+    //============================================================================================//
+
+    /**
+     * @notice Join Tier 2 for a specified strategy by staking a certain amount
+     * @param strategy The strategy for which the user is joining Tier 2
+     * @param user The address of the user
+     * @param stake The stake amount of tokens the user use to join Tier 2
+     */
+    function joinTier2(address strategy, address user, uint256 stake) external payable;
+
+    /**
+     * @notice Leave Tier 2 for a specified strategy and withdraw a certain stake amount
+     * @param strategy The strategy from which the user is leaving Tier 2
+     * @param user The address of the user
+     * @param stake The amount of initial stake the user is withdrawing from Tier 2
+     * @return The total withdrawal amount, including the stake, generated revenue, after fees
+     */
+    function leaveTier2(address strategy, address user, uint256 stake) external returns (uint256);
+
+    //============================================================================================//
+    //                                           View                                             //
+    //============================================================================================//
+
+    /**
+     * @notice Retrieves Tier 2 vault information for a specified strategy
+     * @param strategy The address of the strategy
+     * @return The VaultTier1 struct containing information about this specific tier
+     */
+    function vaultTier2Info(address strategy) external view returns (VaultTier2 memory);
+
+    // TODO tier2Contribution?
+    // function userContribution(address strategy, address user) external view returns (uint256);
+}

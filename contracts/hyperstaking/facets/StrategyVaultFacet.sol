@@ -61,12 +61,6 @@ contract StrategyVaultFacet is IStrategyVault, HyperStakingAcl, ReentrancyGuardU
         return v.vaultInfo[strategy];
     }
 
-    /// @inheritdoc IStrategyVault
-    function vaultTier2Info(address strategy) external view returns (VaultTier2 memory) {
-        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-        return v.vaultTier2Info[strategy];
-    }
-
     //============================================================================================//
     //                                     Internal Functions                                     //
     //============================================================================================//

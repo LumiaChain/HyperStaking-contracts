@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {UserVaultInfo, VaultInfo, VaultTier2} from "../libraries/LibStrategyVault.sol";
+import {UserVaultInfo, VaultInfo} from "../libraries/LibStrategyVault.sol";
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -34,7 +34,14 @@ interface IStrategyVault {
 
     // ========= Managed ========= //
 
-    /// @notice Adds a new strategy and assigns it to the specified staking pool
+    /**
+     * @notice Adds a new strategy and links it to a specific staking pool
+     * @dev Sets up the strategy with an associated asset and a revenue fee for Tier 1 users
+     * @param poolId The ID of the staking pool to assign this strategy to
+     * @param strategy The address of the strategy being added
+     * @param asset The ERC20-compliant asset associated with the strategy
+     * @param tier1RevenueFee The revenue fee for Tier 1 users, specified as an 18-decimal fraction
+     */
     function addStrategy(
         uint256 poolId,
         address strategy,
@@ -52,6 +59,4 @@ interface IStrategyVault {
     ) external view returns (UserVaultInfo memory);
 
     function vaultInfo(address strategy) external view returns (VaultInfo memory);
-
-    function vaultTier2Info(address strategy) external view returns (VaultTier2 memory);
 }

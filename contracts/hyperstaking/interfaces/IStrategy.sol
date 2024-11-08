@@ -50,9 +50,9 @@ interface IStrategy {
     //                                           View                                             //
     //============================================================================================//
 
-    /// Return current stake to asset allocation ratio (price)
+    /// @dev Return current stake to asset allocation ratio (price)
     function convertToAllocation(uint256 stakeAmount_) external view returns (uint256);
 
-    /// Return current asset to stake ratio (price)
+    /// @dev Return current asset to stake ratio (price)
     function convertToStake(uint256 assetAllocation_) external view returns (uint256);
 }

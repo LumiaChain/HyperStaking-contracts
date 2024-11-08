@@ -24,7 +24,7 @@ interface ITier1Vault {
         uint256 indexed poolId,
         address indexed strategy,
         address indexed user,
-        uint256 amount,
+        uint256 stake,
         uint256 allocation,
         uint256 revenueFee
     );
@@ -44,18 +44,18 @@ interface ITier1Vault {
      * @notice Join Tier 1 for a specified strategy by staking a certain amount
      * @param strategy The strategy for which the user is joining Tier 1
      * @param user The address of the user
-     * @param amount The amount of tokens the user is staking to join Tier 1
+     * @param stake The stake amount of tokens the user use to join Tier 1
      */
-    function joinTier1(address strategy, address user, uint256 amount) external payable;
+    function joinTier1(address strategy, address user, uint256 stake) external payable;
 
     /**
-     * @notice Leave Tier 1 for a specified strategy and withdraw a certain amount
+     * @notice Leave Tier 1 for a specified strategy and withdraw a certain stake amount
      * @param strategy The strategy from which the user is leaving Tier 1
      * @param user The address of the user
-     * @param amount The amount of initial stake the user is withdrawing from Tier 1
+     * @param stake The amount of initial stake the user is withdrawing from Tier 1
      * @return The total withdrawal amount, including the stake, generated revenue, after fees
      */
-    function leaveTier1(address strategy, address user, uint256 amount) external returns (uint256);
+    function leaveTier1(address strategy, address user, uint256 stake) external returns (uint256);
 
     /**
      * @notice Sets the revenue fee for users in a specified strategy
