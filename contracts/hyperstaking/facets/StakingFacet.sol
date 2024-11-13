@@ -3,6 +3,7 @@ pragma solidity =0.8.27;
 
 import {IStaking} from "../interfaces/IStaking.sol";
 import {ITier1Vault} from "../interfaces/ITier1Vault.sol";
+import {ITier2Vault} from "../interfaces/ITier2Vault.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {
@@ -49,14 +50,14 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     //                                      Public Functions                                      //
     //============================================================================================//
 
-    /// @notice Main deposit function
+    /// @notice Main Tier1 deposit function
     /// @inheritdoc IStaking
-    function stakeDeposit(
-        uint256 poolId,
-        address strategy,
-        uint256 amount,
-        address to
-    ) public payable nonReentrant whenNotPaused validate(poolId, strategy)
+    function stakeDeposit(uint256 poolId, address strategy, uint256 stake, address to)
+        external
+        payable
+        nonReentrant
+        whenNotPaused
+        validate(poolId, strategy)
     {
         StakingStorage storage s = LibStaking.diamondStorage();
 
@@ -66,44 +67,75 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         pool.currency.transferFrom(
             msg.sender,
             address(this),
-            amount
+            stake
         );
 
-        pool.totalStake += amount;
-        userPool.staked += amount;
+        pool.totalStake += stake;
+        userPool.staked += stake;
 
         // will lock user stake
-        ITier1Vault(address(this)).joinTier1(strategy, to, amount);
+        ITier1Vault(address(this)).joinTier1(strategy, to, stake);
 
-        emit StakeDeposit(msg.sender, to, poolId, strategy, amount);
+        emit StakeDeposit(msg.sender, to, poolId, strategy, stake, 1);
     }
 
-    /// @notice Main withdraw function
+    /// @notice Tier1 withdraw function
     /// @inheritdoc IStaking
-    function stakeWithdraw(
-        uint256 poolId,
-        address strategy,
-        uint256 amount,
-        address to
-    ) public nonReentrant whenNotPaused validate(poolId, strategy)
-    returns (uint256 withdrawAmount) {
+    function stakeWithdraw(uint256 poolId, address strategy, uint256 stake, address to)
+        external
+        nonReentrant
+        whenNotPaused
+        validate(poolId, strategy)
+        returns (uint256 withdrawAmount)
+    {
         StakingStorage storage s = LibStaking.diamondStorage();
 
         StakingPoolInfo storage pool = s.poolInfo[poolId];
         UserPoolInfo storage userPool = s.userInfo[poolId][msg.sender];
 
-        withdrawAmount = ITier1Vault(address(this)).leaveTier1(strategy, msg.sender, amount);
+        withdrawAmount = ITier1Vault(address(this)).leaveTier1(strategy, msg.sender, stake);
 
         // stake should be unlocked at this point
-        pool.totalStake -= amount;
-        userPool.staked -= amount;
+        pool.totalStake -= stake;
+        userPool.staked -= stake;
 
         pool.currency.transfer(
             to,
             withdrawAmount
         );
 
-        emit StakeWithdraw(msg.sender, to, poolId, strategy, amount, withdrawAmount);
+        emit StakeWithdraw(msg.sender, to, poolId, strategy, stake, withdrawAmount);
+    }
+
+    /* ========== Tier 2  ========== */
+
+    /// @notice Tier2 deposit function
+    /// @inheritdoc IStaking
+    function stakeDepositTier2(uint256 poolId, address strategy, uint256 stake, address to)
+        external
+        payable
+        nonReentrant
+        whenNotPaused
+        validate(poolId, strategy)
+    {
+        StakingStorage storage s = LibStaking.diamondStorage();
+
+        StakingPoolInfo storage pool = s.poolInfo[poolId];
+        UserPoolInfo storage userPool = s.userInfo[poolId][to];
+
+        pool.currency.transferFrom(
+            msg.sender,
+            address(this),
+            stake
+        );
+
+        pool.totalStake += stake;
+        userPool.staked += stake;
+
+        // will lock user stake
+        ITier2Vault(address(this)).joinTier2(strategy, to, stake);
+
+        emit StakeDeposit(msg.sender, to, poolId, strategy, stake, 2);
     }
 
     /* ========== ACL  ========== */

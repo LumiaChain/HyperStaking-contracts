@@ -9,10 +9,10 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 //================================================================================================//
 
 /**
- * @notice Info of each user
+ * @notice Info of each user (Tier1)
  * @param amount Token amount the user has provided
  */
-struct UserVaultInfo {
+struct UserTier1Info {
     uint256 stakeLocked;
     uint256 allocationPoint; // average asset price - maturity
 }
@@ -24,7 +24,7 @@ struct VaultTier1 {
 }
 
 // Users at Tier2 don't have stake stored in the pool anymore,
-// as it is represented by ERC4626 vault token, liquid shares
+// as it is represented by ERC4626 vault token - liquid shares
 struct VaultTier2 {
     IERC4626 vaultToken;
 }
@@ -41,7 +41,7 @@ struct VaultInfo {
 
 struct StrategyVaultStorage {
     /// @notice Info of each user that stakes using vault
-    mapping (address strategy => mapping (address user => UserVaultInfo)) userInfo;
+    mapping (address strategy => mapping (address user => UserTier1Info)) userInfo;
 
     /// @notice Info of each vault
     mapping (address strategy => VaultInfo) vaultInfo;

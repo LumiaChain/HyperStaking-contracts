@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {VaultTier1} from "../libraries/LibStrategyVault.sol";
+import {UserTier1Info, VaultTier1} from "../libraries/LibStrategyVault.sol";
 
 /**
  * @title ITierVault
@@ -13,7 +13,6 @@ interface ITier1Vault {
     //============================================================================================//
 
     event Tier1Join(
-        uint256 indexed poolId,
         address indexed strategy,
         address indexed user,
         uint256 stake,
@@ -21,7 +20,6 @@ interface ITier1Vault {
     );
 
     event Tier1Leave(
-        uint256 indexed poolId,
         address indexed strategy,
         address indexed user,
         uint256 stake,
@@ -74,6 +72,17 @@ interface ITier1Vault {
      * @return The VaultTier1 struct containing information about this specific tier
      */
     function vaultTier1Info(address strategy) external view returns (VaultTier1 memory);
+
+    /**
+     * @notice Retrieves tier1 vault information specific to a user within a given strategy
+     * @param strategy The address of the strategy
+     * @param user The address of the user
+     * @return A UserTier1Info struct containing the user's specific vault details
+     */
+    function userTier1Info(
+        address strategy,
+        address user
+    ) external view returns (UserTier1Info memory);
 
     /**
      * @notice Retrieves the total contribution of a user for a specified strategy

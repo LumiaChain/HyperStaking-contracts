@@ -17,7 +17,7 @@ import {
     LibStaking, StakingStorage, UserPoolInfo, StakingPoolInfo
 } from "../libraries/LibStaking.sol";
 import {
-    LibStrategyVault, StrategyVaultStorage, UserVaultInfo, VaultInfo, VaultTier1
+    LibStrategyVault, StrategyVaultStorage, UserTier1Info, VaultInfo, VaultTier1
 } from "../libraries/LibStrategyVault.sol";
 
 /**
@@ -47,7 +47,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         StakingPoolInfo storage pool = s.poolInfo[vault.poolId];
 
         {
-            UserVaultInfo storage userVault = v.userInfo[strategy][user];
+            UserTier1Info storage userVault = v.userInfo[strategy][user];
             UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
             userVault.allocationPoint = _calculateNewAllocPoint(
@@ -73,7 +73,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         tier1.assetAllocation += allocation;
         vault.asset.safeTransferFrom(strategy, address(this), allocation);
 
-        emit Tier1Join(vault.poolId, strategy, user, stake, allocation);
+        emit Tier1Join(strategy, user, stake, allocation);
     }
 
     /// @inheritdoc ITier1Vault
@@ -98,7 +98,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         tier1.assetAllocation -= allocation;
 
         {
-            UserVaultInfo storage userVault = v.userInfo[strategy][user];
+            UserTier1Info storage userVault = v.userInfo[strategy][user];
             UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
             // withdraw does not change user allocation point
@@ -110,7 +110,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
 
         withdrawAmount = exitAmount - revenueFeeAmount;
 
-        emit Tier1Leave(vault.poolId, strategy, user, stake, allocation, revenueFeeAmount);
+        emit Tier1Leave(strategy, user, stake, allocation, revenueFeeAmount);
     }
 
     // ========= Managed ========= //
@@ -120,7 +120,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         address strategy,
         uint256 revenueFee
     ) external onlyStrategyVaultManager nonReentrant {
-        require(revenueFee <= 20e16, InvalidRevenueFeeValue()); // 20e16 == 20%
+        require(revenueFee <= 30e16, InvalidRevenueFeeValue()); // 30e16 == 30%
 
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         v.vaultTier1Info[strategy].revenueFee = revenueFee;
@@ -134,12 +134,20 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         return v.vaultTier1Info[strategy];
     }
 
+    /// @inheritdoc ITier1Vault
+    function userTier1Info(
+        address strategy,
+        address user
+    ) external view returns (UserTier1Info  memory) {
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+        return v.userInfo[strategy][user];
+    }
 
     /// @inheritdoc ITier1Vault
     function userContribution(address strategy, address user) public view returns (uint256) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
 
-        UserVaultInfo memory userVault = v.userInfo[strategy][user];
+        UserTier1Info memory userVault = v.userInfo[strategy][user];
         VaultTier1 memory tier1 = v.vaultTier1Info[strategy];
 
         if (userVault.stakeLocked == 0) {
@@ -157,7 +165,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         uint8 assetDecimals = v.vaultInfo[strategy].asset.decimals();
         uint256 currentAllocationPrice = IStrategy(strategy).convertToAllocation(10**assetDecimals);
 
-        UserVaultInfo storage userVault = v.userInfo[strategy][user];
+        UserTier1Info storage userVault = v.userInfo[strategy][user];
 
         // allocation price hasn't increased, no revenue is generated
         if (currentAllocationPrice > userVault.allocationPoint) {
@@ -186,7 +194,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
      */
     function _lockUserStake(
         UserPoolInfo storage userPool,
-        UserVaultInfo storage userVault,
+        UserTier1Info storage userVault,
         VaultTier1 storage tier1,
         uint256 stake
     ) internal {
@@ -205,7 +213,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
      */
     function _unlockUserStake(
         UserPoolInfo storage userPool,
-        UserVaultInfo storage userVault,
+        UserTier1Info storage userVault,
         VaultTier1 storage tier1,
         uint256 stake
     ) internal {
@@ -225,7 +233,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
      * @return The calculated allocation point based on the weighted average
      */
     function _calculateNewAllocPoint(
-        UserVaultInfo storage userVault,
+        UserTier1Info storage userVault,
         address strategy,
         uint256 stake
     ) internal view returns (uint256) {
@@ -270,7 +278,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         uint256 stake
     ) internal view returns (uint256 revenueFeeAmount) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-        UserVaultInfo storage userVault = v.userInfo[strategy][user];
+        UserTier1Info storage userVault = v.userInfo[strategy][user];
         VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
 
         uint256 withdrawRatio = stake * LibStaking.TOKEN_PRECISION_FACTOR / userVault.stakeLocked;

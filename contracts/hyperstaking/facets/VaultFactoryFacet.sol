@@ -14,10 +14,10 @@ import {
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {
-    LibStrategyVault, StrategyVaultStorage, UserVaultInfo, VaultInfo, VaultTier1, VaultTier2
+    LibStrategyVault, StrategyVaultStorage, VaultInfo, VaultTier1, VaultTier2
 } from "../libraries/LibStrategyVault.sol";
 
-import {LiquidVaultToken} from "../LiquidVaultToken.sol";
+import {VaultToken} from "../VaultToken.sol";
 
 /**
  * @title VaultFactoryFacet
@@ -45,16 +45,6 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
 
     // ========= View ========= //
 
-    // TODO move to Tier1?
-    /// @inheritdoc IVaultFactory
-    function userVaultInfo(
-        address strategy,
-        address user
-    ) external view returns (UserVaultInfo  memory) {
-        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-        return v.userInfo[strategy][user];
-    }
-
     /// @inheritdoc IVaultFactory
     function vaultInfo(address strategy) external view returns (VaultInfo memory) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
@@ -71,11 +61,16 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
      * @param asset The underlying asset for the vault token, which provides name and symbol info
      * @return vaultToken The newly created vault token that conforms to the IERC4626 standard
      */
-    function _deployVaultToken(IERC20Metadata asset) internal returns (IERC4626 vaultToken) {
+    function _deployVaultToken(
+        IERC20Metadata asset,
+        address strategy
+    ) internal returns (IERC4626 vaultToken) {
+
         string memory sharesName = _concat("Lumia Liquid ", asset.name());
         string memory sharesSymbol = _concat("ll", asset.symbol());
-        vaultToken = new LiquidVaultToken(
+        vaultToken = new VaultToken(
             address(this),
+            strategy,
             IERC20(asset),
             sharesName,
             sharesSymbol
@@ -97,6 +92,7 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
         IERC20Metadata asset,
         uint256 tier1RevenueFee
     ) internal {
+
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
 
         require(v.vaultInfo[strategy].poolId == 0, VaultAlreadyExist());
@@ -118,7 +114,7 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
         // init tier2
 
         // deploy vaultToken which represent shares to this strategy vault
-        IERC4626 vaultToken = _deployVaultToken(asset);
+        IERC4626 vaultToken = _deployVaultToken(asset, strategy);
 
         v.vaultTier2Info[strategy] = VaultTier2({
             vaultToken: vaultToken

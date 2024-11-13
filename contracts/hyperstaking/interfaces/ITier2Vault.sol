@@ -13,7 +13,6 @@ interface ITier2Vault {
     //============================================================================================//
 
     event Tier2Join(
-        uint256 indexed poolId,
         address indexed strategy,
         address indexed user,
         uint256 stake,
@@ -21,7 +20,6 @@ interface ITier2Vault {
     );
 
     event Tier2Leave(
-        uint256 indexed poolId,
         address indexed strategy,
         address indexed user,
         uint256 stake,
@@ -41,13 +39,17 @@ interface ITier2Vault {
     function joinTier2(address strategy, address user, uint256 stake) external payable;
 
     /**
-     * @notice Leave Tier 2 for a specified strategy and withdraw a certain stake amount
+     * @notice Leave Tier 2 for a specified strategy and asset amount.
      * @param strategy The strategy from which the user is leaving Tier 2
      * @param user The address of the user
-     * @param stake The amount of initial stake the user is withdrawing from Tier 2
+     * @param allocation The amount of asset allocation from ValutToken
      * @return The total withdrawal amount, including the stake, generated revenue, after fees
      */
-    function leaveTier2(address strategy, address user, uint256 stake) external returns (uint256);
+    function leaveTier2(
+        address strategy,
+        address user,
+        uint256 allocation
+    ) external returns (uint256);
 
     //============================================================================================//
     //                                           View                                             //

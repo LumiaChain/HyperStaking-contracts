@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {UserVaultInfo, VaultInfo} from "../libraries/LibStrategyVault.sol";
+import {VaultInfo} from "../libraries/LibStrategyVault.sol";
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -53,10 +53,10 @@ interface IVaultFactory {
     //                                           View                                             //
     //============================================================================================//
 
-    function userVaultInfo(
-        address strategy,
-        address user
-    ) external view returns (UserVaultInfo memory);
-
+    /**
+     * @notice Retrieves information about a specific vault associated with a strategy
+     * @param strategy The address of the strategy for which to retrieve vault information
+     * @return A VaultInfo struct containing details about the vault
+     */
     function vaultInfo(address strategy) external view returns (VaultInfo memory);
 }

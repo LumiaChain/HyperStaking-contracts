@@ -15,7 +15,7 @@ import {PirexIntegration} from "./PirexIntegration.sol";
 contract DineroStrategy is IStrategy, PirexIntegration {
     using SafeERC20 for IERC20;
 
-    /// Diamond deployment address
+    /// Lumia Diamond Proxy address
     address public immutable DIAMOND;
 
     //============================================================================================//

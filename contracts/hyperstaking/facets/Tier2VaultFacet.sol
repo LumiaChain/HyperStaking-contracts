@@ -30,10 +30,27 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     using CurrencyHandler for Currency;
 
     //============================================================================================//
+    //                                          Errors                                            //
+    //============================================================================================//
+
+    error NotVaultToken();
+
+    //============================================================================================//
+    //                                         Modifiers                                          //
+    //============================================================================================//
+
+    modifier onlyVaultToken(address strategy) {
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
+
+        require(msg.sender == address(tier2.vaultToken), NotVaultToken());
+        _;
+    }
+
+    //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
 
-    /// TODO
     /// @inheritdoc ITier2Vault
     function joinTier2(
         address strategy,
@@ -42,6 +59,7 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     ) external payable diamondInternal {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
+        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
 
         StakingStorage storage s = LibStaking.diamondStorage();
         StakingPoolInfo storage pool = s.poolInfo[vault.poolId];
@@ -59,26 +77,34 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         // fetch allocation to this vault
         vault.asset.safeTransferFrom(strategy, address(this), allocation);
 
-        emit Tier2Join(vault.poolId, strategy, user, stake, allocation);
+        vault.asset.safeIncreaseAllowance(address(tier2.vaultToken), allocation);
+        tier2.vaultToken.deposit(allocation, user);
+
+        emit Tier2Join(strategy, user, stake, allocation);
     }
 
-    /// TODO
     /// @inheritdoc ITier2Vault
     function leaveTier2(
         address strategy,
         address user,
-        uint256 stake
-    ) external diamondInternal returns (uint256 withdrawAmount) {
+        uint256 allocation
+    ) external onlyVaultToken(strategy) returns (uint256 withdrawAmount) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
+        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
 
-        // StakingStorage storage s = LibStaking.diamondStorage();
-        uint256 allocation; // = _convertToTier1Allocation(tier1, stake);
+        StakingStorage storage s = LibStaking.diamondStorage();
+        Currency memory stakeCurrency = s.poolInfo[vault.poolId].currency;
+
+        // VaultToken should approved DIAMOND first
+        vault.asset.safeTransferFrom(address(tier2.vaultToken), address(this), allocation);
 
         vault.asset.safeIncreaseAllowance(strategy, allocation);
         withdrawAmount = IStrategy(strategy).exit(allocation, user);
 
-        emit Tier2Leave(vault.poolId, strategy, user, stake, allocation);
+        stakeCurrency.transfer(user, withdrawAmount);
+
+        emit Tier2Leave(strategy, user, withdrawAmount, allocation);
     }
 
     // ========= View ========= //

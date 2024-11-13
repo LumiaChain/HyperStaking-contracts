@@ -76,14 +76,14 @@ describe("Staking", function () {
     it("should set the right owner", async function () {
       const { ownershipFacet, owner } = await loadFixture(deployDiamond);
 
-      expect(await ownershipFacet.owner()).to.equal(owner.address);
+      expect(await ownershipFacet.owner()).to.equal(owner);
     });
 
     it("it should be able to transfer ownership", async function () {
       const { ownershipFacet, alice } = await loadFixture(deployDiamond);
 
-      await ownershipFacet.transferOwnership(alice.address);
-      expect(await ownershipFacet.owner()).to.equal(alice.address);
+      await ownershipFacet.transferOwnership(alice);
+      expect(await ownershipFacet.owner()).to.equal(alice);
     });
   });
 
@@ -126,23 +126,24 @@ describe("Staking", function () {
         );
 
       // event
+      const tier1 = 1;
       await expect(staking.stakeDeposit(ethPoolId, reserveStrategy1, stakeAmount, owner, { value: stakeAmount }))
         .to.emit(staking, "StakeDeposit")
-        .withArgs(owner.address, owner.address, ethPoolId, reserveStrategy1, stakeAmount);
+        .withArgs(owner, owner, ethPoolId, reserveStrategy1, stakeAmount, tier1);
 
       const stakeAmountForAlice = parseEther("11");
       await expect(staking.connect(alice).stakeDeposit(
         ethPoolId, reserveStrategy1, stakeAmountForAlice, alice, { value: stakeAmountForAlice }),
       )
         .to.emit(staking, "StakeDeposit")
-        .withArgs(alice.address, alice.address, ethPoolId, reserveStrategy1, stakeAmountForAlice);
+        .withArgs(alice, alice, ethPoolId, reserveStrategy1, stakeAmountForAlice, tier1);
 
       // UserInfo
       expect(
-        (await staking.userPoolInfo(ethPoolId, owner.address)).staked,
+        (await staking.userPoolInfo(ethPoolId, owner)).staked,
       ).to.equal(stakeAmount * 2n);
       expect(
-        (await staking.userPoolInfo(ethPoolId, alice.address)).staked,
+        (await staking.userPoolInfo(ethPoolId, alice)).staked,
       ).to.equal(stakeAmountForAlice);
 
       // PoolInfo
@@ -166,7 +167,7 @@ describe("Staking", function () {
 
       await expect(staking.stakeWithdraw(ethPoolId, reserveStrategy1, withdrawAmount, owner))
         .to.emit(staking, "StakeWithdraw")
-        .withArgs(owner.address, owner.address, ethPoolId, reserveStrategy1, withdrawAmount, anyValue);
+        .withArgs(owner, owner, ethPoolId, reserveStrategy1, withdrawAmount, anyValue);
 
       const precisionError = 4n; // 4wei
       await expect(staking.stakeWithdraw(ethPoolId, reserveStrategy1, withdrawAmount, alice))
@@ -177,10 +178,10 @@ describe("Staking", function () {
 
       // UserInfo
       expect(
-        (await staking.userPoolInfo(ethPoolId, owner.address)).staked,
+        (await staking.userPoolInfo(ethPoolId, owner)).staked,
       ).to.equal(stakeAmount - 3n * withdrawAmount);
       expect(
-        (await staking.userPoolInfo(ethPoolId, alice.address)).staked,
+        (await staking.userPoolInfo(ethPoolId, alice)).staked,
       ).to.equal(0);
 
       // PoolInfo
@@ -206,7 +207,7 @@ describe("Staking", function () {
 
       await expect(staking.stakeWithdraw(erc20PoolId, reserveStrategy2, withdrawAmount, owner))
         .to.emit(staking, "StakeWithdraw")
-        .withArgs(owner.address, owner.address, erc20PoolId, reserveStrategy2, withdrawAmount, withdrawAmount);
+        .withArgs(owner, owner, erc20PoolId, reserveStrategy2, withdrawAmount, withdrawAmount);
 
       await expect(staking.stakeWithdraw(erc20PoolId, reserveStrategy2, withdrawAmount, alice))
         .to.changeTokenBalances(testERC20,
@@ -216,10 +217,10 @@ describe("Staking", function () {
 
       // UserInfo
       expect(
-        (await staking.userPoolInfo(erc20PoolId, owner.address)).staked,
+        (await staking.userPoolInfo(erc20PoolId, owner)).staked,
       ).to.equal(stakeAmount - 3n * withdrawAmount);
       expect(
-        (await staking.userPoolInfo(erc20PoolId, alice.address)).staked,
+        (await staking.userPoolInfo(erc20PoolId, alice)).staked,
       ).to.equal(0);
 
       // PoolInfo

@@ -1,0 +1,204 @@
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { expect } from "chai";
+import HyperStakingModule from "../ignition/modules/HyperStaking";
+import hre, { ethers } from "hardhat";
+import { parseEther, parseUnits } from "ethers";
+
+import * as shared from "./shared";
+
+describe("VaultToken", function () {
+  async function deployHyperStaking() {
+    const [owner, stakingManager, strategyVaultManager, bob, alice] = await ethers.getSigners();
+    const { diamond, staking, factory, tier1, tier2 } = await hre.ignition.deploy(HyperStakingModule);
+
+    // --------------------- Deploy Tokens ----------------------
+
+    const testReserveAsset = await shared.deloyTestERC20("Test Reserve Asset", "tRaETH");
+
+    // ------------------ Create Staking Pools ------------------
+
+    const { nativeTokenAddress, ethPoolId } = await shared.createNativeStakingPool(staking);
+
+    // -------------------- Apply Strategies --------------------
+
+    const defaultRevenueFee = parseEther("0"); // 0% fee
+
+    // strategy asset price to eth 2:1
+    const reserveAssetPrice = parseEther("2");
+
+    const reserveStrategy = await shared.createReserveStrategy(
+      diamond, nativeTokenAddress, await testReserveAsset.getAddress(), reserveAssetPrice,
+    );
+
+    await factory.connect(strategyVaultManager).addStrategy(
+      ethPoolId,
+      reserveStrategy,
+      testReserveAsset,
+      defaultRevenueFee,
+    );
+
+    const vaultTokenAddress = (await tier2.vaultTier2Info(reserveStrategy)).vaultToken;
+    const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
+
+    /* eslint-disable object-property-newline */
+    return {
+      diamond, // diamond
+      staking, factory, tier1, tier2, // diamond facets
+      testReserveAsset, reserveStrategy, vaultToken, // test contracts
+      ethPoolId, // ids
+      defaultRevenueFee, reserveAssetPrice, // values
+      nativeTokenAddress, owner, stakingManager, strategyVaultManager, alice, bob, // addresses
+    };
+    /* eslint-enable object-property-newline */
+  }
+
+  describe("Tier2", function () {
+    it("it shouldn't be possible to mint shares apart from the diamond", async function () {
+      const { vaultToken, alice } = await loadFixture(deployHyperStaking);
+
+      await expect(vaultToken.deposit(100, alice))
+        .to.be.revertedWithCustomError(vaultToken, "OwnableUnauthorizedAccount");
+
+      await expect(vaultToken.mint(100, alice))
+        .to.be.revertedWithCustomError(vaultToken, "OwnableUnauthorizedAccount");
+    });
+
+    it("it should be possible to stake deposit to tier2", async function () {
+      const { staking, ethPoolId, reserveStrategy, vaultToken, owner, alice } = await loadFixture(deployHyperStaking);
+
+      const lpBefore = await vaultToken.balanceOf(alice);
+
+      const stakeAmount = parseEther("6");
+
+      const tier2 = 2;
+      await expect(staking.stakeDepositTier2(
+        ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount },
+      ))
+        .to.emit(staking, "StakeDeposit")
+        .withArgs(owner, alice, ethPoolId, reserveStrategy, stakeAmount, tier2);
+
+      const lpAfter = await vaultToken.balanceOf(alice);
+      expect(lpAfter).to.be.gt(lpBefore);
+
+      // more accurate amount calculation
+      const allocation = await reserveStrategy.convertToAllocation(stakeAmount);
+      const lpAmount = await vaultToken.previewDeposit(allocation);
+
+      expect(lpAfter).to.be.eq(lpBefore + lpAmount);
+    });
+
+    it("shars should be minted equally regardless of the deposit order", async function () {
+      const { staking, ethPoolId, reserveStrategy, vaultToken, owner, alice, bob } = await loadFixture(deployHyperStaking);
+
+      const stakeAmount = parseEther("7");
+
+      await staking.stakeDepositTier2(ethPoolId, reserveStrategy, stakeAmount, owner, { value: stakeAmount });
+      await staking.stakeDepositTier2(ethPoolId, reserveStrategy, stakeAmount, bob, { value: stakeAmount });
+      await staking.stakeDepositTier2(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
+
+      const aliceShares = await vaultToken.balanceOf(alice);
+      const bobShares = await vaultToken.balanceOf(bob);
+      const ownerShares = await vaultToken.balanceOf(owner);
+
+      expect(aliceShares).to.be.eq(bobShares);
+      expect(aliceShares).to.be.eq(ownerShares);
+
+      // 2x stake
+      await staking.stakeDepositTier2(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
+
+      const aliceShares2 = await vaultToken.balanceOf(alice);
+      expect(aliceShares2).to.be.eq(2n * bobShares);
+    });
+
+    it("it should be possible to approve and transfer vault token", async function () {
+      const { staking, ethPoolId, reserveStrategy, vaultToken, owner, alice, bob } = await loadFixture(deployHyperStaking);
+
+      expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
+      expect(await vaultToken.balanceOf(bob)).to.be.eq(0);
+      expect(await vaultToken.balanceOf(owner)).to.be.eq(0);
+
+      const stakeAmount = parseEther("3");
+      await staking.stakeDepositTier2(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
+      const lpBalance = await vaultToken.balanceOf(alice);
+
+      await vaultToken.connect(alice).approve(bob, lpBalance);
+      await vaultToken.connect(bob).transferFrom(alice, bob, lpBalance);
+
+      expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
+      expect(await vaultToken.balanceOf(bob)).to.be.eq(lpBalance);
+      expect(await vaultToken.balanceOf(owner)).to.be.eq(0);
+
+      await vaultToken.connect(bob).transfer(owner, lpBalance);
+
+      expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
+      expect(await vaultToken.balanceOf(bob)).to.be.eq(0);
+      expect(await vaultToken.balanceOf(owner)).to.be.eq(lpBalance);
+
+      await staking.stakeDepositTier2(ethPoolId, reserveStrategy, stakeAmount, bob, { value: stakeAmount });
+      await staking.stakeDepositTier2(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
+    });
+
+    it("it should be possible to redeem vaultToken and withdraw stake", async function () {
+      const {
+        staking, ethPoolId, testReserveAsset, reserveStrategy, reserveAssetPrice, vaultToken, alice, bob,
+      } = await loadFixture(deployHyperStaking);
+
+      expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
+
+      const stakeAmount = parseEther("3");
+      await staking.stakeDepositTier2(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
+
+      const lpBalance = await vaultToken.balanceOf(alice);
+
+      expect(await vaultToken.balanceOf(alice)).to.be.gt(0);
+      expect(await vaultToken.totalAssets()).to.be.eq(stakeAmount * parseEther("1") / reserveAssetPrice);
+      expect(await testReserveAsset.balanceOf(vaultToken)).to.be.gt(0);
+
+      await expect(vaultToken.connect(alice).redeem(lpBalance, alice, alice))
+        .to.changeEtherBalances([alice], [stakeAmount]);
+
+      expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
+      expect(await testReserveAsset.balanceOf(vaultToken)).to.be.eq(0);
+
+      // -- scenario with approval redeem
+      await staking.stakeDepositTier2(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
+
+      // alice approve bob to redeem her shares
+      await vaultToken.connect(alice).approve(bob, lpBalance);
+      expect(await vaultToken.allowance(alice, bob)).to.be.eq(lpBalance);
+
+      await expect(vaultToken.connect(bob).redeem(lpBalance, bob, alice))
+        .to.changeEtherBalances([bob], [stakeAmount]);
+
+      expect(await vaultToken.allowance(alice, bob)).to.be.eq(0);
+      expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
+      expect(await vaultToken.balanceOf(bob)).to.be.eq(0);
+      expect(await testReserveAsset.balanceOf(vaultToken)).to.be.eq(0);
+    });
+
+    it("fee from tier1 should increase tier2 shares value", async function () {
+      const {
+        staking, tier1, ethPoolId, reserveStrategy, reserveAssetPrice, vaultToken,
+        strategyVaultManager, alice, bob,
+      } = await loadFixture(deployHyperStaking);
+
+      const revenueFee = parseUnits("20", 16); // 20% fee
+      tier1.connect(strategyVaultManager).setRevenueFee(reserveStrategy, revenueFee);
+
+      expect(await vaultToken.totalAssets()).to.be.eq(0);
+
+      const aliceStakeAmount = parseEther("10");
+      const bobStakeAmount = parseEther("1");
+
+      // alice stake to tier1, bob stake to tier2
+      await staking.stakeDeposit(ethPoolId, reserveStrategy, aliceStakeAmount, alice, { value: aliceStakeAmount });
+      await staking.stakeDepositTier2(ethPoolId, reserveStrategy, bobStakeAmount, bob, { value: bobStakeAmount });
+
+      // expect(await vaultToken.totalAssets()).to.be.eq(0); bob stake amount?
+      expect(await vaultToken.totalAssets()).to.be.eq(bobStakeAmount * parseEther("1") / reserveAssetPrice);
+    });
+
+    // it("it should be possible to effectively migrate from tier1 to tier2", async function () {
+    // });
+  });
+});
