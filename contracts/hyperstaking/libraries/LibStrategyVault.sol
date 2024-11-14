@@ -8,13 +8,20 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 //                                            Types                                               //
 //================================================================================================//
 
-/**
- * @notice Info of each user (Tier1)
- * @param amount Token amount the user has provided
- */
+/// @notice Info of each user (Tier1)
 struct UserTier1Info {
     uint256 stakeLocked;
     uint256 allocationPoint; // average asset price - maturity
+}
+
+/// @notice Information for each Tier 2 user
+/// @param shares VaultToken shares held by the user
+/// @param allocation Allocation corresponding to the user’s shares
+/// @param stake Amount of the underlying asset allocation corresponding to the user's shares
+struct UserTier2Info {
+    uint256 shares;
+    uint256 allocation;
+    uint256 stake;
 }
 
 struct VaultTier1 {
@@ -56,6 +63,10 @@ struct StrategyVaultStorage {
 library LibStrategyVault {
     bytes32 constant internal STRATEGY_VAULT_STORAGE_POSITION
         = keccak256("hyperstaking-strategy-vault.storage");
+
+    uint256 constant internal ALLOCATION_POINT_PRECISION = 1e18;
+
+    uint256 constant internal PERCENT_PRECISION = 1e18; // represent 100%
 
     function diamondStorage() internal pure returns (StrategyVaultStorage storage s) {
         bytes32 position = STRATEGY_VAULT_STORAGE_POSITION;

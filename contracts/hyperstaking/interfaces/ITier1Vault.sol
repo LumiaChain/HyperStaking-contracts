@@ -24,7 +24,7 @@ interface ITier1Vault {
         address indexed user,
         uint256 stake,
         uint256 allocation,
-        uint256 revenueFee
+        uint256 allocationFee
     );
 
     //============================================================================================//
@@ -54,6 +54,8 @@ interface ITier1Vault {
      * @return The total withdrawal amount, including the stake, generated revenue, after fees
      */
     function leaveTier1(address strategy, address user, uint256 stake) external returns (uint256);
+
+    //function migrateToTier2(address strategy, address user, uint256 stake) external returns (uint256);
 
     /**
      * @notice Sets the revenue fee for users in a specified strategy
@@ -91,6 +93,32 @@ interface ITier1Vault {
      * @return The user's total contribution amount for the specified strategy (18-dec fraction)
      */
     function userContribution(address strategy, address user) external view returns (uint256);
+
+    /**
+     * @notice Calculates the allocation gain
+     * @dev Based on given user allocation, which could be adjusted by the user proportional stake
+     * @param strategy The strategy from which the fee is calculated
+     * @param user The address of the user
+     * @param stake The user initial stake amount used
+     * @return allocationGain The calculated allocation gain amount
+     */
+    function allocationGain(
+        address strategy,
+        address user,
+        uint256 stake
+    ) external view returns (uint256);
+
+    /**
+     * @notice Calculates the allocation fee based on given allocation gain
+     * @dev Computes a proportional fee expresed in allocation asset
+     * @param strategy The strategy from which the fee is calculated
+     * @param allocation The amount of allocation on which to apply fee
+     * @return feeAmount The calculated fee amount
+     */
+    function allocationFee(
+        address strategy,
+        uint256 allocation
+    ) external view returns (uint256 feeAmount);
 
     /**
      * @notice Returns the revenue for a user based on the current allocation price of a strategy

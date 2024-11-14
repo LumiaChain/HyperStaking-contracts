@@ -17,7 +17,7 @@ import {
     LibStaking, StakingStorage, UserPoolInfo, StakingPoolInfo
 } from "../libraries/LibStaking.sol";
 import {
-    LibStrategyVault, StrategyVaultStorage, UserTier1Info, VaultInfo, VaultTier1
+    LibStrategyVault, StrategyVaultStorage, UserTier1Info, VaultInfo, VaultTier1, VaultTier2
 } from "../libraries/LibStrategyVault.sol";
 
 /**
@@ -46,7 +46,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         StakingStorage storage s = LibStaking.diamondStorage();
         StakingPoolInfo storage pool = s.poolInfo[vault.poolId];
 
-        {
+        { // lock stake
             UserTier1Info storage userVault = v.userInfo[strategy][user];
             UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
@@ -85,19 +85,14 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
         VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
+        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
 
         StakingStorage storage s = LibStaking.diamondStorage();
 
-        uint256 revenueFeeAmount = _calcTier1RevenueFee(
-            strategy,
-            user,
-            stake
-        );
-
-        uint256 allocation = _convertToTier1Allocation(tier1, stake);
+        uint256 allocation = _convertToAllocation(tier1, stake);
         tier1.assetAllocation -= allocation;
 
-        {
+        { // unlock stake
             UserTier1Info storage userVault = v.userInfo[strategy][user];
             UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
@@ -105,12 +100,20 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
             _unlockUserStake(userPool, userVault, tier1, stake);
         }
 
-        vault.asset.safeIncreaseAllowance(strategy, allocation);
-        uint256 exitAmount = IStrategy(strategy).exit(allocation, user);
+        // allocation fee on gain
+        uint256 fee = allocationFee(
+            strategy,
+            allocationGain(strategy, user, stake)
+        );
 
-        withdrawAmount = exitAmount - revenueFeeAmount;
+        vault.asset.safeIncreaseAllowance(strategy, allocation - fee);
+        withdrawAmount = IStrategy(strategy).exit(allocation - fee, user);
 
-        emit Tier1Leave(strategy, user, stake, allocation, revenueFeeAmount);
+        if (fee > 0) {
+            vault.asset.safeTransfer(address(tier2.vaultToken), fee);
+        }
+
+        emit Tier1Leave(strategy, user, stake, allocation, fee);
     }
 
     // ========= Managed ========= //
@@ -120,7 +123,8 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         address strategy,
         uint256 revenueFee
     ) external onlyStrategyVaultManager nonReentrant {
-        require(revenueFee <= 30e16, InvalidRevenueFeeValue()); // 30e16 == 30%
+        uint256 onePercent = LibStrategyVault.PERCENT_PRECISION / 100;
+        require(revenueFee <= 30 * onePercent, InvalidRevenueFeeValue());
 
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         v.vaultTier1Info[strategy].revenueFee = revenueFee;
@@ -154,30 +158,60 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
             return 0;
         }
 
-        return userVault.stakeLocked * LibStaking.TOKEN_PRECISION_FACTOR / tier1.totalStakeLocked;
+        return userVault.stakeLocked * LibStrategyVault.PERCENT_PRECISION / tier1.totalStakeLocked;
+    }
+
+    /// @inheritdoc ITier1Vault
+    function allocationGain(
+        address strategy,
+        address user,
+        uint256 stake
+    ) public view returns (uint256) {
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+        UserTier1Info storage userVault = v.userInfo[strategy][user];
+
+        uint256 currentAllocationPrice = _currentAllocationPrice(strategy);
+
+        // allocation price hasn't increased, no fee is generated
+        if (currentAllocationPrice > userVault.allocationPoint) {
+            return 0;
+        }
+
+        // s * all_point = all
+        // s * all_current = all + gain
+        //
+        // gain = s (all_point - all_current)
+        return
+            stake * (userVault.allocationPoint - currentAllocationPrice)
+            / LibStrategyVault.ALLOCATION_POINT_PRECISION;
+    }
+
+    /// @inheritdoc ITier1Vault
+    function allocationFee(
+        address strategy,
+        uint256 allocation
+    ) public view returns (uint256 feeAmount) {
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+        VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
+        return allocation * tier1.revenueFee / LibStrategyVault.PERCENT_PRECISION;
     }
 
     /// @inheritdoc ITier1Vault
     function userRevenue(address strategy, address user) public view returns (uint256 revenue) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-
-        // current allocation price (stake to asset)
-        uint8 assetDecimals = v.vaultInfo[strategy].asset.decimals();
-        uint256 currentAllocationPrice = IStrategy(strategy).convertToAllocation(10**assetDecimals);
-
         UserTier1Info storage userVault = v.userInfo[strategy][user];
 
-        // allocation price hasn't increased, no revenue is generated
-        if (currentAllocationPrice > userVault.allocationPoint) {
+        // use the whole user locked stake
+        uint256 gain = allocationGain(strategy, user, userVault.stakeLocked);
+
+        // no revenue is generated
+        if (gain == 0) {
             return 0;
         }
 
-        // calc the total amount to withdraw based on asset price and allocation point
-        uint256 totalWithdraw =
-            (userVault.allocationPoint * userVault.stakeLocked) / currentAllocationPrice;
+        uint256 fee = allocationFee(strategy, gain);
 
-        // difference between total withdrawable amount and locked stake
-        revenue = totalWithdraw - userVault.stakeLocked;
+        return IStrategy(strategy).convertToStake(gain - fee);
     }
 
     //============================================================================================//
@@ -242,7 +276,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         // Weighted average calculation for the updated allocation point
         return (
             userVault.stakeLocked * userVault.allocationPoint
-            + newAllocation * LibStaking.TOKEN_PRECISION_FACTOR
+            + newAllocation * LibStrategyVault.PERCENT_PRECISION
         ) / (userVault.stakeLocked + stake);
     }
 
@@ -254,36 +288,30 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
      * @param stake The stake amount to convert to Tier 1 allocation
      * @return The calculated Tier 1 allocation for the given stake amount
      */
-    function _convertToTier1Allocation(
+    function _convertToAllocation(
         VaultTier1 storage tier1,
         uint256 stake
     ) internal view returns (uint256) {
         // amout ratio of the total stake locked in vault
-        uint256 amountRatio = stake * LibStaking.TOKEN_PRECISION_FACTOR / tier1.totalStakeLocked;
-        return amountRatio * tier1.assetAllocation / LibStaking.TOKEN_PRECISION_FACTOR;
+        uint256 amountRatio = stake * LibStrategyVault.PERCENT_PRECISION / tier1.totalStakeLocked;
+        return amountRatio * tier1.assetAllocation / LibStrategyVault.PERCENT_PRECISION;
     }
 
     /**
-     * @notice Calculates the revenue fee for a Tier 1 user based on their withdrawal amount
-     * @dev Computes a proportional revenue fee amunt by adjusting the user's revenue according to
-     *      the withdrawal amount and applying the strategy’s Tier 1 fee rate
-     * @param strategy The strategy from which the user is exiting
-     * @param user The address of the user
-     * @param stake The stake amount the user wishes to withdraw
-     * @return revenueFeeAmount The calculated revenue fee amount
+     * @dev Helper
+     * @dev Price uses asset precision (decimals)
+     * @param strategy The strategy contract address, used for converting `stake` to an allocation
+     * @return Current allocation price (expresed in base stake unit -> to asset)
      */
-    function _calcTier1RevenueFee(
-        address strategy,
-        address user,
-        uint256 stake
-    ) internal view returns (uint256 revenueFeeAmount) {
+    function _currentAllocationPrice(address strategy) internal view returns (uint256) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-        UserTier1Info storage userVault = v.userInfo[strategy][user];
-        VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
+        VaultInfo storage vault = v.vaultInfo[strategy];
 
-        uint256 withdrawRatio = stake * LibStaking.TOKEN_PRECISION_FACTOR / userVault.stakeLocked;
-        uint256 revenue = userRevenue(strategy, user);
-        uint256 revenuePart = revenue * withdrawRatio / LibStaking.TOKEN_PRECISION_FACTOR;
-        revenueFeeAmount = revenuePart * tier1.revenueFee / LibStaking.TOKEN_PRECISION_FACTOR;
+        StakingStorage storage s = LibStaking.diamondStorage();
+        StakingPoolInfo storage pool = s.poolInfo[vault.poolId];
+
+        // current allocation price (stake to asset)
+        uint8 stakeDecimals = pool.currency.decimals();
+        return IStrategy(strategy).convertToAllocation(10 ** stakeDecimals);
     }
 }

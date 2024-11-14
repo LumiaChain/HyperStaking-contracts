@@ -178,9 +178,15 @@ describe("VaultToken", function () {
 
     it("fee from tier1 should increase tier2 shares value", async function () {
       const {
-        staking, tier1, ethPoolId, reserveStrategy, reserveAssetPrice, vaultToken,
+        staking, tier1, tier2, ethPoolId, reserveStrategy, reserveAssetPrice, vaultToken,
         strategyVaultManager, alice, bob,
       } = await loadFixture(deployHyperStaking);
+
+      const price1 = parseEther("2");
+      const price2 = parseEther("4");
+      const priceRatio = price2 / price1;
+
+      await reserveStrategy.setAssetPrice(price1);
 
       const revenueFee = parseUnits("20", 16); // 20% fee
       tier1.connect(strategyVaultManager).setRevenueFee(reserveStrategy, revenueFee);
@@ -194,8 +200,42 @@ describe("VaultToken", function () {
       await staking.stakeDeposit(ethPoolId, reserveStrategy, aliceStakeAmount, alice, { value: aliceStakeAmount });
       await staking.stakeDepositTier2(ethPoolId, reserveStrategy, bobStakeAmount, bob, { value: bobStakeAmount });
 
-      // expect(await vaultToken.totalAssets()).to.be.eq(0); bob stake amount?
-      expect(await vaultToken.totalAssets()).to.be.eq(bobStakeAmount * parseEther("1") / reserveAssetPrice);
+      await reserveStrategy.setAssetPrice(price2);
+
+      let expectedBobAllocation = bobStakeAmount * parseEther("1") / reserveAssetPrice;
+      const expectedBobShares = expectedBobAllocation;
+      expect((await tier2.userTier2Info(reserveStrategy, bob)).shares).to.be.eq(expectedBobShares);
+      expect((await tier2.userTier2Info(reserveStrategy, bob)).allocation).to.be.eq(expectedBobAllocation);
+      expect((await tier2.userTier2Info(reserveStrategy, bob)).stake).to.be.eq(bobStakeAmount * priceRatio);
+
+      expect(await vaultToken.totalAssets()).to.be.eq(expectedBobAllocation);
+
+      // Tier1 withdraw generates fee
+      await staking.connect(alice).stakeWithdraw(ethPoolId, reserveStrategy, aliceStakeAmount, alice);
+
+      const allocationFee = await tier1.allocationFee(
+        reserveStrategy,
+        await tier1.allocationGain(reserveStrategy, alice, aliceStakeAmount),
+      );
+
+      // shares amount does not change, but allocation should increase
+      expectedBobAllocation += allocationFee;
+
+      const precisionError = 1n;
+      const expectedNewBobStake = await reserveStrategy.convertToStake(expectedBobAllocation - precisionError);
+
+      expect((await tier2.userTier2Info(reserveStrategy, bob)).shares).to.be.eq(expectedBobShares);
+      expect((await tier2.userTier2Info(reserveStrategy, bob)).allocation).to.be.eq(expectedBobAllocation - precisionError);
+      expect((await tier2.userTier2Info(reserveStrategy, bob)).stake).to.be.eq(expectedNewBobStake);
+      expect(await vaultToken.totalAssets()).to.be.eq(expectedBobAllocation);
+
+      // actual withdraw
+      await vaultToken.connect(bob).approve(vaultToken, expectedBobShares);
+      await expect(vaultToken.connect(bob).withdraw(expectedBobAllocation - precisionError, bob, bob))
+        .to.changeEtherBalances([bob], [expectedNewBobStake]);
+
+      expect(await vaultToken.totalSupply()).to.be.eq(0);
+      expect(await vaultToken.totalAssets()).to.be.eq(precisionError);
     });
 
     // it("it should be possible to effectively migrate from tier1 to tier2", async function () {

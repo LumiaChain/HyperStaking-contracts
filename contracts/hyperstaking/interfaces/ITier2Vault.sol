@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {VaultTier2} from "../libraries/LibStrategyVault.sol";
+import {VaultTier2, UserTier2Info} from "../libraries/LibStrategyVault.sol";
 
 /**
  * @title ITierVault
@@ -61,6 +61,17 @@ interface ITier2Vault {
      * @return The VaultTier1 struct containing information about this specific tier
      */
     function vaultTier2Info(address strategy) external view returns (VaultTier2 memory);
+
+    /**
+     * @notice Retrieves tier2 vault information specific to a user within a given strategy
+     * @param strategy The address of the strategy
+     * @param user The address of the user
+     * @return A UserTier2Info struct containing the user's specific vault details
+     */
+    function userTier2Info(
+        address strategy,
+        address user
+    ) external view returns (UserTier2Info memory);
 
     // TODO tier2Contribution?
     // function userContribution(address strategy, address user) external view returns (uint256);

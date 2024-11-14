@@ -17,7 +17,7 @@ import {
     LibStaking, StakingStorage, StakingPoolInfo
 } from "../libraries/LibStaking.sol";
 import {
-    LibStrategyVault, StrategyVaultStorage, VaultInfo, VaultTier2
+    LibStrategyVault, StrategyVaultStorage, VaultInfo, VaultTier2, UserTier2Info
 } from "../libraries/LibStrategyVault.sol";
 
 /**
@@ -109,10 +109,28 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
 
     // ========= View ========= //
 
-
     /// @inheritdoc ITier2Vault
     function vaultTier2Info(address strategy) external view returns (VaultTier2 memory) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         return v.vaultTier2Info[strategy];
+    }
+
+    /// @inheritdoc ITier2Vault
+    function userTier2Info(
+        address strategy,
+        address user
+    ) external view returns (UserTier2Info memory) {
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
+
+        uint256 shares = tier2.vaultToken.balanceOf(user);
+        uint256 allocation = tier2.vaultToken.convertToAssets(shares);
+        uint256 stake = IStrategy(strategy).convertToStake(allocation);
+
+        return UserTier2Info({
+            shares: shares,
+            allocation: allocation,
+            stake: stake
+        });
     }
 }

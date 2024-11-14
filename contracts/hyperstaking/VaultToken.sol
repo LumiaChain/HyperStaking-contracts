@@ -126,7 +126,7 @@ contract VaultToken is ERC4626, Ownable2Step {
 
         { // -- actual override change
 
-            // get underlying ERC4626 asset address and approve for Diamond
+            // get underlying asset address and approve for Diamond
             IERC20(asset()).safeIncreaseAllowance(DIAMOND, assets);
 
             // execute Tier2 leave path
