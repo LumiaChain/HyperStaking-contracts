@@ -34,6 +34,9 @@ interface ITier1Vault {
     /// @notice Thrown when attempting to set invalid revenue fee value for tier1
     error InvalidRevenueFeeValue();
 
+    /// @notice Thrown when attempting to withdraw more stake than user has
+    error InsufficientStakeLocked();
+
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
@@ -55,7 +58,12 @@ interface ITier1Vault {
      */
     function leaveTier1(address strategy, address user, uint256 stake) external returns (uint256);
 
-    //function migrateToTier2(address strategy, address user, uint256 stake) external returns (uint256);
+    /**
+     * @notice Migrate Tier1 locked stake to Tier2 liquid vault
+     * @param strategy The strategy address
+     * @param stake The amount of initial stake the user is migrating
+     */
+    function migrateToTier2(address strategy, uint256 stake) external;
 
     /**
      * @notice Sets the revenue fee for users in a specified strategy

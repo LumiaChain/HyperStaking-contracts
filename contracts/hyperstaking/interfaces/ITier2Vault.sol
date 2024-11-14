@@ -15,7 +15,6 @@ interface ITier2Vault {
     event Tier2Join(
         address indexed strategy,
         address indexed user,
-        uint256 stake,
         uint256 allocation
     );
 
@@ -34,9 +33,22 @@ interface ITier2Vault {
      * @notice Join Tier 2 for a specified strategy by staking a certain amount
      * @param strategy The strategy for which the user is joining Tier 2
      * @param user The address of the user
-     * @param stake The stake amount of tokens the user use to join Tier 2
+     * @param stake The stake amount
      */
     function joinTier2(address strategy, address user, uint256 stake) external payable;
+
+    /**
+     * @notice Join Tier 2 for a specified strategy with asset instead of stake
+     * @dev Used in migration process
+     * @param strategy The strategy for which the user is joining Tier 2
+     * @param user The address of the user
+     * @param allocation The asset allocation amount
+     */
+    function joinTier2WithAllocation(
+        address strategy,
+        address user,
+        uint256 allocation
+    ) external;
 
     /**
      * @notice Leave Tier 2 for a specified strategy and asset amount.

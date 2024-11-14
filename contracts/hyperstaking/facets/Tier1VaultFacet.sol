@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {ITier1Vault} from "../interfaces/ITier1Vault.sol";
+import {ITier2Vault} from "../interfaces/ITier2Vault.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
@@ -84,36 +85,31 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     ) external diamondInternal returns (uint256 withdrawAmount) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
-        VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
-        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
 
-        StakingStorage storage s = LibStaking.diamondStorage();
+        uint256 exitAllocation = _leaveTier1(strategy, user, stake);
 
-        uint256 allocation = _convertToAllocation(tier1, stake);
-        tier1.assetAllocation -= allocation;
+        vault.asset.safeIncreaseAllowance(strategy, exitAllocation);
+        withdrawAmount = IStrategy(strategy).exit(exitAllocation, user);
+    }
 
-        { // unlock stake
-            UserTier1Info storage userVault = v.userInfo[strategy][user];
-            UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
+    /// @inheritdoc ITier1Vault
+    function migrateToTier2(address strategy, uint256 stake) external {
+        // use msg.sender to leave tier1 and join tier2
+        uint256 exitAllocation = _leaveTier1(strategy, msg.sender, stake);
 
-            // withdraw does not change user allocation point
-            _unlockUserStake(userPool, userVault, tier1, stake);
+        { // decrease user and pool stake
+            StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+            VaultInfo storage vault = v.vaultInfo[strategy];
+
+            StakingStorage storage s = LibStaking.diamondStorage();
+            StakingPoolInfo storage pool = s.poolInfo[vault.poolId];
+            UserPoolInfo storage userPool = s.userInfo[vault.poolId][msg.sender];
+
+            pool.totalStake -= stake;
+            userPool.staked -= stake;
         }
 
-        // allocation fee on gain
-        uint256 fee = allocationFee(
-            strategy,
-            allocationGain(strategy, user, stake)
-        );
-
-        vault.asset.safeIncreaseAllowance(strategy, allocation - fee);
-        withdrawAmount = IStrategy(strategy).exit(allocation - fee, user);
-
-        if (fee > 0) {
-            vault.asset.safeTransfer(address(tier2.vaultToken), fee);
-        }
-
-        emit Tier1Leave(strategy, user, stake, allocation, fee);
+        ITier2Vault(address(this)).joinTier2WithAllocation(strategy, msg.sender, exitAllocation);
     }
 
     // ========= Managed ========= //
@@ -254,6 +250,53 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         userPool.stakeLocked -= stake;
         userVault.stakeLocked -= stake;
         tier1.totalStakeLocked -= stake;
+    }
+
+    /**
+     * @notice Implementation of leaveTier1
+     * @dev Without exiting strategy,
+     *      shared code used in stake withdrawal, but also during migration
+     * @return exitAllocation allocation which could be exited from strategy
+     */
+    function _leaveTier1(
+        address strategy,
+        address user,
+        uint256 stake
+    ) internal returns (uint256 exitAllocation) {
+
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+        VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
+        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
+
+        StakingStorage storage s = LibStaking.diamondStorage();
+        UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
+
+        require(userPool.stakeLocked >= stake, InsufficientStakeLocked());
+
+        uint256 allocation = _convertToAllocation(tier1, stake);
+        tier1.assetAllocation -= allocation;
+
+        { // unlock stake
+            UserTier1Info storage userVault = v.userInfo[strategy][user];
+
+            // withdraw does not change user allocation point
+            _unlockUserStake(userPool, userVault, tier1, stake);
+        }
+
+        // allocation fee on gain
+        uint256 fee = allocationFee(
+            strategy,
+            allocationGain(strategy, user, stake)
+        );
+
+        if (fee > 0) {
+            vault.asset.safeTransfer(address(tier2.vaultToken), fee);
+        }
+
+        emit Tier1Leave(strategy, user, stake, allocation, fee);
+
+        exitAllocation = allocation - fee;
     }
 
     // ========= View ========= //

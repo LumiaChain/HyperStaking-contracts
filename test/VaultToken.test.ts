@@ -178,7 +178,7 @@ describe("VaultToken", function () {
 
     it("fee from tier1 should increase tier2 shares value", async function () {
       const {
-        staking, tier1, tier2, ethPoolId, reserveStrategy, reserveAssetPrice, vaultToken,
+        staking, tier1, tier2, ethPoolId, reserveStrategy, vaultToken,
         strategyVaultManager, alice, bob,
       } = await loadFixture(deployHyperStaking);
 
@@ -202,7 +202,7 @@ describe("VaultToken", function () {
 
       await reserveStrategy.setAssetPrice(price2);
 
-      let expectedBobAllocation = bobStakeAmount * parseEther("1") / reserveAssetPrice;
+      let expectedBobAllocation = bobStakeAmount * parseEther("1") / price1;
       const expectedBobShares = expectedBobAllocation;
       expect((await tier2.userTier2Info(reserveStrategy, bob)).shares).to.be.eq(expectedBobShares);
       expect((await tier2.userTier2Info(reserveStrategy, bob)).allocation).to.be.eq(expectedBobAllocation);
@@ -238,7 +238,69 @@ describe("VaultToken", function () {
       expect(await vaultToken.totalAssets()).to.be.eq(precisionError);
     });
 
-    // it("it should be possible to effectively migrate from tier1 to tier2", async function () {
-    // });
+    it("it should be possible to effectively migrate from tier1 to tier2", async function () {
+      const {
+        staking, tier1, tier2, ethPoolId, reserveStrategy, testReserveAsset, vaultToken,
+        strategyVaultManager, alice,
+      } = await loadFixture(deployHyperStaking);
+
+      const price1 = parseEther("1");
+      const price2 = parseEther("1.5");
+
+      await reserveStrategy.setAssetPrice(price1);
+
+      const revenueFee = parseUnits("10", 16); // 10% fee
+      tier1.connect(strategyVaultManager).setRevenueFee(reserveStrategy, revenueFee);
+
+      const stakeAmount = parseEther("10");
+
+      // alice stake to tier1
+      await staking.stakeDeposit(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
+
+      await reserveStrategy.setAssetPrice(price2);
+
+      // is should not be possible to migrate more than staked
+      await expect(tier1.connect(alice).migrateToTier2(reserveStrategy, stakeAmount + 1n))
+        .to.be.revertedWithCustomError(tier1, "InsufficientStakeLocked");
+
+      const allocationFee = await tier1.allocationFee(
+        reserveStrategy,
+        await tier1.allocationGain(reserveStrategy, alice, stakeAmount),
+      );
+
+      await tier1.connect(alice).migrateToTier2(reserveStrategy, stakeAmount);
+
+      // check Tier1 values
+      expect((await tier1.userTier1Info(reserveStrategy, alice)).stakeLocked).to.equal(0);
+      expect((await tier1.vaultTier1Info(reserveStrategy)).assetAllocation).to.equal(0);
+      expect((await tier1.vaultTier1Info(reserveStrategy)).totalStakeLocked).to.equal(0);
+
+      // assets
+      expect(await ethers.provider.getBalance(staking)).to.equal(0);
+      expect(await testReserveAsset.balanceOf(tier1)).to.equal(0);
+      expect(await testReserveAsset.balanceOf(vaultToken)).to.equal(stakeAmount);
+      expect(await vaultToken.totalAssets()).to.be.eq(stakeAmount);
+
+      // staking
+      expect((await staking.userPoolInfo(ethPoolId, alice)).staked).to.equal(0);
+      expect((await staking.userPoolInfo(ethPoolId, alice)).stakeLocked).to.equal(0);
+      expect((await staking.poolInfo(ethPoolId)).totalStake).to.equal(0);
+
+      // check Tier2 shares
+      const shares = await vaultToken.convertToShares(stakeAmount - allocationFee); // assume price == 1
+      const allocation = await vaultToken.convertToAssets(shares);
+      const expectedStake = allocation * price2 / parseEther("1");
+
+      expect((await tier2.userTier2Info(reserveStrategy, alice)).shares).to.be.eq(shares);
+      expect((await tier2.userTier2Info(reserveStrategy, alice)).allocation).to.be.eq(allocation);
+      expect((await tier2.userTier2Info(reserveStrategy, alice)).stake).to.be.eq(expectedStake);
+
+      // expectedStake is lower than it would be if deposited directly into tier2
+      expect(expectedStake).to.be.lt((stakeAmount) * price2 / parseEther("1"));
+
+      // redeem
+      await expect(vaultToken.connect(alice).redeem(shares, alice, alice))
+        .to.changeEtherBalances([alice], [expectedStake]);
+    });
   });
 });

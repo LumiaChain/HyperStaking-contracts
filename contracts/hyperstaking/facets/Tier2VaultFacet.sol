@@ -80,7 +80,23 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         vault.asset.safeIncreaseAllowance(address(tier2.vaultToken), allocation);
         tier2.vaultToken.deposit(allocation, user);
 
-        emit Tier2Join(strategy, user, stake, allocation);
+        emit Tier2Join(strategy, user, allocation);
+    }
+
+    /// @inheritdoc ITier2Vault
+    function joinTier2WithAllocation(
+        address strategy,
+        address user,
+        uint256 allocation
+    ) external diamondInternal {
+        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
+
+        vault.asset.safeIncreaseAllowance(address(tier2.vaultToken), allocation);
+        tier2.vaultToken.deposit(allocation, user);
+
+        emit Tier2Join(strategy, user, allocation);
     }
 
     /// @inheritdoc ITier2Vault
