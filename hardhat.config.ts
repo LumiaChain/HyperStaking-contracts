@@ -44,13 +44,18 @@ const config: HardhatUserConfig = {
       url: process.env.LOCAL_RPC_URL,
       chainId: 31337,
     },
+    // ethereum: {
+    //   url: process.env.ETHEREUM_RPC_URL,
+    //   chainId: 1,
+    //   accounts: [process.env.DEPLOYER_PRIVATE_KEY!],
+    //   gasPrice: 20e9, // 20 Gwei
+    // },
     sepolia: {
       url: process.env.SEPOLIA_RPC_URL,
       chainId: 11155111,
       accounts: {
         mnemonic: process.env.WALLET_MNEMONIC,
       },
-      initialBaseFeePerGas: 2500000000,
     },
     holesky: {
       url: process.env.HOLESKY_RPC_URL,
@@ -58,7 +63,18 @@ const config: HardhatUserConfig = {
       accounts: {
         mnemonic: process.env.WALLET_MNEMONIC,
       },
-      initialBaseFeePerGas: 2500000000,
+    },
+    // lumia_mainnet: {
+    //   url: process.env.LUMIA_MAINNET_RPC_URL,
+    //   chainId: 994873017,
+    //   accounts: [process.env.DEPLOYER_PRIVATE_KEY!],
+    // },
+    lumia_testnet: {
+      url: process.env.LUMIA_TESTNET_RPC_URL,
+      chainId: 1952959480,
+      accounts: {
+        mnemonic: process.env.WALLET_MNEMONIC,
+      },
     },
   },
 
