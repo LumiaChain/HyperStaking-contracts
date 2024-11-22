@@ -1,29 +1,39 @@
 import { ethers } from "hardhat";
+import { ZeroAddress } from "ethers";
+import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/facets/StakingFacet";
 
-const DIAMOND_ADDRESS = "0xfE72b15d3Cb70224E91aBdCa5531966F48180876";
-// const TOKEN_ADDRESS = "0x";
+import * as holeskyDeployment from "../ignition/deployments/holesky/deployed_addresses.json";
 
 async function main() {
-  const stakingFacet = await ethers.getContractAt("IStaking", DIAMOND_ADDRESS);
+  const stakingManager = (await ethers.getSigners())[1];
 
-  const nativeTokenAddress = await stakingFacet.nativeTokenAddress();
-  console.log("Native token address:", nativeTokenAddress);
+  const network = await ethers.provider.getNetwork();
+  console.log("network:", network.name, ", chainId:", network.chainId);
 
-  const TOKEN_ADDRESS = nativeTokenAddress;
+  const diamondAddress = holeskyDeployment["DiamondModule#Diamond"];
+  console.log("diamond address:", diamondAddress);
+
+  const stakingFacet = await ethers.getContractAt("IStaking", diamondAddress);
+
+  // the pool is created for the native coin
+  const nativeTokenAddress = ZeroAddress;
+  const currency = { token: nativeTokenAddress } as CurrencyStruct;
 
   console.log("Creating staking pool...");
-  const tx = await stakingFacet.createStakingPool(TOKEN_ADDRESS);
+  const tx = await stakingFacet.connect(stakingManager).createStakingPool(currency);
   console.log("TX:", tx);
   await tx.wait();
 
-  const idx = await stakingFacet.stakeTokenPoolCount(TOKEN_ADDRESS);
-  console.log("Pool idx:", idx);
-  const poolId = await stakingFacet.generatePoolId(TOKEN_ADDRESS, idx - 1n);
+  const poolCount = await stakingFacet.stakeTokenPoolCount(currency);
+  const poolIdx = poolCount - 1n;
 
-  if (TOKEN_ADDRESS === nativeTokenAddress) {
+  console.log("Pool idx:", poolIdx);
+  const poolId = await stakingFacet.generatePoolId(currency, poolIdx);
+
+  if (currency.token === ZeroAddress) {
     console.log(`Staking pool for native token created, id: 0x${poolId.toString(16)}`);
   } else {
-    console.log(`Staking pool for token ${TOKEN_ADDRESS} created, id: 0x${poolId.toString(16)}`);
+    console.log(`Staking pool for token ${currency.token} created, id: 0x${poolId.toString(16)}`);
   }
 }
 

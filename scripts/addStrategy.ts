@@ -1,14 +1,37 @@
 import { ethers } from "hardhat";
+import { parseEther } from "ethers";
 
-const DIAMOND_ADDRESS = "0xfE72b15d3Cb70224E91aBdCa5531966F48180876";
-const POOL_ID = "0x5909197e2a2837216e8440fcb020f8c5959b43e88180524e1b26697ddd72b67e";
-const STRATEGY_ADDRESS = "0xFeA618E29263A0501533fd438FD33618139F6E7b";
-const VAULT_TOKEN = "0x0e4bf0D7e9198756B821446C6Fb7A17Dfbfca198"; // apxETH, testnet (holesky)
+import * as holeskyAddresses from "../ignition/parameters.holesky.json";
+
+const REVENUE_FEE = parseEther("0.02"); // 2% fee
 
 async function main() {
-  const vaultFacet = await ethers.getContractAt("IStrategyVault", DIAMOND_ADDRESS);
+  const strategyVaultManager = (await ethers.getSigners())[2];
+  console.log("strategy manager:", strategyVaultManager.address);
 
-  const tx = await vaultFacet.addStrategy(POOL_ID, STRATEGY_ADDRESS, VAULT_TOKEN);
+  const network = await ethers.provider.getNetwork();
+  console.log("network:", network.name, ", chainId:", network.chainId);
+
+  const diamond = holeskyAddresses.General.diamond;
+  const strategy = holeskyAddresses.General.dineroStrategy;
+  const vaultAsset = holeskyAddresses.DineroStrategyModule.autoPxEth;
+  const poolId = holeskyAddresses.General.defaultNativePool;
+
+  console.log("diamond address:", diamond);
+  console.log("strategy address:", strategy);
+  console.log("vault asset:", vaultAsset);
+  console.log("pool id:", poolId);
+  console.log("revenue fee:", REVENUE_FEE.toString());
+
+  const factoryFacet = await ethers.getContractAt("IVaultFactory", diamond);
+
+  const tx = await factoryFacet.connect(strategyVaultManager).addStrategy(
+    poolId,
+    strategy,
+    vaultAsset,
+    REVENUE_FEE,
+  );
+
   console.log("TX:", tx);
   const receipt = await tx.wait();
 

@@ -3,6 +3,15 @@ import { getSelectors, FacetCutAction } from "../../scripts/libraries/diamond";
 import { getContractInterface } from "../../scripts/libraries/hardhat";
 
 import DiamondModule from "./Diamond";
+import { solidityPacked, keccak256 } from "ethers";
+
+const STAKING_MANAGER_ROLE = keccak256(
+  solidityPacked(["string"], ["STAKING_MANAGER_ROLE"]),
+);
+
+const STRATEGY_VAULT_MANAGER_ROLE = keccak256(
+  solidityPacked(["string"], ["STRATEGY_VAULT_MANAGER_ROLE"]),
+);
 
 // HyperStakingModule is in fact a proxy upgrade which adds the Facets to the Diamond
 const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
@@ -30,7 +39,6 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
 
   const aclInterface = getContractInterface("HyperStakingAcl");
   const aclInterfaceSelectors = getSelectors(aclInterface).remove(["supportsInterface(bytes4)"]);
-  ;
 
   // --- cut struct
 
@@ -65,7 +73,9 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const initCall = hyperStakingInitInterface.encodeFunctionData("init");
 
   const diamondCut = m.contractAt("IDiamondCut", diamond);
-  m.call(diamondCut, "diamondCut", [cut, hyperStakingInit, initCall], { from: owner });
+  const diamondCutFuture = m.call(
+    diamondCut, "diamondCut", [cut, hyperStakingInit, initCall], { from: owner },
+  );
 
   // --- init facets
 
@@ -74,26 +84,26 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const tier1 = m.contractAt("ITier1Vault", diamond);
   const tier2 = m.contractAt("ITier2Vault", diamond);
 
-  const roles = m.contractAt("IHyperStakingRoles", diamond);
+  // const roles = m.contractAt("IHyperStakingRoles", diamond);
+  // const STAKING_MANAGER_ROLE = m.staticCall(roles, "STAKING_MANAGER_ROLE", [], 0);
+  // const STRATEGY_VAULT_MANAGER_ROLE = m.staticCall(roles, "STRATEGY_VAULT_MANAGER_ROLE", [], 0);
+
   const acl = m.contractAt("HyperStakingAcl", diamond);
 
   // --- grant roles
-
-  const STAKING_MANAGER_ROLE = m.staticCall(roles, "STAKING_MANAGER_ROLE", []);
-  const STRATEGY_VAULT_MANAGER_ROLE = m.staticCall(roles, "STRATEGY_VAULT_MANAGER_ROLE", []);
 
   m.call(
     acl,
     "grantRole",
     [STAKING_MANAGER_ROLE, stakingManager],
-    { id: "grantRoleStakingManager" },
+    { id: "grantRoleStakingManager", after: [diamondCutFuture] },
   );
 
   m.call(
     acl,
     "grantRole",
     [STRATEGY_VAULT_MANAGER_ROLE, strategyVaultManager],
-    { id: "grantRoleStrategyVaultManager" },
+    { id: "grantRoleStrategyVaultManager", after: [diamondCutFuture] },
   );
 
   // --- return

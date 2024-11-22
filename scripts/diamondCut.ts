@@ -4,23 +4,26 @@ import { getContractInterface } from "./libraries/hardhat";
 
 import { ZeroAddress } from "ethers";
 
-const DIAMOND_ADDRESS = "0xfE72b15d3Cb70224E91aBdCa5531966F48180876";
-// const FACET_ADDRESS = "0xde53c05e25328C1Ac90d9d1dE57291171361ba76";
+import * as holeskyAddresses from "../ignition/parameters.holesky.json";
 
 async function main() {
-  const newVaultFacet = await ethers.deployContract("StrategyVaultFacet");
-  await newVaultFacet.waitForDeployment();
+  const diamond = holeskyAddresses.General.diamond;
 
-  // const newVaultFacet = await ethers.getContractAt("StrategyVaultFacet", FACET_ADDRESS);
-  console.log("vaultFacet address:", newVaultFacet.target);
+  const newVaultFactoryFacet = await ethers.deployContract("VaultFactoryFacet");
+  await newVaultFactoryFacet.waitForDeployment();
 
-  const facetInterface = getContractInterface("IStrategyVault");
-  const selectors = getSelectors(facetInterface).getByNames(["deposit"]);
+  // const newVaultFactoryFacet = await ethers.getContractAt("IVaultFactory", FACET_ADDRESS);
+
+  console.log("new VaultFactoryFacet address:", newVaultFactoryFacet.target);
+
+  const facetInterface = getContractInterface("IVaultFactory");
+  const selectors = getSelectors(facetInterface);
+  // const selectors = getSelectors(facetInterface).getByNames(["deposit"]);
   console.log("Selectors:", selectors);
 
   const cut = [
     {
-      facetAddress: newVaultFacet.target,
+      facetAddress: newVaultFactoryFacet.target,
       action: FacetCutAction.Replace,
       functionSelectors: selectors,
     },
@@ -28,7 +31,7 @@ async function main() {
 
   const diamondCut = await ethers.getContractAt(
     "IDiamondCut",
-    DIAMOND_ADDRESS,
+    diamond,
   );
 
   console.log(cut);
