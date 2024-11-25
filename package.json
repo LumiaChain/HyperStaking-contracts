@@ -31,13 +31,13 @@
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-prettier": "^5.2.1",
     "ethers": "^6.13.2",
-    "hardhat": "^2.22.15",
+    "hardhat": "^2.22.16",
     "hardhat-contract-sizer": "^2.10.0",
-    "typechain": "^8.3.2",
     "husky": "^9.1.5",
     "prettier": "^3.3.3",
     "prettier-plugin-solidity": "^1.4.1",
     "solhint": "^5.0.3",
-    "solidity-docgen": "^0.6.0-beta.36"
+    "solidity-docgen": "^0.6.0-beta.36",
+    "typechain": "^8.3.2"
   }
 }
