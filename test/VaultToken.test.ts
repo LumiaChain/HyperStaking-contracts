@@ -85,6 +85,10 @@ describe("VaultToken", function () {
       const lpAmount = await vaultToken.previewDeposit(allocation);
 
       expect(lpAfter).to.be.eq(lpBefore + lpAmount);
+
+      // stake values should be 0 in tier2
+      expect((await staking.userPoolInfo(ethPoolId, alice)).stakeLocked).to.equal(0);
+      expect((await staking.poolInfo(ethPoolId)).totalStake).to.equal(0);
     });
 
     it("shars should be minted equally regardless of the deposit order", async function () {

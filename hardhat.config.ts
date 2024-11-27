@@ -2,6 +2,7 @@ import { HardhatUserConfig, task } from "hardhat/config";
 
 import "@nomicfoundation/hardhat-toolbox";
 import "@nomicfoundation/hardhat-foundry";
+import "@typechain/hardhat";
 import "hardhat-contract-sizer";
 import "solidity-docgen";
 
@@ -35,6 +36,10 @@ const config: HardhatUserConfig = {
         },
       },
     ],
+  },
+  typechain: {
+    outDir: "typechain-types",
+    target: "ethers-v6",
   },
 
   defaultNetwork: "hardhat",

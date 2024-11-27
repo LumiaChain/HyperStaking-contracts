@@ -119,18 +119,13 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         validate(poolId, strategy)
     {
         StakingStorage storage s = LibStaking.diamondStorage();
-
         StakingPoolInfo storage pool = s.poolInfo[poolId];
-        UserPoolInfo storage userPool = s.userInfo[poolId][to];
 
         pool.currency.transferFrom(
             msg.sender,
             address(this),
             stake
         );
-
-        pool.totalStake += stake;
-        userPool.staked += stake;
 
         // will lock user stake
         ITier2Vault(address(this)).joinTier2(strategy, to, stake);
