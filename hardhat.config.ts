@@ -81,6 +81,13 @@ const config: HardhatUserConfig = {
         mnemonic: process.env.WALLET_MNEMONIC,
       },
     },
+    bsc_testnet: {
+      url: process.env.BSC_TESTNET_RPC_URL,
+      chainId: 97,
+      accounts: {
+        mnemonic: process.env.WALLET_MNEMONIC,
+      },
+    },
   },
 
   gasReporter: {
