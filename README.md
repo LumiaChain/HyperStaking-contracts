@@ -4,14 +4,15 @@ This repository contains the HyperStaking contracts, built using Hardhat for tes
 
 ## Project Overview
 
-This project introduces multiple staking pools and a range of yield-generating strategies, allowing users to stake various tokens into different pools, each potentially linked to multiple strategies. The system is designed to easily accommodate new pools and strategies as needed.
+This project introduces multiple staking pools and a range of yield-generating strategies, allowing users to stake various tokens into different pools. The system is designed to easily accommodate new pools and strategies as needed.
 
 ### Key Features:
 - **Diamond Proxy Architecture**: HyperStaking is built on the ERC-2535 standard, allowing modular and upgradeable contract functionality.
-- **Staking Pools**: Supports multiple staking pools, each capable of integrating with various strategies.
-- **Revenue Strategies**: Pools can be linked to multiple yield-generating strategies.
-Yield generation strategies for staked tokens.
-- **Multi-Token Rewards**: Supports distributing multiple rewards per strategy, based on user contribution.
+- **Staking Pools**: Supports staking pools, capable of integrating with various strategies.
+- **Revenue Strategies**: Pools are linked to yield-generating strategies.
+- **ERC4626 Integration**: Tier 2 utilizes the ERC4626 standard for vaults, ensuring compatibility with DeFi, where LP tokens represent the staked ETH and its associated revenue.
+- **Revarding Fee Logic**: Introduces a fee system for Tier 1, calculated based on the revenue generated from the underlying asset (not the stake itself). Fees are distributed among LP token holders, enhancing the value of Tier 2 shares.
+- **Hyperlane Integration (In Progress)**: Building a cross-chain bridge using Hyperlane for interaction between chains. This includes collateral-synthetic token bridging.
 
 ### Testing
 
@@ -29,8 +30,7 @@ Ensure code follows standards and is properly formatted using:
 
 ```bash
 npm run prettier          # Formats Solidity files using Prettier
-npm run lint_sol          # Checks Solidity files for formatting issues
-npm run lint_js           # Lints JS and TS files using ESLint
+npm run lint              # Lints Solidity and JS/TS files for formatting issues
 npm run check             # Runs Solhint to check Solidity code quality
 ```
 
@@ -52,4 +52,4 @@ npx hardhat ignition deploy ignition/modules/HyperStaking.ts --network holesky
 
 ## Foundry Integration
 
-The foundry-plugin has been added to this project to enhance testing and development, allowing for the integration of external tools and libraries, such as Solmate, to streamline the development process.
+The foundry-plugin has been added to this project to enhance testing and development, allowing for the integration of external tools and libraries, such as Solmate.
