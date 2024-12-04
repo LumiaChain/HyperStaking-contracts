@@ -4,6 +4,7 @@ import "@nomicfoundation/hardhat-toolbox";
 import "@nomicfoundation/hardhat-foundry";
 import "@typechain/hardhat";
 import "hardhat-contract-sizer";
+import "hardhat-switch-network";
 import "solidity-docgen";
 
 import dotenv from "dotenv";
