@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.27;
+pragma solidity =0.8.27;
 
 import {DineroERC20} from "./DineroERC20.sol";
 import {Errors} from "./libraries/Errors.sol";
