@@ -12,7 +12,7 @@ This project introduces multiple staking pools and a range of yield-generating s
 - **Revenue Strategies**: Pools are linked to yield-generating strategies.
 - **ERC4626 Integration**: Tier 2 utilizes the ERC4626 standard for vaults, ensuring compatibility with DeFi, where LP tokens represent the staked ETH and its associated revenue.
 - **Revarding Fee Logic**: Introduces a fee system for Tier 1, calculated based on the revenue generated from the underlying asset (not the stake itself). Fees are distributed among LP token holders, enhancing the value of Tier 2 shares.
-- **Hyperlane Integration (In Progress)**: Building a cross-chain bridge using Hyperlane for interaction between chains. This includes collateral-synthetic token bridging.
+- **Hyperlane Integration (In Progress)**: Building a cross-chain bridge using Hyperlane for interaction between chains. This includes xerc20/lockbox token bridging.
 
 ### Testing
 
