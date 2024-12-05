@@ -11,7 +11,7 @@ export async function deployContract<ContractType>(
   contractName: string,
   args: any[], // eslint-disable-line @typescript-eslint/no-explicit-any
 ): Promise<{ contract: ContractType; receipt: ContractTransactionReceipt; }> {
-  const confirmations = 1;
+  const confirmations = 5;
   const factory = await ethers.getContractFactory(contractName, deployer);
 
   // call the deploy function
@@ -33,4 +33,22 @@ export async function deployContract<ContractType>(
   }
 
   return { contract: contractInstance, receipt };
+}
+
+export async function deployContractVerbose<ContractType>(
+  deployer: Signer,
+  contractName: string,
+  args: any[], // eslint-disable-line @typescript-eslint/no-explicit-any
+): Promise<ContractType> {
+  const networkName = (await ethers.provider.getNetwork()).name;
+
+  const { contract, receipt } = await deployContract<ContractType>(
+    deployer,
+    contractName,
+    args,
+  );
+
+  console.log(`[${networkName}] ${contractName} deployed at: ${receipt.contractAddress}, tx_hash: ${receipt.hash}`);
+
+  return contract;
 }

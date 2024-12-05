@@ -37,21 +37,16 @@ describe("XBridge", function () {
 
     const erc20 = await shared.deloyTestERC20(tokenName, tokenSymbol);
     const xerc20A = await shared.deloyTestXERC20(mailboxAddress, tokenName, tokenSymbol);
-    const xerc20B = await shared.deloyTestXERC20(mailboxAddress, tokenName, tokenSymbol);
-
     const lockbox = (await ignition.deploy(LumiaXERC20LockboxModule, {
       parameters: {
         LumiaXERC20LockboxModule: {
           mailbox: mailboxAddress,
           destination: 31337,
-          recipient: await xerc20B.getAddress(),
           xerc20Address: await xerc20A.getAddress(),
           erc20Address: await erc20.getAddress(),
         },
       },
     })).xERC20Lockbox;
-
-    const { lumiaReceiver } = await ignition.deploy(LumiaReceiverModule);
 
     const chainA: ChainADeployment = {
       mailbox,
@@ -59,6 +54,9 @@ describe("XBridge", function () {
       xerc20: xerc20A,
       lockbox,
     };
+
+    const xerc20B = await shared.deloyTestXERC20(mailboxAddress, tokenName, tokenSymbol);
+    const { lumiaReceiver } = await ignition.deploy(LumiaReceiverModule);
 
     const chainB: ChainBDeployment = {
       mailbox,
@@ -70,6 +68,7 @@ describe("XBridge", function () {
 
     // chainA
     await xerc20A.setLockbox(lockbox);
+    await lockbox.setRecipient(xerc20B);
 
     // chainB
     const mintingLimit = parseEther("1000000");

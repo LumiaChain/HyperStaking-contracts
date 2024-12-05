@@ -31,6 +31,8 @@ contract LumiaXERC20Lockbox is XERC20Lockbox, Ownable2Step {
     error InvalidMailbox(address badMailbox);
     error InvalidRecipient(address badRecipient);
 
+    error RecipientUnset();
+
     // ========= Events ========= //
 
     event ReturnMessageSent(address indexed sender, uint256 amount);
@@ -46,7 +48,6 @@ contract LumiaXERC20Lockbox is XERC20Lockbox, Ownable2Step {
     /**
      * @param mailbox_ The address of the mailbox contract, used for cross-chain communication
      * @param destination_ Chain ID of the route destination for token return
-     * @param recipient_ The address of destination chan contract
      * @param xerc20_ The address of the cross-chain ERC20 token
      * @param erc20_ The address of the standard ERC20 token
      * @param isNative_ Native token (true) or a standard token (false)
@@ -54,14 +55,12 @@ contract LumiaXERC20Lockbox is XERC20Lockbox, Ownable2Step {
     constructor(
         address mailbox_,
         uint32 destination_,
-        address recipient_,
         address xerc20_,
         address erc20_,
         bool isNative_
     ) XERC20Lockbox(xerc20_, erc20_, isNative_) Ownable(msg.sender) {
         setMailbox(mailbox_);
         setDestination(destination_);
-        setRecipient(recipient_);
     }
 
     //============================================================================================//
@@ -74,6 +73,8 @@ contract LumiaXERC20Lockbox is XERC20Lockbox, Ownable2Step {
      * @param amount_ Amount of tokens to return
      */
     function returnToken(uint256 amount_) external payable {
+        require(recipient != address(0), RecipientUnset());
+
         // erc20 -> xerc20
         _deposit(address(this), amount_);
 
