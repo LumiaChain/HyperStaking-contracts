@@ -72,6 +72,8 @@ describe("Strategy", function () {
       defaultRevenueFee,
     );
 
+    // -------------------------------------------
+
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond

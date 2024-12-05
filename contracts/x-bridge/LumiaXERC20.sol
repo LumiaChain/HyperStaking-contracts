@@ -7,6 +7,7 @@ import {IMailbox} from "../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../external/hyperlane/libs/TypeCasts.sol";
 
 import {ReturnMessage} from "./libraries/ReturnMessage.sol";
+import {ILumiaReceiver} from "./interfaces/ILumiaReceiver.sol";
 
 /**
  * @title LumiaXERC20
@@ -22,7 +23,7 @@ contract LumiaXERC20 is XERC20 {
     address public originLockbox;
 
     /// Actual of the contract which should receive message (ReceivedMessage)
-    address public lumiaReceiver;
+    ILumiaReceiver public lumiaReceiver;
 
     address public lastSender;
     bytes public lastData;
@@ -96,23 +97,23 @@ contract LumiaXERC20 is XERC20 {
         bytes calldata data_
     ) external payable {
         require(originLockbox != address(0), OriginLockboxNotSet());
-        require(lumiaReceiver != address(0), LumiaReceiverNotSet());
+        require(address(lumiaReceiver) != address(0), LumiaReceiverNotSet());
 
         emit ReceivedMessage(origin_, sender_, msg.value, string(data_));
 
         lastSender = TypeCasts.bytes32ToAddress(sender_);
         lastData = data_;
 
+        require(
+            lastSender == address(originLockbox),
+            NotFromLumiaLockbox(lastSender)
+        );
+
         // parse data_ (ReturnMessage)
         address returnSender = TypeCasts.bytes32ToAddress(data_.returnSender());
         uint256 returnAmount = data_.returnAmount();
 
-        require(
-            returnSender == address(originLockbox),
-            NotFromLumiaLockbox(returnSender)
-        );
-
-        
+        lumiaReceiver.tokensReceived(returnAmount);
 
         emit ReturnMessageReceived(returnSender, returnAmount);
     }
@@ -129,8 +130,8 @@ contract LumiaXERC20 is XERC20 {
             InvalidMailbox(newMailbox_)
         );
 
-        mailbox = IMailbox(newMailbox_);
         emit MailboxUpdated(address(mailbox), newMailbox_);
+        mailbox = IMailbox(newMailbox_);
     }
 
     /**
@@ -138,8 +139,8 @@ contract LumiaXERC20 is XERC20 {
      * @param newLockbox_ The new origin lockbox address
      */
     function setOriginLockbox(address newLockbox_) public onlyOwner {
-        originLockbox = newLockbox_;
         emit OriginLockboxUpdated(originLockbox, newLockbox_);
+        originLockbox = newLockbox_;
     }
 
     /**
@@ -152,7 +153,7 @@ contract LumiaXERC20 is XERC20 {
             InvalidLumiaReceiver(newReceiver_)
         );
 
-        lumiaReceiver = newReceiver_;
-        emit LumiaReceiverUpdated(lumiaReceiver, newReceiver_);
+        emit LumiaReceiverUpdated(address(lumiaReceiver), newReceiver_);
+        lumiaReceiver = ILumiaReceiver(newReceiver_);
     }
 }

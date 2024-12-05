@@ -100,6 +100,17 @@ contract LumiaXERC20Lockbox is XERC20Lockbox, Ownable2Step {
         emit ReturnMessageSent(msg.sender, amount_);
     }
 
+    // ========= View ========= //
+
+    /// @notice Helper: separated function for getting mailbox dispatch quote
+    function quoteDispatch(uint256 amount_) external view returns (uint256) {
+        return mailbox.quoteDispatch(
+            destination,
+            TypeCasts.addressToBytes32(recipient),
+            generateBody(msg.sender, amount_)
+        );
+    }
+
     /// @notice Helper: separated function for generating hyperlane message body
     function generateBody(address sender_, uint256 amount_) public pure returns (bytes memory body) {
         body = ReturnMessage.serialize(
@@ -121,8 +132,8 @@ contract LumiaXERC20Lockbox is XERC20Lockbox, Ownable2Step {
             InvalidMailbox(newMailbox_)
         );
 
-        mailbox = IMailbox(newMailbox_);
         emit MailboxUpdated(address(mailbox), newMailbox_);
+        mailbox = IMailbox(newMailbox_);
     }
 
     /**
@@ -130,8 +141,8 @@ contract LumiaXERC20Lockbox is XERC20Lockbox, Ownable2Step {
      * @param newDestination_ The new destination chain ID
      */
     function setDestination(uint32 newDestination_) public onlyOwner {
-        destination = newDestination_;
         emit DestinationUpdated(destination, newDestination_);
+        destination = newDestination_;
     }
 
     /**
@@ -140,7 +151,7 @@ contract LumiaXERC20Lockbox is XERC20Lockbox, Ownable2Step {
      */
     function setRecipient(address newRecipient_) public onlyOwner {
         require(newRecipient_ != address(0), InvalidRecipient(newRecipient_));
-        recipient = newRecipient_;
         emit RecipientUpdated(recipient, newRecipient_);
+        recipient = newRecipient_;
     }
 }

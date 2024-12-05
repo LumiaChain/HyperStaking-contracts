@@ -2,34 +2,23 @@
 pragma solidity =0.8.27;
 
 import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
-
-import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {IXERC20} from "../external/defi-wonderland/interfaces/IXERC20.sol";
 
-contract LumiaReceiver is Ownable2Step {
-    using SafeERC20 for IERC20;
+
+import {ILumiaReceiver} from "./interfaces/ILumiaReceiver.sol";
+
+contract LumiaReceiver is ILumiaReceiver, Ownable2Step {
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    /// @notice Token address -> amount of tokens waiting to be bridged
-    mapping(address => uint256) public waitings;
+    /// @inheritdoc ILumiaReceiver
+    mapping(address xerc20 => uint256) public waitings;
 
     /// @notice Tokens allowed for processing (enumerable set can be added later)
     EnumerableSet.AddressSet private registeredTokens;
 
     /// @notice Address of the Lumia broker
     address public lumiaBroker;
-
-    // ========= Errors ========= //
-
-    error NotRegisteredToken(address token);
-    error UnauthorizedBroker(address sender);
-
-    // ========= Events ========= //
-
-    event TokenRegistered(address indexed token, bool status);
-    event TokensReceived(address indexed token, uint256 amount);
-    event TokensEmitted(address indexed token, uint256 amount);
-    event BrokerUpdated(address indexed oldBroker, address indexed newBroker);
 
     // ========= Modifiers ========= //
 
@@ -60,10 +49,7 @@ contract LumiaReceiver is Ownable2Step {
 
     // ========= Registered ========= //
 
-    /**
-     * @notice Records tokens received from bridging
-     * @param amount_ The amount of tokens received
-     */
+    /// @inheritdoc ILumiaReceiver
     function tokensReceived(uint256 amount_) external onlyRegistered(msg.sender) {
         waitings[msg.sender] -= amount_;
 
@@ -72,27 +58,20 @@ contract LumiaReceiver is Ownable2Step {
 
     // ========= Broker ========= //
 
-    /**
-     * @notice Emits tokens to the broker for further processing
-     * @param token_ The token address to emit
-     * @param amount_ The amount of tokens to emit
-     */
+    /// @inheritdoc ILumiaReceiver
     function emitTokens(address token_, uint256 amount_) external onlyBroker {
         require(registeredTokens.contains(token_), NotRegisteredToken(token_));
 
         waitings[token_] += amount_;
-        IERC20(token_).safeTransfer(lumiaBroker, amount_);
+
+        IXERC20(token_).mint(lumiaBroker, amount_);
 
         emit TokensEmitted(token_, amount_);
     }
 
     // ========= Owner ========= //
 
-    /**
-     * @notice Updates the registration status of a token
-     * @param token_ The token address to register or unregister
-     * @param status_ The registration status (true to register, false to unregister)
-     */
+    /// @inheritdoc ILumiaReceiver
     function updateRegisteredToken(address token_, bool status_) external onlyOwner {
         if (status_) {
             registeredTokens.add(token_);
@@ -108,7 +87,7 @@ contract LumiaReceiver is Ownable2Step {
      * @param newBroker_ The new broker address
      */
     function setBroker(address newBroker_) external onlyOwner {
-        lumiaBroker = newBroker_;
         emit BrokerUpdated(lumiaBroker, newBroker_);
+        lumiaBroker = newBroker_;
     }
 }

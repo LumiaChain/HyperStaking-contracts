@@ -1,13 +1,24 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 
-const LumiaXERC20Module = buildModule("LumiaXERC20Module", (m) => {
-  const erc20Address = m.getParameter("erc20Address");
+const LumiaXERC20LockboxModule = buildModule("LumiaXERC20LockboxModule", (m) => {
+  const mailbox = m.getParameter("mailbox");
+  const destination = m.getParameter("destination");
+  const recipient = m.getParameter("recipient");
+
   const xerc20Address = m.getParameter("xerc20Address");
+  const erc20Address = m.getParameter("erc20Address");
   const native = m.getParameter("native", false);
 
-  const xERC20Lockbox = m.contract("LumiaXERC20Lockbox", [erc20Address, xerc20Address, native]);
+  const xERC20Lockbox = m.contract("LumiaXERC20Lockbox", [
+    mailbox,
+    destination,
+    recipient,
+    xerc20Address,
+    erc20Address,
+    native,
+  ]);
 
   return { xERC20Lockbox };
 });
 
-export default LumiaXERC20Module;
+export default LumiaXERC20LockboxModule;

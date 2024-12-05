@@ -14,7 +14,8 @@ import {IMailbox} from "../external/hyperlane/interfaces/IMailbox.sol";
 // ============ External Imports ============
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Mailbox is IMailbox, Ownable {
+/// @dev Test contract based on hyperlane Mailbox
+contract OneChainMailbox is IMailbox, Ownable {
     uint8 public constant VERSION = 33;
 
     // ============ Libraries ============
@@ -175,10 +176,12 @@ contract Mailbox is IMailbox, Ownable {
 
         // Check that the message was intended for this mailbox.
         require(_message.version() == VERSION, "Mailbox: bad version");
-        require(
-            _message.destination() == localDomain,
-            "Mailbox: unexpected destination"
-        );
+
+        // TEST - don't check domain
+        // require(
+        //     _message.destination() == localDomain,
+        //     "Mailbox: unexpected destination"
+        // );
 
         // Check that the message hasn't already been delivered.
         bytes32 _id = _message.id();

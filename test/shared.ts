@@ -1,7 +1,10 @@
 import { ignition, ethers } from "hardhat";
 import { Contract, ZeroAddress, parseEther } from "ethers";
+
 import TestERC20Module from "../ignition/modules/TestERC20";
+import LumiaXERC20Module from "../ignition/modules/LumiaXERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
+
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/facets/StakingFacet";
 import { IERC20 } from "../typechain-types";
 
@@ -15,6 +18,19 @@ export async function deloyTestERC20(name: string, symbol: string): Promise<Cont
     },
   });
   return testERC20;
+}
+
+export async function deloyTestXERC20(mailbox: string, name: string, symbol: string): Promise<Contract> {
+  const { xERC20 } = await ignition.deploy(LumiaXERC20Module, {
+    parameters: {
+      LumiaXERC20Module: {
+        mailbox,
+        name,
+        symbol,
+      },
+    },
+  });
+  return xERC20;
 }
 
 export async function createNativeStakingPool(staking: Contract) {
