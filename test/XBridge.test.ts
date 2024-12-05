@@ -100,13 +100,13 @@ describe("XBridge", function () {
       await expect(lumiaReceiver.connect(broker).emitTokens(xerc20, amount))
         .to.changeTokenBalances(xerc20, [broker], [amount]);
 
-      expect(await lumiaReceiver.waitings(xerc20)).to.eq(amount);
+      expect(await lumiaReceiver.pendingTokens(xerc20)).to.eq(amount);
 
       await expect(lumiaReceiver.connect(broker).emitTokens(xerc20, mintingLimit))
         .to.revertedWithCustomError(xerc20, "IXERC20_NotHighEnoughLimits");
     });
 
-    it("return token should pass message through mailbox and resolve waitings", async function () {
+    it("return token should pass message through mailbox and resolve pendingTokens", async function () {
       const { chainA, chainB, broker } = await loadFixture(deployXBridge);
 
       const amount = parseEther("1000");
@@ -118,8 +118,8 @@ describe("XBridge", function () {
       await chainA.erc20.approve(chainA.lockbox, amount);
       await chainA.lockbox.returnToken(amount, { value: dispatchFee });
 
-      // waiting should be resolved
-      expect(await chainB.lumiaReceiver.waitings(chainB.xerc20)).to.eq(0);
+      // pendingTokens should be resolved
+      expect(await chainB.lumiaReceiver.pendingTokens(chainB.xerc20)).to.eq(0);
     });
   });
 });

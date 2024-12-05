@@ -12,7 +12,7 @@ contract LumiaReceiver is ILumiaReceiver, Ownable2Step {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     /// @inheritdoc ILumiaReceiver
-    mapping(address xerc20 => uint256) public waitings;
+    mapping(address xerc20 => uint256) public pendingTokens;
 
     /// @notice Tokens allowed for processing
     EnumerableSet.AddressSet private registeredTokens;
@@ -51,7 +51,7 @@ contract LumiaReceiver is ILumiaReceiver, Ownable2Step {
 
     /// @inheritdoc ILumiaReceiver
     function tokensReceived(uint256 amount_) external onlyRegistered(msg.sender) {
-        waitings[msg.sender] -= amount_;
+        pendingTokens[msg.sender] -= amount_;
 
         emit TokensReceived(msg.sender, amount_);
     }
@@ -62,7 +62,7 @@ contract LumiaReceiver is ILumiaReceiver, Ownable2Step {
     function emitTokens(address token_, uint256 amount_) external onlyBroker {
         require(registeredTokens.contains(token_), NotRegisteredToken(token_));
 
-        waitings[token_] += amount_;
+        pendingTokens[token_] += amount_;
 
         IXERC20(token_).mint(lumiaBroker, amount_);
 

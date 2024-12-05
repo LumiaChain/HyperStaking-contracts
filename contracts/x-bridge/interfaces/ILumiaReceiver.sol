@@ -48,5 +48,5 @@ interface ILumiaReceiver {
     //============================================================================================//
 
     /// @notice Token address -> amount of tokens waiting to be bridged
-    function waitings(address xerc20) external returns (uint256);
+    function pendingTokens(address xerc20) external returns (uint256);
 }
