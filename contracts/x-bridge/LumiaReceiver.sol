@@ -14,7 +14,7 @@ contract LumiaReceiver is ILumiaReceiver, Ownable2Step {
     /// @inheritdoc ILumiaReceiver
     mapping(address xerc20 => uint256) public waitings;
 
-    /// @notice Tokens allowed for processing (enumerable set can be added later)
+    /// @notice Tokens allowed for processing
     EnumerableSet.AddressSet private registeredTokens;
 
     /// @notice Address of the Lumia broker

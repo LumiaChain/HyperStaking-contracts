@@ -11,7 +11,7 @@ export async function deployContract<ContractType>(
   contractName: string,
   args: any[], // eslint-disable-line @typescript-eslint/no-explicit-any
 ): Promise<{ contract: ContractType; receipt: ContractTransactionReceipt; }> {
-  const confirmations = 5;
+  const confirmations = 3;
   const factory = await ethers.getContractFactory(contractName, deployer);
 
   // call the deploy function
