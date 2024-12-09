@@ -6,7 +6,7 @@ import { parseEther, ZeroAddress } from "ethers";
 
 import DiamondModule from "../ignition/modules/Diamond";
 import HyperStakingModule from "../ignition/modules/HyperStaking";
-import RevertingContractModule from "../ignition/modules/RevertingContract";
+import RevertingContractModule from "../ignition/modules/test/RevertingContract";
 
 import * as shared from "./shared";
 

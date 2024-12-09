@@ -5,11 +5,11 @@ import hre, { ethers } from "hardhat";
 import { parseEther, parseUnits, ZeroAddress } from "ethers";
 
 import HyperStakingModule from "../ignition/modules/HyperStaking";
-import PirexMockModule from "../ignition/modules/PirexMock";
 import DineroStrategyModule from "../ignition/modules/DineroStrategy";
-import { PirexEth } from "../typechain-types";
+import PirexMockModule from "../ignition/modules/test/PirexMock";
 
 import * as shared from "./shared";
+import { PirexEth } from "../typechain-types";
 import TxCostTracker from "./txCostTracker";
 
 describe("Strategy", function () {

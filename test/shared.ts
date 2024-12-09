@@ -1,7 +1,7 @@
 import { ignition, ethers } from "hardhat";
 import { Contract, ZeroAddress, parseEther } from "ethers";
 
-import TestERC20Module from "../ignition/modules/TestERC20";
+import TestERC20Module from "../ignition/modules/test/TestERC20";
 import LumiaXERC20Module from "../ignition/modules/LumiaXERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
 

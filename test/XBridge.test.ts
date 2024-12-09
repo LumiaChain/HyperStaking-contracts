@@ -2,7 +2,7 @@ import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import { ignition, ethers } from "hardhat";
 
-import OneChainMailboxModule from "../ignition/modules/OneChainMailbox";
+import OneChainMailboxModule from "../ignition/modules/test/OneChainMailbox";
 import LumiaXERC20LockboxModule from "../ignition/modules/LumiaXERC20Lockbox";
 import LumiaReceiverModule from "../ignition/modules/LumiaReceiver";
 
