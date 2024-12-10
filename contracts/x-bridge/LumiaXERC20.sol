@@ -28,18 +28,6 @@ contract LumiaXERC20 is XERC20 {
     address public lastSender;
     bytes public lastData;
 
-    // ========= Errors ========= //
-
-    error NotFromMailbox(address from);
-    error NotFromLumiaLockbox(address sender);
-
-    error OriginLockboxNotSet();
-    error LumiaReceiverNotSet();
-
-    error InvalidMailbox(address badMailbox);
-    error InvalidLumiaReceiver(address badReceiver);
-
-
     // ========= Events ========= //
 
     event ReceivedMessage(
@@ -53,6 +41,17 @@ contract LumiaXERC20 is XERC20 {
     event MailboxUpdated(address indexed oldMailbox, address indexed newMailbox);
     event OriginLockboxUpdated(address indexed oldLockbox, address indexed newLockbox);
     event LumiaReceiverUpdated(address indexed oldReceiver, address indexed newReceiver);
+
+    // ========= Errors ========= //
+
+    error NotFromMailbox(address from);
+    error NotFromLumiaLockbox(address sender);
+
+    error OriginLockboxNotSet();
+    error LumiaReceiverNotSet();
+
+    error InvalidMailbox(address badMailbox);
+    error InvalidLumiaReceiver(address badReceiver);
 
     //============================================================================================//
     //                                         Modifiers                                          //

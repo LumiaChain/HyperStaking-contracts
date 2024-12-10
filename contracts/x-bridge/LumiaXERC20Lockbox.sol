@@ -23,6 +23,14 @@ contract LumiaXERC20Lockbox is XERC20Lockbox, Ownable2Step {
     /// chainID - route destination
     uint32 public destination;
 
+    // ========= Events ========= //
+
+    event ReturnMessageSent(address indexed sender, uint256 amount);
+
+    event MailboxUpdated(address indexed oldMailbox, address indexed newMailbox);
+    event DestinationUpdated(uint32 indexed oldDestination, uint32 indexed newDestination);
+    event RecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
+
     // ========= Errors ========= //
 
     // Custom error for failed ether transfers
@@ -32,14 +40,6 @@ contract LumiaXERC20Lockbox is XERC20Lockbox, Ownable2Step {
     error InvalidRecipient(address badRecipient);
 
     error RecipientUnset();
-
-    // ========= Events ========= //
-
-    event ReturnMessageSent(address indexed sender, uint256 amount);
-
-    event MailboxUpdated(address indexed oldMailbox, address indexed newMailbox);
-    event DestinationUpdated(uint32 indexed oldDestination, uint32 indexed newDestination);
-    event RecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
 
     //============================================================================================//
     //                                        Constructor                                         //

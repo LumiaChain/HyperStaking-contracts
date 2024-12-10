@@ -7,17 +7,17 @@ pragma solidity =0.8.27;
  */
 interface ILumiaReceiver {
 
-    // ========= Errors ========= //
-
-    error NotRegisteredToken(address token);
-    error UnauthorizedBroker(address sender);
-
     // ========= Events ========= //
 
     event TokenRegistered(address indexed token, bool status);
     event TokensReceived(address indexed token, uint256 amount);
     event TokensEmitted(address indexed token, uint256 amount);
     event BrokerUpdated(address indexed oldBroker, address indexed newBroker);
+
+    // ========= Errors ========= //
+
+    error NotRegisteredToken(address token);
+    error UnauthorizedBroker(address sender);
 
     //============================================================================================//
     //                                          Mutable                                           //
