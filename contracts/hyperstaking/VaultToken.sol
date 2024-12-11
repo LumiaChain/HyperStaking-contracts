@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
 import {IERC20, ERC20, ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
@@ -18,7 +18,7 @@ contract VaultToken is ERC4626, Ownable2Step {
     /// Lumia Diamond Proxy address
     address public immutable DIAMOND;
 
-    /// Associated with this token Lumia strategy
+    /// Lumia Strategy associated with this token
     address public immutable STRATEGY;
 
     //============================================================================================//

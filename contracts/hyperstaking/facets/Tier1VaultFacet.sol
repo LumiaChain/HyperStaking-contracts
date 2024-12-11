@@ -124,6 +124,8 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
 
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         v.vaultTier1Info[strategy].revenueFee = revenueFee;
+
+        emit RevenueFeeSet(strategy, revenueFee);
     }
 
     // ========= View ========= //

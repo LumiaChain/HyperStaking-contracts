@@ -4,6 +4,8 @@ pragma solidity =0.8.27;
 import {IERC4626} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
+import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
+
 //================================================================================================//
 //                                            Types                                               //
 //================================================================================================//
@@ -42,6 +44,12 @@ struct VaultInfo {
     IERC20Metadata asset;
 }
 
+struct LockboxData {
+    IMailbox mailbox; /// Hyperlane Mailbox
+    uint32 destination; /// ChainID - route destination
+    address recipient; /// Destinaion contract which will be receiving messages
+}
+
 //================================================================================================//
 //                                           Storage                                              //
 //================================================================================================//
@@ -58,6 +66,9 @@ struct StrategyVaultStorage {
 
     /// @notice Info of vaults tier2
     mapping (address strategy => VaultTier2) vaultTier2Info;
+
+    /// @notice General lockbox data
+    LockboxData lockboxData;
 }
 
 library LibStrategyVault {
