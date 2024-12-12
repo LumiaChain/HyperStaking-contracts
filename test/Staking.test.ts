@@ -1,28 +1,27 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
-import hre from "hardhat";
+import { ethers, ignition } from "hardhat";
 import { parseEther, ZeroAddress } from "ethers";
 
 import DiamondModule from "../ignition/modules/Diamond";
-import HyperStakingModule from "../ignition/modules/HyperStaking";
 import RevertingContractModule from "../ignition/modules/test/RevertingContract";
 
 import * as shared from "./shared";
 
 describe("Staking", function () {
   async function deployDiamond() {
-    const [owner, alice] = await hre.ethers.getSigners();
-    const { diamond } = await hre.ignition.deploy(DiamondModule);
+    const [owner, alice] = await ethers.getSigners();
+    const { diamond } = await ignition.deploy(DiamondModule);
 
-    const ownershipFacet = await hre.ethers.getContractAt("OwnershipFacet", diamond);
+    const ownershipFacet = await ethers.getContractAt("OwnershipFacet", diamond);
 
     return { diamond, ownershipFacet, owner, alice };
   }
 
   async function deployHyperStaking() {
-    const [owner, stakingManager, strategyVaultManager, alice, bob] = await hre.ethers.getSigners();
-    const { diamond, staking, factory } = await hre.ignition.deploy(HyperStakingModule);
+    const [owner, stakingManager, strategyVaultManager, alice, bob] = await ethers.getSigners();
+    const { diamond, staking, factory } = await shared.deployTestHyperStaking(0n);
 
     // --------------------- Deploy Tokens --------------------
 
@@ -234,13 +233,13 @@ describe("Staking", function () {
       const randomCurrency = { token: "0x5FbDB2315678afecb367f032d93F642f64180aa3" };
 
       const generatedPoolId = await staking.generatePoolId(randomCurrency, 5);
-      const expectedPoolId = hre.ethers.keccak256(
-        hre.ethers.solidityPacked(["address", "uint96"], [randomCurrency.token, 5]),
+      const expectedPoolId = ethers.keccak256(
+        ethers.solidityPacked(["address", "uint96"], [randomCurrency.token, 5]),
       );
       expect(generatedPoolId).to.equal(expectedPoolId);
 
       const generatedPoolId2 = await staking.generatePoolId(randomCurrency, 9);
-      const expectedPoolId2 = hre.ethers.keccak256(
+      const expectedPoolId2 = ethers.keccak256(
       // <-           160 bits address           -><-   96 bits uint96   ->
         "0x5FbDB2315678afecb367f032d93F642f64180aa3000000000000000000000009",
       );
@@ -260,14 +259,14 @@ describe("Staking", function () {
         const value = parseEther("0.99");
 
         await expect(staking.stakeDeposit(ethPoolId, reserveStrategy1, stakeAmount, owner, { value }))
-          .to.be.revertedWith("Invalid native value sent");
+          .to.be.revertedWith("Insufficient native value");
       });
 
       it("Transfer call failed", async function () {
         const { staking, ethPoolId, reserveStrategy1, owner } = await loadFixture(deployHyperStaking);
 
         // test contract which reverts on payable call
-        const { revertingContract } = await hre.ignition.deploy(RevertingContractModule);
+        const { revertingContract } = await ignition.deploy(RevertingContractModule);
 
         const stakeAmount = parseEther("1");
 

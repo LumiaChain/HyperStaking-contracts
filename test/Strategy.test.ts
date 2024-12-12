@@ -1,10 +1,9 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
-import hre, { ethers } from "hardhat";
+import { ethers, ignition } from "hardhat";
 import { parseEther, parseUnits, ZeroAddress } from "ethers";
 
-import HyperStakingModule from "../ignition/modules/HyperStaking";
 import DineroStrategyModule from "../ignition/modules/DineroStrategy";
 import PirexMockModule from "../ignition/modules/test/PirexMock";
 
@@ -14,8 +13,8 @@ import TxCostTracker from "./txCostTracker";
 
 describe("Strategy", function () {
   async function getMockedPirex() {
-    const [, , rewardRecipient] = await hre.ethers.getSigners();
-    const { pxEth, upxEth, pirexEth, autoPxEth } = await hre.ignition.deploy(PirexMockModule);
+    const [, , rewardRecipient] = await ethers.getSigners();
+    const { pxEth, upxEth, pirexEth, autoPxEth } = await ignition.deploy(PirexMockModule);
 
     // increase rewards buffer
     await (pirexEth.connect(rewardRecipient) as PirexEth).harvest(await ethers.provider.getBlockNumber(), { value: parseEther("100") });
@@ -24,8 +23,8 @@ describe("Strategy", function () {
   }
 
   async function deployHyperStaking() {
-    const [owner, stakingManager, strategyVaultManager, bob, alice] = await hre.ethers.getSigners();
-    const { diamond, staking, factory, tier1, tier2 } = await hre.ignition.deploy(HyperStakingModule);
+    const [owner, stakingManager, strategyVaultManager, bob, alice] = await ethers.getSigners();
+    const { diamond, staking, factory, tier1, tier2 } = await shared.deployTestHyperStaking(0n);
 
     // --------------------- Deploy Tokens ----------------------
 
@@ -54,7 +53,7 @@ describe("Strategy", function () {
     );
 
     const { pxEth, upxEth, pirexEth, autoPxEth } = await loadFixture(getMockedPirex);
-    const { dineroStrategy } = await hre.ignition.deploy(DineroStrategyModule, {
+    const { dineroStrategy } = await ignition.deploy(DineroStrategyModule, {
       parameters: {
         DineroStrategyModule: {
           diamond: await diamond.getAddress(),
@@ -452,7 +451,7 @@ describe("Strategy", function () {
 
   describe("Pirex Mock", function () {
     it("it should be possible to deposit ETH and get pxETH", async function () {
-      const [owner] = await hre.ethers.getSigners();
+      const [owner] = await ethers.getSigners();
       const { pxEth, pirexEth } = await loadFixture(getMockedPirex);
 
       await pirexEth.deposit(owner, false, { value: parseEther("1") });
@@ -461,7 +460,7 @@ describe("Strategy", function () {
     });
 
     it("it should be possible to deposit ETH and auto-compund it with apxEth", async function () {
-      const [owner] = await hre.ethers.getSigners();
+      const [owner] = await ethers.getSigners();
       const { pxEth, pirexEth, autoPxEth } = await loadFixture(getMockedPirex);
 
       await pirexEth.deposit(owner, true, { value: parseEther("5") });
@@ -471,7 +470,7 @@ describe("Strategy", function () {
     });
 
     it("it should be possible to instant Redeem apxEth back to ETH", async function () {
-      const [owner, alice] = await hre.ethers.getSigners();
+      const [owner, alice] = await ethers.getSigners();
       const { pxEth, pirexEth, autoPxEth } = await loadFixture(getMockedPirex);
 
       const initialDeposit = parseEther("1");

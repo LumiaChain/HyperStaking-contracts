@@ -1,7 +1,6 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
-import HyperStakingModule from "../ignition/modules/HyperStaking";
-import hre, { ethers } from "hardhat";
+import { ethers } from "hardhat";
 import { parseEther, parseUnits } from "ethers";
 
 import * as shared from "./shared";
@@ -9,7 +8,8 @@ import * as shared from "./shared";
 describe("VaultToken", function () {
   async function deployHyperStaking() {
     const [owner, stakingManager, strategyVaultManager, bob, alice] = await ethers.getSigners();
-    const { diamond, staking, factory, tier1, tier2 } = await hre.ignition.deploy(HyperStakingModule);
+
+    const { diamond, staking, factory, tier1, tier2 } = await shared.deployTestHyperStaking(0n);
 
     // --------------------- Deploy Tokens ----------------------
 

@@ -12,15 +12,15 @@ library BridgeTokenMessage {
         return abi.encodePacked(sender_, vaultToken_, amount_, metadata_);
     }
 
-    function returnVaultToken(bytes calldata message) internal pure returns (bytes32) {
+    function vaultToken(bytes calldata message) internal pure returns (bytes32) {
         return bytes32(message[0:32]);
     }
 
-    function returnSender(bytes calldata message) internal pure returns (bytes32) {
+    function sender(bytes calldata message) internal pure returns (bytes32) {
         return bytes32(message[32:64]);
     }
 
-    function returnAmount(bytes calldata message) internal pure returns (uint256) {
+    function amount(bytes calldata message) internal pure returns (uint256) {
         return uint256(bytes32(message[64:96]));
     }
 

@@ -9,9 +9,6 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {
     ReentrancyGuardUpgradeable
 } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import {
-    PausableUpgradeable
-} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 import {BridgeTokenMessage} from "../libraries/BridgeTokenMessage.sol";
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
@@ -26,7 +23,7 @@ import {LibStrategyVault, VaultTier2, LockboxData} from "../libraries/LibStrateg
  *         Lumia chain. Handles incoming messages to initiate the unstaking process
  * @dev Managed by HyperStaking Tier2 Vault
  */
-contract LockboxFacet is ILockbox, HyperStakingAcl, ReentrancyGuardUpgradeable, PausableUpgradeable {
+contract LockboxFacet is ILockbox, HyperStakingAcl, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
     //============================================================================================//
@@ -45,27 +42,23 @@ contract LockboxFacet is ILockbox, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
     /// @inheritdoc ILockbox
     function bridgeToken(
-        address strategy,
+        address vaultToken,
         address user,
         uint256 amount
-    ) external payable nonReentrant whenNotPaused onlyVaultToken(strategy) {
-        VaultTier2 storage t = LibStrategyVault.diamondStorage().vaultTier2Info[strategy];
+    ) external payable diamondInternal {
         LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
-
-        // TODO IERC4626 deposit here?
-
         require(box.recipient != address(0), RecipientUnset());
 
-        bytes memory body = generateBody(address(t.vaultToken), user, amount);
+        bytes memory body = generateBody(vaultToken, user, amount);
 
         // address left-padded to bytes32 for compatibility with hyperlane
         bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.recipient);
 
         // quote message fee for forwarding a message across chains
-        uint256 fee = box.mailbox.quoteDispatch(box.destination, recipientBytes32, body);
-        box.mailbox.dispatch{value: fee}(box.destination, recipientBytes32, body);
+        // uint256 fee = quoteDispatch(address(vaultToken), user, amount);
+        box.mailbox.dispatch{value: msg.value}(box.destination, recipientBytes32, body);
 
-        emit VaultTokenBridged(address(t.vaultToken), user, amount);
+        emit VaultTokenBridged(address(vaultToken), user, amount);
     }
 
     /* ========== ACL  ========== */
@@ -111,7 +104,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         address vaultToken,
         address sender,
         uint256 amount
-    ) external view returns (uint256) {
+    ) public view returns (uint256) {
         LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
         return box.mailbox.quoteDispatch(
             box.destination,

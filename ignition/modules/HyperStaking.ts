@@ -15,6 +15,10 @@ const STRATEGY_VAULT_MANAGER_ROLE = keccak256(
 
 // HyperStakingModule is in fact a proxy upgrade which adds the Facets to the Diamond
 const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
+  const mailbox = m.getParameter("lockboxMailbox");
+  const destination = m.getParameter("lockboxDestination");
+  const recipient = m.getParameter("lockboxRecipient");
+
   const { diamond } = m.useModule(DiamondModule);
 
   // --- accounts
@@ -36,6 +40,9 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
 
   const tier2Facet = m.contract("Tier2VaultFacet");
   const tier2FacetInterface = getContractInterface("ITier2Vault");
+
+  const lockboxFacet = m.contract("LockboxFacet");
+  const lockboxFacetInterface = getContractInterface("ILockbox");
 
   const aclInterface = getContractInterface("HyperStakingAcl");
   const aclInterfaceSelectors = getSelectors(aclInterface).remove(["supportsInterface(bytes4)"]);
@@ -64,6 +71,11 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       action: FacetCutAction.Add,
       functionSelectors: getSelectors(tier2FacetInterface),
     },
+    {
+      facetAddress: lockboxFacet,
+      action: FacetCutAction.Add,
+      functionSelectors: getSelectors(lockboxFacetInterface),
+    },
   ];
 
   // --- cut init
@@ -83,6 +95,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const factory = m.contractAt("IVaultFactory", diamond);
   const tier1 = m.contractAt("ITier1Vault", diamond);
   const tier2 = m.contractAt("ITier2Vault", diamond);
+  const lockbox = m.contractAt("ILockbox", diamond);
 
   // const roles = m.contractAt("IHyperStakingRoles", diamond);
   // const STAKING_MANAGER_ROLE = m.staticCall(roles, "STAKING_MANAGER_ROLE", [], 0);
@@ -106,9 +119,32 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
     { id: "grantRoleStrategyVaultManager", after: [diamondCutFuture] },
   );
 
+  // --- setup lockbox bridge
+
+  m.call(
+    lockbox,
+    "setMailbox",
+    [mailbox],
+    { id: "setMailbox", after: [diamondCutFuture], from: strategyVaultManager },
+  );
+
+  m.call(
+    lockbox,
+    "setDestination",
+    [destination],
+    { id: "setDestination", after: [diamondCutFuture], from: strategyVaultManager },
+  );
+
+  m.call(
+    lockbox,
+    "setRecipient",
+    [recipient],
+    { id: "setRecipient", after: [diamondCutFuture], from: strategyVaultManager },
+  );
+
   // --- return
 
-  return { diamond, staking, factory, tier1, tier2 };
+  return { diamond, staking, factory, tier1, tier2, lockbox };
 });
 
 export default HyperStakingModule;

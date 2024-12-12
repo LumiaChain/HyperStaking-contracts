@@ -1,12 +1,45 @@
 import { ignition, ethers } from "hardhat";
 import { Contract, ZeroAddress, parseEther } from "ethers";
 
+import HyperStakingModule from "../ignition/modules/HyperStaking";
+import OneChainMailboxModule from "../ignition/modules/test/OneChainMailbox";
+
 import TestERC20Module from "../ignition/modules/test/TestERC20";
 import LumiaXERC20Module from "../ignition/modules/LumiaXERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
 
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/facets/StakingFacet";
 import { IERC20 } from "../typechain-types";
+
+export async function deployTestHyperStaking(mailboxFee: bigint) {
+  const { mailbox } = await ignition.deploy(OneChainMailboxModule, {
+    parameters: {
+      OneChainMailboxModule: {
+        fee: mailboxFee,
+      },
+    },
+  });
+
+  const mailboxAddress = await mailbox.getAddress();
+
+  const recipient = await ethers.deployContract("Recipient", [mailboxAddress]);
+
+  const testDestination = 31337;
+
+  const { diamond, staking, factory, tier1, tier2, lockbox } = await ignition.deploy(HyperStakingModule, {
+    parameters: {
+      HyperStakingModule: {
+        lockboxMailbox: mailboxAddress,
+        lockboxDestination: testDestination,
+        lockboxRecipient: await recipient.getAddress(),
+      },
+    },
+  });
+
+  await recipient.setOriginLockbox(await diamond.getAddress());
+
+  return { mailbox, recipient, diamond, staking, factory, tier1, tier2, lockbox };
+}
 
 export async function deloyTestERC20(name: string, symbol: string): Promise<Contract> {
   const { testERC20 } = await ignition.deploy(TestERC20Module, {

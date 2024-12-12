@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {LockboxData} from "../libraries/LibStrategyVault.sol";
+import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 /**
  * @title ILockbox
@@ -17,7 +18,6 @@ interface ILockbox {
     event MailboxUpdated(address indexed oldMailbox, address indexed newMailbox);
     event DestinationUpdated(uint32 indexed oldDestination, uint32 indexed newDestination);
     event RecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
-
 
     //===========================================================================================//
     //                                          Errors                                            //
@@ -38,7 +38,7 @@ interface ILockbox {
      * @dev This function sends a message to trigger the token return process
      * @param amount Amount of tokens to bridge
      */
-    function bridgeToken(address strategy, address user, uint256 amount) external payable;
+    function bridgeToken(address vaultToken, address user, uint256 amount) external payable;
 
     /**
      * @notice Updates the mailbox address used for interchain messaging

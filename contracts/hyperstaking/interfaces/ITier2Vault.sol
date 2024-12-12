@@ -48,7 +48,7 @@ interface ITier2Vault {
         address strategy,
         address user,
         uint256 allocation
-    ) external;
+    ) external payable;
 
     /**
      * @notice Leave Tier 2 for a specified strategy and asset amount.
