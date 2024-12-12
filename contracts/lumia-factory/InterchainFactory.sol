@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
+import {LumiaLPToken} from "./LumiaLPToken.sol";
+
 import {IMailbox} from "../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../external/hyperlane/libs/TypeCasts.sol";
 
@@ -26,6 +28,9 @@ contract InterchainFactory is Ownable {
     address public lastSender;
     bytes public lastData;
 
+    // TODO enumerable map
+    mapping(address originToken => LumiaLPToken lpToken) public lpTokens;
+
     // ========= Events ========= //
 
     event ReceivedMessage(
@@ -35,9 +40,10 @@ contract InterchainFactory is Ownable {
         string message
     );
 
-    event TokenDeployMessageReceived(address tokenAddress, string name, string symbol);
-    event TokenBridgeMessageReceived(
-        address indexed vaultToken,
+    event TokenDeployed(address originToken, address lpToken, string name, string symbol);
+    event TokenBridged(
+        address indexed originToken,
+        address indexed lpToken,
         address indexed sender,
         uint256 amount
     );
@@ -55,6 +61,8 @@ contract InterchainFactory is Ownable {
 
     error InvalidMailbox(address badMailbox);
     error InvalidLumiaReceiver(address badReceiver);
+
+    error TokenAlreadyDeployed();
 
     //============================================================================================//
     //                                         Modifiers                                          //
@@ -150,9 +158,18 @@ contract InterchainFactory is Ownable {
         string memory name = data_.name();
         string memory symbol = data_.symbol();
 
-        // TODO implementation
+        require(address(lpTokens[tokenAddress]) == address(0), TokenAlreadyDeployed());
 
-        emit TokenDeployMessageReceived(tokenAddress, name, symbol);
+        LumiaLPToken lpToken = new LumiaLPToken({
+            interchainFactory_: address(this),
+            name_: name,
+            symbol_:symbol
+        });
+
+        // save in the storage
+        lpTokens[tokenAddress] = lpToken;
+
+        emit TokenDeployed(tokenAddress, address(lpToken), name, symbol);
     }
 
     function _handleTokenBridge(bytes calldata data_) internal {
@@ -160,8 +177,11 @@ contract InterchainFactory is Ownable {
         address sender = data_.sender();
         uint256 amount = data_.amount();
 
-        // TODO implementation
+        LumiaLPToken lpToken = lpTokens[vaultToken];
 
-        emit TokenBridgeMessageReceived(vaultToken, sender, amount);
+        // mint LP tokens for the specified used
+        lpToken.mint(sender, amount);
+
+        emit TokenBridged(vaultToken, address(lpToken), sender, amount);
     }
 }

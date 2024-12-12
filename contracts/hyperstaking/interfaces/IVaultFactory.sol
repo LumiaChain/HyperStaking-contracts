@@ -37,6 +37,7 @@ interface IVaultFactory {
     /**
      * @notice Adds a new strategy and links it to a specific staking pool
      * @dev Sets up the strategy with an associated asset and a revenue fee for Tier 1 users
+     *      payable for dispatching interchain "TokenDeploy" messages to other chains
      * @param poolId The ID of the staking pool to assign this strategy to
      * @param strategy The address of the strategy being added
      * @param asset The ERC20-compliant asset associated with the strategy
@@ -47,7 +48,7 @@ interface IVaultFactory {
         address strategy,
         IERC20Metadata asset,
         uint256 tier1RevenueFee
-    ) external;
+    ) external payable;
 
     //============================================================================================//
     //                                           View                                             //

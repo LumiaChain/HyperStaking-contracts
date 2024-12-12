@@ -40,7 +40,7 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
         address strategy,
         IERC20Metadata asset,
         uint256 tier1RevenueFee
-    ) external onlyStrategyVaultManager nonReentrant {
+    ) external payable onlyStrategyVaultManager nonReentrant {
         _createVault(poolId, strategy, asset, tier1RevenueFee);
     }
 

@@ -39,16 +39,20 @@ describe("Lockbox", function () {
       reserveStrategy,
       testReserveAsset,
       defaultRevenueFee,
+      { value: mailboxFee },
     );
 
     const vaultTokenAddress = (await tier2.vaultTier2Info(reserveStrategy)).vaultToken;
     const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
 
+    const lpTokenAddress = await interchainFactory.lpTokens(vaultTokenAddress);
+    const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
+
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
       staking, factory, tier1, tier2, lockbox, // diamond facets
-      mailbox, interchainFactory, testReserveAsset, reserveStrategy, vaultToken, // test contracts
+      mailbox, interchainFactory, testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
       ethPoolId, // ids
       defaultRevenueFee, reserveAssetPrice, mailboxFee, // values
       nativeTokenAddress, owner, stakingManager, strategyVaultManager, alice, bob, // addresses
@@ -58,9 +62,9 @@ describe("Lockbox", function () {
 
   describe("Lockbox", function () {
     it("stake deposit to tier2 with non-zero mailbox fee", async function () {
-      const { staking, ethPoolId, reserveStrategy, vaultToken, mailboxFee, owner, alice } = await loadFixture(deployHyperStaking);
+      const { staking, ethPoolId, reserveStrategy, vaultToken, lpToken, mailboxFee, owner, alice } = await loadFixture(deployHyperStaking);
 
-      const lpBefore = await vaultToken.balanceOf(alice);
+      const lpBefore = await lpToken.balanceOf(alice);
 
       const stakeAmount = parseEther("2");
 
@@ -71,7 +75,7 @@ describe("Lockbox", function () {
         .to.emit(staking, "StakeDeposit")
         .withArgs(owner, alice, ethPoolId, reserveStrategy, stakeAmount, tier2);
 
-      const lpAfter = await vaultToken.balanceOf(alice);
+      const lpAfter = await lpToken.balanceOf(alice);
       expect(lpAfter).to.be.gt(lpBefore);
 
       // more accurate amount calculation
@@ -86,7 +90,11 @@ describe("Lockbox", function () {
     });
   });
 
-  // TODO test:
+  // TODO mailbox fee when creating strategy
+
+  // TODO mailbox fee from quoteStakeDispatch
+
+  // TODO test HyperlaneMessages:
   // require(temp.length <= 32, "stringToBytes32: overflow");
   // require(temp.length <= 64, "stringToBytes64: overflow");
 });
