@@ -2,7 +2,6 @@
 pragma solidity =0.8.27;
 
 import {LockboxData} from "../libraries/LibStrategyVault.sol";
-import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 /**
  * @title ILockbox
@@ -13,7 +12,21 @@ interface ILockbox {
     //                                          Events                                            //
     //============================================================================================//
 
-    event VaultTokenBridged(address indexed vaultToken, address indexed user, uint256 amount);
+    event TokenDeployDispatched(
+        address indexed mailbox,
+        address recipient,
+        address tokenAddress,
+        string name,
+        string symbol
+    );
+
+    event BridgeTokenDispatched(
+        address indexed mailbox,
+        address recipient,
+        address indexed vaultToken,
+        address indexed user,
+        uint256 shares
+    );
 
     event MailboxUpdated(address indexed oldMailbox, address indexed newMailbox);
     event DestinationUpdated(uint32 indexed oldDestination, uint32 indexed newDestination);
@@ -34,11 +47,24 @@ interface ILockbox {
     //============================================================================================//
 
     /**
-     * @notice Dispatches a cross-chain message responsible for bridiging vault token
-     * @dev This function sends a message to trigger the token return process
-     * @param amount Amount of tokens to bridge
+     * @notice Dispatches a cross-chain message responsible for minting corresponding lp token
+     * @dev This function sends a message to trigger the token deploy
      */
-    function bridgeToken(address vaultToken, address user, uint256 amount) external payable;
+    function tokenDeployDispatch(
+        address tokenAddress,
+        string memory name,
+        string memory symbol
+    ) external payable;
+
+    /**
+     * @notice Dispatches a cross-chain message responsible for bridiging vault token
+     * @dev This function sends a message to trigger the token mint process
+     */
+    function bridgeTokenDispatch(
+        address vaultToken,
+        address user,
+        uint256 shares
+    ) external payable;
 
     /**
      * @notice Updates the mailbox address used for interchain messaging
@@ -66,16 +92,39 @@ interface ILockbox {
     function lockboxData() external view returns (LockboxData memory);
 
     /// @notice Helper: separated function for getting mailbox dispatch quote
-    function quoteDispatch(
+    function quoteDispatchTokenDeploy(
+        address tokenAddress,
+        string memory name,
+        string memory symbol
+    ) external view returns (uint256);
+
+    /// @notice Helper: separated function for getting mailbox dispatch quote
+    function quoteDispatchTokenBridge(
         address vaultToken,
         address sender,
-        uint256 amount
+        uint256 shares
+    ) external view returns (uint256);
+
+    /// @notice Helper: mailbox dispatch quote, but using stake data
+    /// @dev Externally only for estimation purposes, as the amount of shares
+    ///      based on allocation changes depending on the allocation of the Vault.
+    function quoteStakeDispatch(
+        address strategy,
+        address sender,
+        uint256 allocation
     ) external view returns (uint256);
 
     /// @notice Helper: separated function for generating hyperlane message body
-    function generateBody(
+    function generateTokenDeployBody(
+        address tokenAddress,
+        string memory name,
+        string memory symbol
+    ) external pure returns (bytes memory body);
+
+    /// @notice Helper: separated function for generating hyperlane message body
+    function generateTokenBridgeBody(
         address vaultToken,
         address sender,
-        uint256 amount
+        uint256 shares
     ) external pure returns (bytes memory body);
 }

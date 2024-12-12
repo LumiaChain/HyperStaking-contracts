@@ -89,13 +89,6 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         address user,
         uint256 allocation
     ) external payable diamondInternal {
-        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-        VaultInfo storage vault = v.vaultInfo[strategy];
-        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
-
-        vault.asset.safeIncreaseAllowance(address(tier2.vaultToken), allocation);
-        tier2.vaultToken.deposit(allocation, user);
-
         // mint and bridge vaultToken shares
         _bridgeVaultTokens(strategy, user, allocation);
 
@@ -168,9 +161,17 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         // vaultToken - shares are deposited to Lockbox (this diamond facet)
         uint256 shares = tier2.vaultToken.deposit(allocation, address(this));
 
-        uint256 fee = ILockbox(address(this)).quoteDispatch(
-            address(tier2.vaultToken), user, shares
+        // quote message fee for forwarding a TokenBridge message across chains
+        uint256 fee = ILockbox(address(this)).quoteDispatchTokenBridge(
+            address(tier2.vaultToken),
+            user,
+            shares
         );
-        ILockbox(address(this)).bridgeToken{value: fee}(address(tier2.vaultToken), user, shares);
+
+        ILockbox(address(this)).bridgeTokenDispatch{value: fee}(
+            address(tier2.vaultToken),
+            user,
+            shares
+        );
     }
 }

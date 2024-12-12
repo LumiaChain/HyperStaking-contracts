@@ -1,7 +1,7 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { parseEther, parseUnits } from "ethers";
+import { parseEther } from "ethers";
 
 import * as shared from "./shared";
 
@@ -12,7 +12,7 @@ describe("Lockbox", function () {
     const mailboxFee = parseEther("0.05");
 
     const {
-      mailbox, recipient, diamond, staking, factory, tier1, tier2, lockbox
+      mailbox, interchainFactory, diamond, staking, factory, tier1, tier2, lockbox,
     } = await shared.deployTestHyperStaking(mailboxFee);
 
     // --------------------- Deploy Tokens ----------------------
@@ -48,7 +48,7 @@ describe("Lockbox", function () {
     return {
       diamond, // diamond
       staking, factory, tier1, tier2, lockbox, // diamond facets
-      mailbox, recipient, testReserveAsset, reserveStrategy, vaultToken, // test contracts
+      mailbox, interchainFactory, testReserveAsset, reserveStrategy, vaultToken, // test contracts
       ethPoolId, // ids
       defaultRevenueFee, reserveAssetPrice, mailboxFee, // values
       nativeTokenAddress, owner, stakingManager, strategyVaultManager, alice, bob, // addresses
@@ -85,4 +85,8 @@ describe("Lockbox", function () {
       expect((await staking.poolInfo(ethPoolId)).totalStake).to.equal(0);
     });
   });
+
+  // TODO test:
+  // require(temp.length <= 32, "stringToBytes32: overflow");
+  // require(temp.length <= 64, "stringToBytes64: overflow");
 });

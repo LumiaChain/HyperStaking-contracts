@@ -22,7 +22,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint) {
 
   const mailboxAddress = await mailbox.getAddress();
 
-  const recipient = await ethers.deployContract("Recipient", [mailboxAddress]);
+  const interchainFactory = await ethers.deployContract("InterchainFactory", [mailboxAddress]);
 
   const testDestination = 31337;
 
@@ -31,14 +31,14 @@ export async function deployTestHyperStaking(mailboxFee: bigint) {
       HyperStakingModule: {
         lockboxMailbox: mailboxAddress,
         lockboxDestination: testDestination,
-        lockboxRecipient: await recipient.getAddress(),
+        lockboxRecipient: await interchainFactory.getAddress(),
       },
     },
   });
 
-  await recipient.setOriginLockbox(await diamond.getAddress());
+  await interchainFactory.setOriginLockbox(await diamond.getAddress());
 
-  return { mailbox, recipient, diamond, staking, factory, tier1, tier2, lockbox };
+  return { mailbox, interchainFactory, diamond, staking, factory, tier1, tier2, lockbox };
 }
 
 export async function deloyTestERC20(name: string, symbol: string): Promise<Contract> {

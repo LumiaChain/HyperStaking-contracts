@@ -10,55 +10,64 @@ import {
     ReentrancyGuardUpgradeable
 } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
-import {BridgeTokenMessage} from "../libraries/BridgeTokenMessage.sol";
+import {HyperlaneMailboxMessages} from "../libraries/HyperlaneMailboxMessages.sol";
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
-import {LibStrategyVault, VaultTier2, LockboxData} from "../libraries/LibStrategyVault.sol";
+import {LibStrategyVault, LockboxData} from "../libraries/LibStrategyVault.sol";
 
 /**
  * @title LockboxFacet
- * @notice A simplified, customized version of XERC20Lockbox for handling interchain communication
+ * @notice A customized version of XERC20Lockbox and Factory for handling interchain communication
  *         via Hyperlane Mailbox. Locks VaultTokens minted in Tier2 and mints tokens on the defined
  *         Lumia chain. Handles incoming messages to initiate the unstaking process
- * @dev Managed by HyperStaking Tier2 Vault
+ * @dev Managed by HyperStaking Tier2 Vault and Vault Factory
  */
 contract LockboxFacet is ILockbox, HyperStakingAcl, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
-
-    //============================================================================================//
-    //                                         Modifiers                                          //
-    //============================================================================================//
-
-    modifier onlyVaultToken(address strategy) {
-        VaultTier2 storage t = LibStrategyVault.diamondStorage().vaultTier2Info[strategy];
-        require(msg.sender == address(t.vaultToken), InvalidVaultToken(msg.sender));
-        _;
-    }
 
     //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
 
     /// @inheritdoc ILockbox
-    function bridgeToken(
-        address vaultToken,
-        address user,
-        uint256 amount
+    function tokenDeployDispatch(
+        address tokenAddress,
+        string memory name,
+        string memory symbol
     ) external payable diamondInternal {
         LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
         require(box.recipient != address(0), RecipientUnset());
 
-        bytes memory body = generateBody(vaultToken, user, amount);
+        bytes memory body = generateTokenDeployBody(tokenAddress, name, symbol);
 
         // address left-padded to bytes32 for compatibility with hyperlane
         bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.recipient);
 
-        // quote message fee for forwarding a message across chains
-        // uint256 fee = quoteDispatch(address(vaultToken), user, amount);
+        // msg.value should already include fee calculated
         box.mailbox.dispatch{value: msg.value}(box.destination, recipientBytes32, body);
 
-        emit VaultTokenBridged(address(vaultToken), user, amount);
+        emit TokenDeployDispatched(address(box.mailbox), box.recipient, tokenAddress, name, symbol);
+    }
+
+    /// @inheritdoc ILockbox
+    function bridgeTokenDispatch(
+        address vaultToken,
+        address user,
+        uint256 shares
+    ) external payable diamondInternal {
+        LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
+        require(box.recipient != address(0), RecipientUnset());
+
+        bytes memory body = generateTokenBridgeBody(vaultToken, user, shares);
+
+        // address left-padded to bytes32 for compatibility with hyperlane
+        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.recipient);
+
+        // msg.value should already include fee calculated
+        box.mailbox.dispatch{value: msg.value}(box.destination, recipientBytes32, body);
+
+        emit BridgeTokenDispatched(address(box.mailbox), box.recipient, vaultToken, user, shares);
     }
 
     /* ========== ACL  ========== */
@@ -100,29 +109,75 @@ contract LockboxFacet is ILockbox, HyperStakingAcl, ReentrancyGuardUpgradeable {
     }
 
     /// @inheritdoc ILockbox
-    function quoteDispatch(
-        address vaultToken,
-        address sender,
-        uint256 amount
-    ) public view returns (uint256) {
+    function quoteDispatchTokenDeploy(
+        address tokenAddress,
+        string memory name,
+        string memory symbol
+    ) external view returns (uint256) {
         LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
         return box.mailbox.quoteDispatch(
             box.destination,
             TypeCasts.addressToBytes32(box.recipient),
-            generateBody(vaultToken, sender, amount)
+            generateTokenDeployBody(tokenAddress, name, symbol)
         );
     }
 
     /// @inheritdoc ILockbox
-    function generateBody(
+    function quoteDispatchTokenBridge(
         address vaultToken,
         address sender,
-        uint256 amount
+        uint256 shares
+    ) external view returns (uint256) {
+        LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
+        return box.mailbox.quoteDispatch(
+            box.destination,
+            TypeCasts.addressToBytes32(box.recipient),
+            generateTokenBridgeBody(vaultToken, sender, shares)
+        );
+    }
+
+    /// @inheritdoc ILockbox
+    function quoteStakeDispatch(
+        address strategy,
+        address sender,
+        uint256 allocation
+    ) external view returns (uint256) {
+        IERC4626 vaultToken = LibStrategyVault.diamondStorage().vaultTier2Info[strategy].vaultToken;
+
+        // Vault: allocation -> shares
+        uint256 shares = vaultToken.previewWithdraw(allocation);
+
+        return this.quoteDispatchTokenBridge(
+            address(vaultToken),
+            sender,
+            shares
+        );
+    }
+
+    /// @inheritdoc ILockbox
+    function generateTokenDeployBody(
+        address tokenAddress,
+        string memory name,
+        string memory symbol
     ) public pure returns (bytes memory body) {
-        body = BridgeTokenMessage.serialize(
-            TypeCasts.addressToBytes32(vaultToken),
-            TypeCasts.addressToBytes32(sender),
-            amount,
+        body = HyperlaneMailboxMessages.serializeTokenDeploy(
+            tokenAddress,
+            name,
+            symbol,
+            bytes("") // no metadata
+        );
+    }
+
+    /// @inheritdoc ILockbox
+    function generateTokenBridgeBody(
+        address vaultToken,
+        address sender,
+        uint256 shares
+    ) public pure returns (bytes memory body) {
+        body = HyperlaneMailboxMessages.serializeTokenBridge(
+            vaultToken,
+            sender,
+            shares,
             bytes("") // no metadata
         );
     }

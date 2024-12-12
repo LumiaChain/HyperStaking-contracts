@@ -5,21 +5,22 @@ import {IMailbox} from "../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../external/hyperlane/libs/TypeCasts.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {BridgeTokenMessage} from "../hyperstaking/libraries/BridgeTokenMessage.sol";
-
-import "hardhat/console.sol";
+import {
+    MessageType, HyperlaneMailboxMessages
+} from "../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
 
 /**
- * @title TODO
- * @notice Recipient - factory of LP tokens
+ * @title InterchainFactory
+ * @notice Factory contract for LP tokens that operates based on messages received via Hyperlane
+ * @dev Facilitates the deployment, management, and processing of LP token operations.
  */
-contract Recipient is Ownable {
-    using BridgeTokenMessage for bytes;
+contract InterchainFactory is Ownable {
+    using HyperlaneMailboxMessages for bytes;
 
     /// Hyperlane Mailbox
     IMailbox public mailbox;
 
-    /// Address of the sender - Lockbox located in the origin chain
+    /// Address of the sender - Lockbox located on the origin chain
     address public originLockbox;
 
     address public lastSender;
@@ -34,8 +35,12 @@ contract Recipient is Ownable {
         string message
     );
 
-    // TODO 2 messages
-    event MessageReceived(address indexed sender, uint256 amount);
+    event TokenDeployMessageReceived(address tokenAddress, string name, string symbol);
+    event TokenBridgeMessageReceived(
+        address indexed vaultToken,
+        address indexed sender,
+        uint256 amount
+    );
 
     event MailboxUpdated(address indexed oldMailbox, address indexed newMailbox);
     event OriginLockboxUpdated(address indexed oldLockbox, address indexed newLockbox);
@@ -99,16 +104,16 @@ contract Recipient is Ownable {
             NotFromLumiaLockbox(lastSender)
         );
 
-        // parse data_ (BridgeTokenMessage ? TODO)
-        address msgVaultToken = TypeCasts.bytes32ToAddress(data_.vaultToken());
-        address msgSender = TypeCasts.bytes32ToAddress(data_.sender());
-        uint256 msgAmount = data_.amount();
+        // parse message data (HyperlaneMailboxMessages)
+        MessageType msgType = data_.messageType();
 
-        console.log("msgVaultToken:", msgVaultToken);
-        console.log("msgSender:", msgSender);
-        console.log("msgAmount:", msgAmount);
+        if (msgType == MessageType.TokenBridge) {
+            _handleTokenBridge(data_);
+        }
 
-        emit MessageReceived(msgSender, msgAmount); // TODO
+        if (msgType == MessageType.TokenDeploy) {
+            _handleTokenDeploy(data_);
+        }
     }
 
     // ========= Owner ========= //
@@ -134,5 +139,29 @@ contract Recipient is Ownable {
     function setOriginLockbox(address newLockbox_) public onlyOwner {
         emit OriginLockboxUpdated(originLockbox, newLockbox_);
         originLockbox = newLockbox_;
+    }
+
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
+    function _handleTokenDeploy(bytes calldata data_) internal {
+        address tokenAddress = data_.tokenAddress();
+        string memory name = data_.name();
+        string memory symbol = data_.symbol();
+
+        // TODO implementation
+
+        emit TokenDeployMessageReceived(tokenAddress, name, symbol);
+    }
+
+    function _handleTokenBridge(bytes calldata data_) internal {
+        address vaultToken = data_.vaultToken();
+        address sender = data_.sender();
+        uint256 amount = data_.amount();
+
+        // TODO implementation
+
+        emit TokenBridgeMessageReceived(vaultToken, sender, amount);
     }
 }

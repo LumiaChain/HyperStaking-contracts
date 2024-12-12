@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {IVaultFactory} from "../interfaces/IVaultFactory.sol";
+import {ILockbox} from "../interfaces/ILockbox.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -56,6 +57,34 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
     //============================================================================================//
 
     /**
+     * @notice Dispatches an interchain message to instruct the deployment of an LP token on the
+     *         destination chain
+     * @dev Uses the Lockbox Facet to send a message containing required details for deploying
+     *      the LP token
+     * @param vaultToken The address of the Vault token that the LP token will represent
+     * @param name The name of the LP token to be deployed
+     * @param symbol The symbol of the LP token to be deployed
+     */
+    function _dispatchTokenDeploy(
+        IERC4626 vaultToken,
+        string memory name,
+        string memory symbol
+    ) internal {
+        // quote message fee for forwarding a TokenDeploy message across chains
+        uint256 fee = ILockbox(address(this)).quoteDispatchTokenDeploy(
+            address(vaultToken),
+            name,
+            symbol
+        );
+
+        ILockbox(address(this)).tokenDeployDispatch{value: fee}(
+            address(vaultToken),
+            name,
+            symbol
+        );
+    }
+
+    /**
      * @notice Deploys a new vault token for a given asset
      * @dev Creates a new `LiquidVaultToken` instance with names and symbols derived from the asset
      * @param asset The underlying asset for the vault token, which provides name and symbol info
@@ -75,6 +104,8 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
             sharesName,
             sharesSymbol
         );
+
+        _dispatchTokenDeploy(vaultToken, sharesName, sharesSymbol);
     }
 
     /**
