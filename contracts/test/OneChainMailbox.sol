@@ -65,8 +65,13 @@ contract OneChainMailbox is IMailbox, Ownable {
 
     constructor(uint256 fee) Ownable(msg.sender) {
         localDomain = 123;
-        hardcodedFee = fee;
+        setFee(fee);
         defaultHook = IPostDispatchHook(address(0));
+    }
+
+    // TEST - configurable static fee
+    function setFee(uint256 fee) public onlyOwner {
+        hardcodedFee = fee;
     }
 
     // ============ External Functions ============

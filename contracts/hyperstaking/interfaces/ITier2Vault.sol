@@ -85,6 +85,15 @@ interface ITier2Vault {
         address user
     ) external view returns (UserTier2Info memory);
 
-    // TODO tier2Contribution?
-    // function userContribution(address strategy, address user) external view returns (uint256);
+     /**
+     * @notice Retrieves tier2 vault information for a given amount of vault shares
+     * @dev Useful, for example, when shares are bridged to another chain
+     * @param strategy The address of the strategy
+     * @param shares Amount of vault shares
+     * @return A UserTier2Info struct containing the specific 'user' vault details
+     */
+    function sharesTier2Info(
+        address strategy,
+        uint256 shares
+    ) external view returns (UserTier2Info memory);
 }

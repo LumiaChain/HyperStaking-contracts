@@ -133,10 +133,19 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         address user
         // TODO specify shares - taken from other chain
     ) external view returns (UserTier2Info memory) {
-        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
-
+        VaultTier2 storage tier2 = LibStrategyVault.diamondStorage().vaultTier2Info[strategy];
         uint256 shares = tier2.vaultToken.balanceOf(user);
+
+        return sharesTier2Info(strategy, shares);
+    }
+
+    /// @inheritdoc ITier2Vault
+    function sharesTier2Info(
+        address strategy,
+        uint256 shares
+    ) public view returns (UserTier2Info memory) {
+        VaultTier2 storage tier2 = LibStrategyVault.diamondStorage().vaultTier2Info[strategy];
+
         uint256 allocation = tier2.vaultToken.convertToAssets(shares);
         uint256 stake = IStrategy(strategy).convertToStake(allocation);
 

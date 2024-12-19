@@ -81,7 +81,7 @@ contract VaultToken is ERC4626, Ownable2Step {
         uint256 assets,
         address receiver,
         address owner
-    ) public virtual override returns (uint256) {
+    ) public virtual override onlyOwner returns (uint256) {
         // return shares;
         return super.withdraw(assets, receiver, owner);
     }
@@ -91,7 +91,7 @@ contract VaultToken is ERC4626, Ownable2Step {
         uint256 shares,
         address receiver,
         address owner
-    ) public virtual override returns (uint256 asserts) {
+    ) public virtual override onlyOwner returns (uint256 asserts) {
         // return assets;
         return super.redeem(shares, receiver, owner);
     }

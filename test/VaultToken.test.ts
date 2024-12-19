@@ -162,11 +162,18 @@ describe("VaultToken", function () {
       expect(await vaultToken.totalAssets()).to.be.eq(stakeAmount * parseEther("1") / reserveAssetPrice);
       expect(await testReserveAsset.balanceOf(vaultToken)).to.be.gt(0);
 
-      // TODO redeem
+      // redeem should be possible only through tier2 - proxy
       await expect(vaultToken.connect(alice).redeem(lpBalance, alice, alice))
-        .to.changeEtherBalances([alice], [stakeAmount]);
+        .to.be.revertedWithCustomError(vaultToken, "OwnableUnauthorizedAccount");
+
+      // withdraw should be possible only through tier2 - proxy
+      await expect(vaultToken.connect(alice).withdraw(stakeAmount, alice, alice))
+        .to.be.revertedWithCustomError(vaultToken, "OwnableUnauthorizedAccount");
+
+      // TODO interchain redeem
 
       expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
+      expect(await lpToken.balanceOf(alice)).to.be.eq(0);
       expect(await testReserveAsset.balanceOf(vaultToken)).to.be.eq(0);
 
       // -- scenario with approval redeem
@@ -213,9 +220,11 @@ describe("VaultToken", function () {
 
       let expectedBobAllocation = bobStakeAmount * parseEther("1") / price1;
       const expectedBobShares = expectedBobAllocation;
-      expect((await tier2.userTier2Info(reserveStrategy, bob)).shares).to.be.eq(expectedBobShares);
-      expect((await tier2.userTier2Info(reserveStrategy, bob)).allocation).to.be.eq(expectedBobAllocation);
-      expect((await tier2.userTier2Info(reserveStrategy, bob)).stake).to.be.eq(bobStakeAmount * priceRatio);
+
+      expect(await vaultToken.totalAssets()).to.be.eq(expectedBobAllocation);
+      expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).shares).to.be.eq(expectedBobShares);
+      expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).allocation).to.be.eq(expectedBobAllocation);
+      expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).stake).to.be.eq(bobStakeAmount * priceRatio);
 
       expect(await vaultToken.totalAssets()).to.be.eq(expectedBobAllocation);
 
@@ -233,10 +242,10 @@ describe("VaultToken", function () {
       const precisionError = 1n;
       const expectedNewBobStake = await reserveStrategy.convertToStake(expectedBobAllocation - precisionError);
 
-      expect((await tier2.userTier2Info(reserveStrategy, bob)).shares).to.be.eq(expectedBobShares);
-      expect((await tier2.userTier2Info(reserveStrategy, bob)).allocation).to.be.eq(expectedBobAllocation - precisionError);
-      expect((await tier2.userTier2Info(reserveStrategy, bob)).stake).to.be.eq(expectedNewBobStake);
       expect(await vaultToken.totalAssets()).to.be.eq(expectedBobAllocation);
+      expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).shares).to.be.eq(expectedBobShares);
+      expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).allocation).to.be.eq(expectedBobAllocation - precisionError);
+      expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).stake).to.be.eq(expectedNewBobStake);
 
       // actual withdraw
       await vaultToken.connect(bob).approve(vaultToken, expectedBobShares);
@@ -300,9 +309,10 @@ describe("VaultToken", function () {
       const allocation = await vaultToken.convertToAssets(shares);
       const expectedStake = allocation * price2 / parseEther("1");
 
-      expect((await tier2.userTier2Info(reserveStrategy, alice)).shares).to.be.eq(shares);
-      expect((await tier2.userTier2Info(reserveStrategy, alice)).allocation).to.be.eq(allocation);
-      expect((await tier2.userTier2Info(reserveStrategy, alice)).stake).to.be.eq(expectedStake);
+      expect(await vaultToken.totalSupply()).to.be.eq(shares);
+      expect((await tier2.sharesTier2Info(reserveStrategy, shares)).shares).to.be.eq(shares);
+      expect((await tier2.sharesTier2Info(reserveStrategy, shares)).allocation).to.be.eq(allocation);
+      expect((await tier2.sharesTier2Info(reserveStrategy, shares)).stake).to.be.eq(expectedStake);
 
       // expectedStake is lower than it would be if deposited directly into tier2
       expect(expectedStake).to.be.lt((stakeAmount) * price2 / parseEther("1"));

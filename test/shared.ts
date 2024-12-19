@@ -73,7 +73,9 @@ export async function createNativeStakingPool(staking: Contract) {
   const currency = { token: nativeTokenAddress } as CurrencyStruct;
 
   await staking.connect(stakingManager).createStakingPool(currency);
-  const ethPoolId = await staking.generatePoolId(currency, 0);
+
+  const poolCount = await staking.stakeTokenPoolCount(currency);
+  const ethPoolId = await staking.generatePoolId(currency, poolCount - 1n);
 
   return { nativeTokenAddress, ethPoolId };
 }

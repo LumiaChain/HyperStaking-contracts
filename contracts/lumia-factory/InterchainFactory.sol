@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {LumiaLPToken} from "./LumiaLPToken.sol";
+import {IInterchainFactory} from "./interfaces/IInterchainFactory.sol";
 
 import {IMailbox} from "../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../external/hyperlane/libs/TypeCasts.sol";
@@ -15,8 +16,9 @@ import {
  * @title InterchainFactory
  * @notice Factory contract for LP tokens that operates based on messages received via Hyperlane
  * @dev Facilitates the deployment, management, and processing of LP token operations.
+ * #TODO Diamond Proxy 2
  */
-contract InterchainFactory is Ownable {
+contract InterchainFactory is IInterchainFactory, Ownable {
     using HyperlaneMailboxMessages for bytes;
 
     /// Hyperlane Mailbox
@@ -33,36 +35,7 @@ contract InterchainFactory is Ownable {
 
     // ========= Events ========= //
 
-    event ReceivedMessage(
-        uint32 indexed origin,
-        bytes32 indexed sender,
-        uint256 value,
-        string message
-    );
-
-    event TokenDeployed(address originToken, address lpToken, string name, string symbol);
-    event TokenBridged(
-        address indexed originToken,
-        address indexed lpToken,
-        address indexed sender,
-        uint256 amount
-    );
-
-    event MailboxUpdated(address indexed oldMailbox, address indexed newMailbox);
-    event OriginLockboxUpdated(address indexed oldLockbox, address indexed newLockbox);
-
     // ========= Errors ========= //
-
-    error NotFromMailbox(address from);
-    error NotFromLumiaLockbox(address sender);
-
-    error OriginLockboxNotSet();
-    error LumiaReceiverNotSet();
-
-    error InvalidMailbox(address badMailbox);
-    error InvalidLumiaReceiver(address badReceiver);
-
-    error TokenAlreadyDeployed();
 
     //============================================================================================//
     //                                         Modifiers                                          //
@@ -84,6 +57,7 @@ contract InterchainFactory is Ownable {
     /**
      * @param mailbox_ The address of the mailbox contract, used for cross-chain communication
      */
+    // TODO proxy instead of owner
     constructor(address mailbox_) Ownable(msg.sender) {
         setMailbox(mailbox_);
     }
@@ -92,9 +66,7 @@ contract InterchainFactory is Ownable {
     //                                      Public Functions                                      //
     //============================================================================================//
 
-    /**
-     * @notice Function called by the Mailbox contract when a message is received
-     */
+    /// @inheritdoc IInterchainFactory
     function handle(
         uint32 origin_,
         bytes32 sender_,
@@ -126,10 +98,7 @@ contract InterchainFactory is Ownable {
 
     // ========= Owner ========= //
 
-    /**
-     * @notice Updates the mailbox address used for interchain messaging
-     * @param newMailbox_ The new mailbox address
-     */
+    /// @inheritdoc IInterchainFactory
     function setMailbox(address newMailbox_) public onlyOwner {
         require(
             newMailbox_ != address(0) && newMailbox_.code.length > 0,
@@ -140,10 +109,7 @@ contract InterchainFactory is Ownable {
         mailbox = IMailbox(newMailbox_);
     }
 
-    /**
-     * @notice Updates the origin lockbox address
-     * @param newLockbox_ The new origin lockbox address
-     */
+    /// @inheritdoc IInterchainFactory
     function setOriginLockbox(address newLockbox_) public onlyOwner {
         emit OriginLockboxUpdated(originLockbox, newLockbox_);
         originLockbox = newLockbox_;

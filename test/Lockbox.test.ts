@@ -1,7 +1,7 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { parseEther } from "ethers";
+import { parseEther, ZeroAddress } from "ethers";
 
 import * as shared from "./shared";
 
@@ -9,11 +9,9 @@ describe("Lockbox", function () {
   async function deployHyperStaking() {
     const [owner, stakingManager, strategyVaultManager, bob, alice] = await ethers.getSigners();
 
-    const mailboxFee = parseEther("0.05");
-
     const {
       mailbox, interchainFactory, diamond, staking, factory, tier1, tier2, lockbox,
-    } = await shared.deployTestHyperStaking(mailboxFee);
+    } = await shared.deployTestHyperStaking(0n);
 
     // --------------------- Deploy Tokens ----------------------
 
@@ -39,8 +37,11 @@ describe("Lockbox", function () {
       reserveStrategy,
       testReserveAsset,
       defaultRevenueFee,
-      { value: mailboxFee },
     );
+
+    // set fee after strategy is added
+    const mailboxFee = parseEther("0.05");
+    await mailbox.connect(owner).setFee(mailboxFee);
 
     const vaultTokenAddress = (await tier2.vaultTier2Info(reserveStrategy)).vaultToken;
     const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
@@ -62,7 +63,9 @@ describe("Lockbox", function () {
 
   describe("Lockbox", function () {
     it("stake deposit to tier2 with non-zero mailbox fee", async function () {
-      const { staking, ethPoolId, reserveStrategy, vaultToken, lpToken, mailboxFee, owner, alice } = await loadFixture(deployHyperStaking);
+      const {
+        staking, ethPoolId, reserveStrategy, vaultToken, lpToken, mailboxFee, owner, alice,
+      } = await loadFixture(deployHyperStaking);
 
       const lpBefore = await lpToken.balanceOf(alice);
 
@@ -88,11 +91,41 @@ describe("Lockbox", function () {
       expect((await staking.userPoolInfo(ethPoolId, alice)).stakeLocked).to.equal(0);
       expect((await staking.poolInfo(ethPoolId)).totalStake).to.equal(0);
     });
+
+    it("mailbox fee is needed when adding strategy too", async function () {
+      const {
+        diamond, staking, factory, lockbox, mailboxFee, strategyVaultManager,
+      } = await loadFixture(deployHyperStaking);
+
+      // new pool and strategy
+      const { nativeTokenAddress, ethPoolId } = await shared.createNativeStakingPool(staking);
+      const asset2 = await shared.deloyTestERC20("Test Reserve Asset 2", "t2");
+
+      const strategy2 = await shared.createReserveStrategy(
+        diamond, nativeTokenAddress, await asset2.getAddress(), parseEther("1"),
+      );
+
+      // revert if mailbox fee is not sent
+      await expect(factory.connect(strategyVaultManager).addStrategy(
+        ethPoolId,
+        strategy2,
+        asset2,
+        0n,
+      )).to.be.reverted;
+
+      expect( // in a real scenario fee could depend on the token address, correct name and symbol
+        await lockbox.quoteDispatchTokenDeploy(ZeroAddress, "Test Reserve Asset 2", "t2"),
+      ).to.equal(mailboxFee);
+
+      await factory.connect(strategyVaultManager).addStrategy(
+        ethPoolId,
+        strategy2,
+        asset2,
+        0n,
+        { value: mailboxFee },
+      );
+    });
   });
-
-  // TODO mailbox fee when creating strategy
-
-  // TODO mailbox fee from quoteStakeDispatch
 
   // TODO test HyperlaneMessages:
   // require(temp.length <= 32, "stringToBytes32: overflow");
