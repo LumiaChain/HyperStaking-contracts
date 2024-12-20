@@ -127,7 +127,91 @@ describe("Lockbox", function () {
     });
   });
 
-  // TODO test HyperlaneMessages:
-  // require(temp.length <= 32, "stringToBytes32: overflow");
-  // require(temp.length <= 64, "stringToBytes64: overflow");
+  describe.only("Hyperlane Mailbox Messages", function () {
+    // remove null bytes from (solidity bytes32) the end of a string
+    const decodeString = (s: string) => s.replace(/\0+$/, "");
+
+    async function deployTestWrapper() {
+      return await ethers.deployContract("TestHyperlaneMessages", []);
+    }
+
+    it("serialization and deserialization", async function () {
+      const testWrapper = await loadFixture(deployTestWrapper);
+
+      // TokenDeploy
+
+      const message1 = {
+        tokenAddress: ZeroAddress,
+        name: "Test Token",
+        symbol: "TT",
+        metadata: "0x1234",
+      };
+
+      const bytes1 = await testWrapper.serializeTokenDeploy(
+        message1.tokenAddress,
+        message1.name,
+        message1.symbol,
+        message1.metadata,
+      );
+
+      expect(await testWrapper.messageType(bytes1)).to.equal(0);
+      expect(await testWrapper.tokenAddress(bytes1)).to.equal(message1.tokenAddress);
+      expect(decodeString(await testWrapper.name(bytes1))).to.equal(message1.name);
+      expect(decodeString(await testWrapper.symbol(bytes1))).to.equal(message1.symbol);
+      expect(await testWrapper.tokenDeployMetadata(bytes1)).to.equal(message1.metadata);
+
+      // TokenBridge
+
+      const message2 = {
+        vaultToken: ZeroAddress,
+        sender: ZeroAddress,
+        amount: parseEther("1"),
+        metadata: "0x1234",
+      };
+
+      const bytes2 = await testWrapper.serializeTokenBridge(
+        message2.vaultToken,
+        message2.sender,
+        message2.amount,
+        message2.metadata,
+      );
+
+      expect(await testWrapper.messageType(bytes2)).to.equal(1);
+      expect(await testWrapper.vaultToken(bytes2)).to.equal(message2.vaultToken);
+      expect(await testWrapper.sender(bytes2)).to.equal(message2.sender);
+      expect(await testWrapper.amount(bytes2)).to.equal(message2.amount);
+      expect(await testWrapper.tokenBridgeMetadata(bytes2)).to.equal(message2.metadata);
+    });
+
+    it("string limitations", async function () {
+      const testWrapper = await loadFixture(deployTestWrapper);
+
+      const message = {
+        tokenAddress: ZeroAddress,
+        name: "Test Token with a little longer name than usual, still working?",
+        symbol: "TTSYMBOLEXTENDED 123456789",
+        metadata: "0x",
+      };
+
+      const bytes1 = await testWrapper.serializeTokenDeploy(
+        message.tokenAddress,
+        message.name,
+        message.symbol,
+        message.metadata,
+      );
+
+      expect(decodeString(await testWrapper.name(bytes1))).to.equal(message.name);
+      expect(decodeString(await testWrapper.symbol(bytes1))).to.equal(message.symbol);
+
+      // but
+
+      await testWrapper.stringToBytes32("X".repeat(32)); // ok
+      await expect(testWrapper.stringToBytes32("X".repeat(33)))
+        .to.be.revertedWith("stringToBytes32: overflow");
+
+      await testWrapper.stringToBytes64("X".repeat(64)); // ok
+      await expect(testWrapper.stringToBytes64("X".repeat(65)))
+        .to.be.revertedWith("stringToBytes64: overflow");
+    });
+  });
 });

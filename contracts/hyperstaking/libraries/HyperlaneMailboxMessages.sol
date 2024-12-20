@@ -32,11 +32,11 @@ library HyperlaneMailboxMessages {
 
         assembly {
             // load the first 32 bytes into the first array slot
-            mstore(add(result, 0x20), mload(add(temp, 0x20)))
+            mstore(add(result, 0x00), mload(add(temp, 0x20)))
 
             // load the next 32 bytes into the second array slot if applicable
             if gt(mload(temp), 32) {
-                mstore(add(result, 0x40), mload(add(temp, 0x40)))
+                mstore(add(result, 0x20), mload(add(temp, 0x40)))
             }
         }
     }
@@ -93,9 +93,7 @@ library HyperlaneMailboxMessages {
         return string(bytes(message[104:136]));
     }
 
-    function tokenDeployMetadata(
-        bytes calldata message
-    ) internal pure returns (bytes calldata) {
+    function tokenDeployMetadata(bytes calldata message) internal pure returns (bytes calldata) {
         return message[136:];
     }
 
@@ -113,9 +111,7 @@ library HyperlaneMailboxMessages {
         return uint256(bytes32(message[72:104]));
     }
 
-    function tokenBridgeMetadata(
-        bytes calldata message
-    ) internal pure returns (bytes calldata) {
+    function tokenBridgeMetadata(bytes calldata message) internal pure returns (bytes calldata) {
         return message[104:];
     }
 }
