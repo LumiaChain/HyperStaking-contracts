@@ -24,6 +24,9 @@ contract InterchainFactory is IInterchainFactory, Ownable {
     /// Hyperlane Mailbox
     IMailbox public mailbox;
 
+    /// ChainID - route destination to origin chain
+    uint32 public destination;
+
     /// Address of the sender - Lockbox located on the origin chain
     address public originLockbox;
 
@@ -31,11 +34,8 @@ contract InterchainFactory is IInterchainFactory, Ownable {
     bytes public lastData;
 
     // TODO enumerable map
-    mapping(address originToken => LumiaLPToken lpToken) public lpTokens;
-
-    // ========= Events ========= //
-
-    // ========= Errors ========= //
+    mapping(LumiaLPToken lpToken => address originVaultToken) public vaultTokens;
+    mapping(address originVaultToken => LumiaLPToken lpTokens) public lpTokens;
 
     //============================================================================================//
     //                                         Modifiers                                          //
@@ -71,7 +71,7 @@ contract InterchainFactory is IInterchainFactory, Ownable {
         uint32 origin_,
         bytes32 sender_,
         bytes calldata data_
-    ) external payable {
+    ) external payable onlyMailbox {
         require(originLockbox != address(0), OriginLockboxNotSet());
 
         emit ReceivedMessage(origin_, sender_, msg.value, string(data_));
@@ -89,11 +89,38 @@ contract InterchainFactory is IInterchainFactory, Ownable {
 
         if (msgType == MessageType.TokenBridge) {
             _handleTokenBridge(data_);
+            return;
         }
 
         if (msgType == MessageType.TokenDeploy) {
             _handleTokenDeploy(data_);
+            return;
         }
+
+        revert UnsupportedMessage();
+    }
+
+    /// @inheritdoc IInterchainFactory
+    function redeemLpTokensDispatch(
+        LumiaLPToken lpToken_,
+        address spender_,
+        uint256 shares_
+    ) external payable {
+        address vaultToken = vaultTokens[lpToken_];
+        require(vaultToken != address(0), UnrecognizedVaultToken());
+
+        // burn lpTokens
+        lpToken_.burnFrom(spender_, shares_);
+
+        bytes memory body = generateTokenRedeemBody(vaultToken, spender_, shares_);
+
+        // address left-padded to bytes32 for compatibility with hyperlane
+        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(originLockbox);
+
+        // msg.value should already include fee calculated
+        mailbox.dispatch{value: msg.value}(destination, recipientBytes32, body);
+
+        emit RedeemTokenDispatched(address(mailbox), originLockbox, vaultToken, spender_, shares_);
     }
 
     // ========= Owner ========= //
@@ -110,15 +137,51 @@ contract InterchainFactory is IInterchainFactory, Ownable {
     }
 
     /// @inheritdoc IInterchainFactory
+    function setDestination(uint32 destination_) external onlyOwner {
+        emit DestinationUpdated(destination, destination_);
+        destination = destination_;
+    }
+
+    /// @inheritdoc IInterchainFactory
     function setOriginLockbox(address newLockbox_) public onlyOwner {
         emit OriginLockboxUpdated(originLockbox, newLockbox_);
         originLockbox = newLockbox_;
+    }
+
+    // ========= View ========= //
+
+    /// @inheritdoc IInterchainFactory
+    function quoteDispatchTokenRedeem(
+        address vaultToken_,
+        address sender_,
+        uint256 shares_
+    ) external view returns (uint256) {
+        return mailbox.quoteDispatch(
+            destination,
+            TypeCasts.addressToBytes32(originLockbox),
+            generateTokenRedeemBody(vaultToken_, sender_, shares_)
+        );
+    }
+
+    /// @inheritdoc IInterchainFactory
+    function generateTokenRedeemBody(
+        address vaultToken_,
+        address sender_,
+        uint256 shares_
+    ) public pure returns (bytes memory body) {
+        body = HyperlaneMailboxMessages.serializeTokenRedeem(
+            vaultToken_,
+            sender_,
+            shares_,
+            bytes("") // no metadata
+        );
     }
 
     //============================================================================================//
     //                                     Internal Functions                                     //
     //============================================================================================//
 
+    /// @notice Handle specific TokenDeploy message
     function _handleTokenDeploy(bytes calldata data_) internal {
         address tokenAddress = data_.tokenAddress();
         string memory name = data_.name();
@@ -132,12 +195,14 @@ contract InterchainFactory is IInterchainFactory, Ownable {
             symbol_:symbol
         });
 
-        // save in the storage
+        // save in the storage # TODO
+        vaultTokens[lpToken] = tokenAddress;
         lpTokens[tokenAddress] = lpToken;
 
         emit TokenDeployed(tokenAddress, address(lpToken), name, symbol);
     }
 
+    /// @notice Handle specific TokenBridge message
     function _handleTokenBridge(bytes calldata data_) internal {
         address vaultToken = data_.vaultToken();
         address sender = data_.sender();
@@ -145,7 +210,7 @@ contract InterchainFactory is IInterchainFactory, Ownable {
 
         LumiaLPToken lpToken = lpTokens[vaultToken];
 
-        // mint LP tokens for the specified used
+        // mint LP tokens for the specified user
         lpToken.mint(sender, amount);
 
         emit TokenBridged(vaultToken, address(lpToken), sender, amount);

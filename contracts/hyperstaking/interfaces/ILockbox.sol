@@ -14,7 +14,7 @@ interface ILockbox {
 
     event TokenDeployDispatched(
         address indexed mailbox,
-        address recipient,
+        address lumiaFactory,
         address tokenAddress,
         string name,
         string symbol
@@ -22,15 +22,22 @@ interface ILockbox {
 
     event BridgeTokenDispatched(
         address indexed mailbox,
-        address recipient,
+        address lumiaFactory,
         address indexed vaultToken,
         address indexed user,
         uint256 shares
     );
 
+    event ReceivedMessage(
+        uint32 indexed origin,
+        bytes32 indexed sender,
+        uint256 value,
+        string message
+    );
+
     event MailboxUpdated(address indexed oldMailbox, address indexed newMailbox);
     event DestinationUpdated(uint32 indexed oldDestination, uint32 indexed newDestination);
-    event RecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
+    event LumiaFactoryUpdated(address indexed oldLumiaFactory, address indexed newLumiaFactory);
 
     //===========================================================================================//
     //                                          Errors                                            //
@@ -38,9 +45,14 @@ interface ILockbox {
 
     error InvalidVaultToken(address badVaultToken);
     error InvalidMailbox(address badMailbox);
-    error InvalidRecipient(address badRecipient);
+    error InvalidLumiaFactory(address badLumiaFactory);
 
     error RecipientUnset();
+
+    error NotFromMailbox(address from);
+    error NotFromLumiaFactory(address sender);
+
+    error UnsupportedMessage();
 
     //============================================================================================//
     //                                          Mutable                                           //
@@ -67,6 +79,15 @@ interface ILockbox {
     ) external payable;
 
     /**
+     * @notice Function called by the Mailbox contract when a message is received
+     */
+    function handle(
+        uint32 origin,
+        bytes32 sender,
+        bytes calldata data
+    ) external payable;
+
+    /**
      * @notice Updates the mailbox address used for interchain messaging
      * @param mailbox The new mailbox address
      */
@@ -79,10 +100,10 @@ interface ILockbox {
     function setDestination(uint32 destination) external;
 
     /**
-     * @notice Updates the recipient contract address for mailbox messages
-     * @param recipient The new recipient address
+     * @notice Updates the lumia factory contract recipient address for mailbox messages
+     * @param lumiaFactory The new recipient address
      */
-    function setRecipient(address recipient) external;
+    function setLumiaFactory(address lumiaFactory) external;
 
     //============================================================================================//
     //                                           View                                             //

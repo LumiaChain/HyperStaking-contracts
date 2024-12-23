@@ -46,7 +46,7 @@ describe("VaultToken", function () {
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      staking, factory, tier1, tier2, // diamond facets
+      staking, factory, tier1, tier2, interchainFactory, // diamond facets
       testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
       ethPoolId, // ids
       defaultRevenueFee, reserveAssetPrice, // values
@@ -117,29 +117,29 @@ describe("VaultToken", function () {
       expect(aliceShares2).to.be.eq(2n * bobShares);
     });
 
-    it("it should be possible to approve and transfer vault token", async function () {
-      const { staking, ethPoolId, reserveStrategy, vaultToken, owner, alice, bob } = await loadFixture(deployHyperStaking);
+    it("it should be possible to approve and transfer lpTokens", async function () {
+      const { staking, ethPoolId, reserveStrategy, lpToken, owner, alice, bob } = await loadFixture(deployHyperStaking);
 
-      expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
-      expect(await vaultToken.balanceOf(bob)).to.be.eq(0);
-      expect(await vaultToken.balanceOf(owner)).to.be.eq(0);
+      expect(await lpToken.balanceOf(alice)).to.be.eq(0);
+      expect(await lpToken.balanceOf(bob)).to.be.eq(0);
+      expect(await lpToken.balanceOf(owner)).to.be.eq(0);
 
       const stakeAmount = parseEther("3");
       await staking.stakeDepositTier2(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
-      const lpBalance = await vaultToken.balanceOf(alice);
+      const lpBalance = await lpToken.balanceOf(alice);
 
-      await vaultToken.connect(alice).approve(bob, lpBalance);
-      await vaultToken.connect(bob).transferFrom(alice, bob, lpBalance);
+      await lpToken.connect(alice).approve(bob, lpBalance);
+      await lpToken.connect(bob).transferFrom(alice, bob, lpBalance);
 
-      expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
-      expect(await vaultToken.balanceOf(bob)).to.be.eq(lpBalance);
-      expect(await vaultToken.balanceOf(owner)).to.be.eq(0);
+      expect(await lpToken.balanceOf(alice)).to.be.eq(0);
+      expect(await lpToken.balanceOf(bob)).to.be.eq(lpBalance);
+      expect(await lpToken.balanceOf(owner)).to.be.eq(0);
 
-      await vaultToken.connect(bob).transfer(owner, lpBalance);
+      await lpToken.connect(bob).transfer(owner, lpBalance);
 
-      expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
-      expect(await vaultToken.balanceOf(bob)).to.be.eq(0);
-      expect(await vaultToken.balanceOf(owner)).to.be.eq(lpBalance);
+      expect(await lpToken.balanceOf(alice)).to.be.eq(0);
+      expect(await lpToken.balanceOf(bob)).to.be.eq(0);
+      expect(await lpToken.balanceOf(owner)).to.be.eq(lpBalance);
 
       await staking.stakeDepositTier2(ethPoolId, reserveStrategy, stakeAmount, bob, { value: stakeAmount });
       await staking.stakeDepositTier2(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
@@ -147,7 +147,8 @@ describe("VaultToken", function () {
 
     it("it should be possible to redeem vaultToken and withdraw stake", async function () {
       const {
-        staking, ethPoolId, testReserveAsset, reserveStrategy, reserveAssetPrice, vaultToken, lpToken, alice, bob,
+        staking, ethPoolId, testReserveAsset, reserveStrategy, interchainFactory,
+        reserveAssetPrice, vaultToken, lpToken, alice, bob,
       } = await loadFixture(deployHyperStaking);
 
       expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
@@ -170,7 +171,12 @@ describe("VaultToken", function () {
       await expect(vaultToken.connect(alice).withdraw(stakeAmount, alice, alice))
         .to.be.revertedWithCustomError(vaultToken, "OwnableUnauthorizedAccount");
 
-      // TODO interchain redeem
+      // interchain redeem
+      await lpToken.connect(alice).approve(interchainFactory, lpBalance);
+      const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, bob, lpBalance);
+      await interchainFactory.connect(alice).redeemLpTokensDispatch(
+        lpToken, alice, lpBalance, { value: dispatchFee },
+      );
 
       expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
       expect(await lpToken.balanceOf(alice)).to.be.eq(0);
@@ -179,12 +185,11 @@ describe("VaultToken", function () {
       // -- scenario with approval redeem
       await staking.stakeDepositTier2(ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount });
 
-      // alice approve bob to redeem her shares
-      await vaultToken.connect(alice).approve(bob, lpBalance);
-      expect(await vaultToken.allowance(alice, bob)).to.be.eq(lpBalance);
-
-      await expect(vaultToken.connect(bob).redeem(lpBalance, bob, alice))
-        .to.changeEtherBalances([bob], [stakeAmount]);
+      // alice approve factory and bob excutes redeem for her
+      await lpToken.connect(alice).approve(interchainFactory, lpBalance);
+      await interchainFactory.connect(bob).redeemLpTokensDispatch(
+        lpToken, alice, lpBalance, { value: dispatchFee },
+      );
 
       expect(await vaultToken.allowance(alice, bob)).to.be.eq(0);
       expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
@@ -194,7 +199,7 @@ describe("VaultToken", function () {
 
     it("fee from tier1 should increase tier2 shares value", async function () {
       const {
-        staking, tier1, tier2, ethPoolId, reserveStrategy, vaultToken,
+        staking, tier1, tier2, interchainFactory, ethPoolId, reserveStrategy, vaultToken, lpToken,
         strategyVaultManager, alice, bob,
       } = await loadFixture(deployHyperStaking);
 
@@ -247,10 +252,13 @@ describe("VaultToken", function () {
       expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).allocation).to.be.eq(expectedBobAllocation - precisionError);
       expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).stake).to.be.eq(expectedNewBobStake);
 
-      // actual withdraw
-      await vaultToken.connect(bob).approve(vaultToken, expectedBobShares);
-      await expect(vaultToken.connect(bob).withdraw(expectedBobAllocation - precisionError, bob, bob))
-        .to.changeEtherBalances([bob], [expectedNewBobStake]);
+      // actual withdraw -> redeem of lpTokens
+      await lpToken.connect(bob).approve(interchainFactory, expectedBobShares);
+      const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, bob, expectedBobShares);
+      await expect(interchainFactory.connect(bob).redeemLpTokensDispatch(
+        lpToken, bob, expectedBobShares, { value: dispatchFee },
+      ))
+        .to.changeEtherBalance(bob, expectedNewBobStake);
 
       expect(await vaultToken.totalSupply()).to.be.eq(0);
       expect(await vaultToken.totalAssets()).to.be.eq(precisionError);
@@ -258,8 +266,8 @@ describe("VaultToken", function () {
 
     it("it should be possible to effectively migrate from tier1 to tier2", async function () {
       const {
-        staking, tier1, tier2, ethPoolId, reserveStrategy, testReserveAsset, vaultToken,
-        strategyVaultManager, alice,
+        staking, tier1, tier2, ethPoolId, reserveStrategy, testReserveAsset, vaultToken, lpToken,
+        interchainFactory, strategyVaultManager, alice,
       } = await loadFixture(deployHyperStaking);
 
       const price1 = parseEther("1");
@@ -318,7 +326,11 @@ describe("VaultToken", function () {
       expect(expectedStake).to.be.lt((stakeAmount) * price2 / parseEther("1"));
 
       // redeem
-      await expect(vaultToken.connect(alice).redeem(shares, alice, alice))
+      await lpToken.connect(alice).approve(interchainFactory, shares);
+      const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, alice, shares);
+      await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(
+        lpToken, alice, shares, { value: dispatchFee },
+      ))
         .to.changeEtherBalances([alice], [expectedStake]);
     });
   });

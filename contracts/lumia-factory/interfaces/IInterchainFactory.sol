@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
+import {LumiaLPToken} from "../LumiaLPToken.sol";
 
 /**
  * @title IInterchainFactory
@@ -27,7 +28,16 @@ interface IInterchainFactory {
         uint256 amount
     );
 
+    event RedeemTokenDispatched(
+        address indexed mailbox,
+        address recipient,
+        address indexed vaultToken,
+        address indexed user,
+        uint256 shares
+    );
+
     event MailboxUpdated(address indexed oldMailbox, address indexed newMailbox);
+    event DestinationUpdated(uint32 indexed oldDestination, uint32 indexed newDestination);
     event OriginLockboxUpdated(address indexed oldLockbox, address indexed newLockbox);
 
     //===========================================================================================//
@@ -44,6 +54,8 @@ interface IInterchainFactory {
     error InvalidLumiaReceiver(address badReceiver);
 
     error TokenAlreadyDeployed();
+    error UnrecognizedVaultToken();
+    error UnsupportedMessage();
 
     //============================================================================================//
     //                                          Mutable                                           //
@@ -59,10 +71,29 @@ interface IInterchainFactory {
     ) external payable;
 
     /**
+     * @notice Initiates token redemption
+     * @dev Handles cross-chain unstaking via hyperlane bridge
+     * @param lpToken_ Address of the token to redeem
+     * @param spender_ Address of the user whose process is initiated
+     * @param shares_ Amount of shares to redeem
+     */
+    function redeemLpTokensDispatch(
+        LumiaLPToken lpToken_,
+        address spender_,
+        uint256 shares_
+    ) external payable;
+
+    /**
      * @notice Updates the mailbox address used for interchain messaging
      * @param newMailbox_ The new mailbox address
      */
     function setMailbox(address newMailbox_) external;
+
+    /**
+     * @notice Updates the destination chain ID for the route
+     * @param destination The new destination chain ID
+     */
+    function setDestination(uint32 destination) external;
 
     /**
      * @notice Updates the origin lockbox address
@@ -82,5 +113,19 @@ interface IInterchainFactory {
 
     function lastData() external view returns(bytes memory);
 
-    // HMH enuberable map getters?
+    // TODO enuberable map getters
+
+    /// @notice Helper: separated function for getting mailbox dispatch quote
+    function quoteDispatchTokenRedeem(
+        address vaultToken,
+        address sender,
+        uint256 shares
+    ) external view returns (uint256);
+
+    /// @notice Helper: separated function for generating hyperlane message body
+    function generateTokenRedeemBody(
+        address vaultToken,
+        address sender,
+        uint256 shares
+    ) external pure returns (bytes memory body);
 }

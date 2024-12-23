@@ -125,11 +125,52 @@ describe("Lockbox", function () {
         { value: mailboxFee },
       );
     });
+
+    it("redeem on the should triger tier2 leave on the origin chain - non-zero mailbox fee", async function () {
+      const {
+        staking, ethPoolId, reserveStrategy, mailbox, vaultToken, interchainFactory,
+        testReserveAsset, lpToken, mailboxFee, reserveAssetPrice, alice,
+      } = await loadFixture(deployHyperStaking);
+
+      const stakeAmount = parseEther("3");
+      const expectedLpAmount = stakeAmount * parseEther("1") / reserveAssetPrice;
+
+      await expect(staking.stakeDepositTier2(
+        ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
+      ))
+        .to.emit(interchainFactory, "TokenBridged")
+        .withArgs(vaultToken.target, lpToken.target, alice.address, expectedLpAmount);
+
+      const lpAfter = await lpToken.balanceOf(alice);
+      expect(lpAfter).to.eq(expectedLpAmount);
+
+      await lpToken.connect(alice).approve(interchainFactory, lpAfter);
+
+      await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(
+        lpToken.target, alice, lpAfter,
+      ))
+        .to.be.revertedWithCustomError(mailbox, "DispatchUnderpaid");
+
+      const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, alice, lpAfter);
+
+      // redeem should return stakeAmount
+      const redeemTx = interchainFactory.connect(alice).redeemLpTokensDispatch(
+        lpToken, alice, lpAfter, { value: dispatchFee },
+      );
+
+      // lpToken -> vaultAsset -> strategy allocation -> stake withdraw
+      await expect(redeemTx).to.changeEtherBalance(alice, stakeAmount - dispatchFee);
+      await expect(redeemTx).to.changeTokenBalance(testReserveAsset, vaultToken, -expectedLpAmount);
+
+      expect(await lpToken.balanceOf(alice)).to.eq(0);
+    });
   });
 
-  describe.only("Hyperlane Mailbox Messages", function () {
-    // remove null bytes from (solidity bytes32) the end of a string
-    const decodeString = (s: string) => s.replace(/\0+$/, "");
+  describe("Hyperlane Mailbox Messages", function () {
+    // remove null bytes from (solidity bytes32) the end of a string (right padding)
+    const decodeString = (s: string) => {
+      return s.replace(/\0+$/, "");
+    };
 
     async function deployTestWrapper() {
       return await ethers.deployContract("TestHyperlaneMessages", []);
@@ -181,6 +222,28 @@ describe("Lockbox", function () {
       expect(await testWrapper.sender(bytes2)).to.equal(message2.sender);
       expect(await testWrapper.amount(bytes2)).to.equal(message2.amount);
       expect(await testWrapper.tokenBridgeMetadata(bytes2)).to.equal(message2.metadata);
+
+      // TokenRedeem
+
+      const message3 = {
+        vaultToken: ZeroAddress,
+        sender: ZeroAddress,
+        amount: parseEther("2"),
+        metadata: "0x1256",
+      };
+
+      const bytes3 = await testWrapper.serializeTokenRedeem(
+        message3.vaultToken,
+        message3.sender,
+        message3.amount,
+        message3.metadata,
+      );
+
+      expect(await testWrapper.messageType(bytes3)).to.equal(2);
+      expect(await testWrapper.vaultToken(bytes3)).to.equal(message3.vaultToken);
+      expect(await testWrapper.sender(bytes3)).to.equal(message3.sender);
+      expect(await testWrapper.amount(bytes3)).to.equal(message3.amount);
+      expect(await testWrapper.tokenBridgeMetadata(bytes3)).to.equal(message3.metadata);
     });
 
     it("string limitations", async function () {

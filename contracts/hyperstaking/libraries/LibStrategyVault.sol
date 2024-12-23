@@ -44,10 +44,16 @@ struct VaultInfo {
     IERC20Metadata asset;
 }
 
+struct HyperlaneMessage {
+    address sender;
+    bytes data;
+}
+
 struct LockboxData {
     IMailbox mailbox; /// Hyperlane Mailbox
     uint32 destination; /// ChainID - route destination
-    address recipient; /// Destinaion contract which will be receiving messages
+    address lumiaFactory; /// Destinaion contract which will be receiving messages
+    HyperlaneMessage lastMessage; /// Information about last mailbox message received
 }
 
 //================================================================================================//

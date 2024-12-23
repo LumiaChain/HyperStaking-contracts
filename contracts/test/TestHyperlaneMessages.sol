@@ -49,6 +49,20 @@ contract TestHyperlaneMessages {
         );
     }
 
+    function serializeTokenRedeem(
+        address vaultToken_,
+        address sender_,
+        uint256 amount_,
+        bytes memory metadata_
+    ) external pure returns (bytes memory) {
+        return HyperlaneMailboxMessages.serializeTokenRedeem(
+            vaultToken_,
+            sender_,
+            amount_,
+            metadata_
+        );
+    }
+
     // ========= General ========= //
 
     function messageType(bytes calldata message) external pure returns (MessageType) {
@@ -73,7 +87,7 @@ contract TestHyperlaneMessages {
         return message.tokenDeployMetadata();
     }
 
-    // ========= TokenBridge ========= //
+    // ========= TokenBridge & TokenRedeem  ========= //
 
     function vaultToken(bytes calldata message) external pure returns (address) {
         return message.vaultToken();
@@ -89,5 +103,9 @@ contract TestHyperlaneMessages {
 
     function tokenBridgeMetadata(bytes calldata message) external pure returns (bytes calldata) {
         return message.tokenBridgeMetadata();
+    }
+
+    function tokenRedeemMetadata(bytes calldata message) external pure returns (bytes calldata) {
+        return message[104:];
     }
 }

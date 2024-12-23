@@ -6,11 +6,8 @@ import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {IERC20, IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {
-    ReentrancyGuardUpgradeable
-} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
-import {HyperlaneMailboxMessages} from "../libraries/HyperlaneMailboxMessages.sol";
+import {MessageType, HyperlaneMailboxMessages} from "../libraries/HyperlaneMailboxMessages.sol";
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
@@ -23,8 +20,23 @@ import {LibStrategyVault, LockboxData} from "../libraries/LibStrategyVault.sol";
  *         Lumia chain. Handles incoming messages to initiate the unstaking process
  * @dev Managed by HyperStaking Tier2 Vault and Vault Factory
  */
-contract LockboxFacet is ILockbox, HyperStakingAcl, ReentrancyGuardUpgradeable {
+contract LockboxFacet is ILockbox, HyperStakingAcl {
+    using HyperlaneMailboxMessages for bytes;
     using SafeERC20 for IERC20;
+
+    //============================================================================================//
+    //                                         Modifiers                                          //
+    //============================================================================================//
+
+    /// @notice Only accept messages from an Hyperlane Mailbox contract
+    modifier onlyMailbox() {
+        LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
+        require(
+            msg.sender == address(box.mailbox),
+            NotFromMailbox(msg.sender)
+        );
+        _;
+    }
 
     //============================================================================================//
     //                                      Public Functions                                      //
@@ -37,17 +49,17 @@ contract LockboxFacet is ILockbox, HyperStakingAcl, ReentrancyGuardUpgradeable {
         string memory symbol
     ) external payable diamondInternal {
         LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
-        require(box.recipient != address(0), RecipientUnset());
+        require(box.lumiaFactory != address(0), RecipientUnset());
 
         bytes memory body = generateTokenDeployBody(tokenAddress, name, symbol);
 
         // address left-padded to bytes32 for compatibility with hyperlane
-        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.recipient);
+        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.lumiaFactory);
 
         // msg.value should already include fee calculated
         box.mailbox.dispatch{value: msg.value}(box.destination, recipientBytes32, body);
 
-        emit TokenDeployDispatched(address(box.mailbox), box.recipient, tokenAddress, name, symbol);
+        emit TokenDeployDispatched(address(box.mailbox), box.lumiaFactory, tokenAddress, name, symbol);
     }
 
     /// @inheritdoc ILockbox
@@ -57,23 +69,57 @@ contract LockboxFacet is ILockbox, HyperStakingAcl, ReentrancyGuardUpgradeable {
         uint256 shares
     ) external payable diamondInternal {
         LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
-        require(box.recipient != address(0), RecipientUnset());
+        require(box.lumiaFactory != address(0), RecipientUnset());
 
         bytes memory body = generateTokenBridgeBody(vaultToken, user, shares);
 
         // address left-padded to bytes32 for compatibility with hyperlane
-        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.recipient);
+        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.lumiaFactory);
 
         // msg.value should already include fee calculated
         box.mailbox.dispatch{value: msg.value}(box.destination, recipientBytes32, body);
 
-        emit BridgeTokenDispatched(address(box.mailbox), box.recipient, vaultToken, user, shares);
+        emit BridgeTokenDispatched(address(box.mailbox), box.lumiaFactory, vaultToken, user, shares);
+    }
+
+    /// @inheritdoc ILockbox
+    function handle(
+        uint32 origin,
+        bytes32 sender,
+        bytes calldata data
+    ) external payable onlyMailbox {
+        LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
+
+        emit ReceivedMessage(origin, sender, msg.value, string(data));
+
+        box.lastMessage.sender = TypeCasts.bytes32ToAddress(sender);
+        box.lastMessage.data = data;
+
+        require(
+            box.lastMessage.sender == address(box.lumiaFactory),
+            NotFromLumiaFactory(box.lastMessage.sender)
+        );
+
+        // parse message data (HyperlaneMailboxMessages)
+        MessageType msgType = data.messageType();
+        require(msgType == MessageType.TokenRedeem, UnsupportedMessage());
+
+        _handleTokenRedeem(data);
+    }
+
+    /// @notice Handle specific TokenBridge message
+    function _handleTokenRedeem(bytes calldata data) internal {
+        address vaultToken = data.vaultToken();
+        address user = data.sender(); // sender -> actual hyperstaking user
+        uint256 shares = data.amount(); // amount -> amount of shares
+
+        IERC4626(vaultToken).redeem(shares, user, address(this));
     }
 
     /* ========== ACL  ========== */
 
     /// @inheritdoc ILockbox
-    function setMailbox(address mailbox) external onlyStrategyVaultManager nonReentrant {
+    function setMailbox(address mailbox) external onlyStrategyVaultManager {
         require(
             mailbox != address(0) && mailbox.code.length > 0,
             InvalidMailbox(mailbox)
@@ -85,7 +131,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl, ReentrancyGuardUpgradeable {
     }
 
     /// @inheritdoc ILockbox
-    function setDestination(uint32 destination) external onlyStrategyVaultManager nonReentrant {
+    function setDestination(uint32 destination) external onlyStrategyVaultManager {
         LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
 
         emit DestinationUpdated(box.destination, destination);
@@ -93,12 +139,12 @@ contract LockboxFacet is ILockbox, HyperStakingAcl, ReentrancyGuardUpgradeable {
     }
 
     /// @inheritdoc ILockbox
-    function setRecipient(address recipient) external onlyStrategyVaultManager nonReentrant {
-        require(recipient != address(0), InvalidRecipient(recipient));
+    function setLumiaFactory(address lumiaFactory) public onlyStrategyVaultManager {
+        require(lumiaFactory != address(0), InvalidLumiaFactory(lumiaFactory));
         LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
 
-        emit RecipientUpdated(box.recipient, recipient);
-        box.recipient = recipient;
+        emit LumiaFactoryUpdated(box.lumiaFactory, lumiaFactory);
+        box.lumiaFactory = lumiaFactory;
     }
 
     // ========= View ========= //
@@ -117,7 +163,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl, ReentrancyGuardUpgradeable {
         LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
         return box.mailbox.quoteDispatch(
             box.destination,
-            TypeCasts.addressToBytes32(box.recipient),
+            TypeCasts.addressToBytes32(box.lumiaFactory),
             generateTokenDeployBody(tokenAddress, name, symbol)
         );
     }
@@ -131,7 +177,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl, ReentrancyGuardUpgradeable {
         LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
         return box.mailbox.quoteDispatch(
             box.destination,
-            TypeCasts.addressToBytes32(box.recipient),
+            TypeCasts.addressToBytes32(box.lumiaFactory),
             generateTokenBridgeBody(vaultToken, sender, shares)
         );
     }
