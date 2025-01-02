@@ -50,6 +50,9 @@ interface IStrategy {
     //                                           View                                             //
     //============================================================================================//
 
+    /// @return The address of the revenue-accumulating asset.
+    function revenueAsset() external view returns(address);
+
     /// @dev Return current stake to asset allocation ratio (price)
     function convertToAllocation(uint256 stakeAmount_) external view returns (uint256);
 

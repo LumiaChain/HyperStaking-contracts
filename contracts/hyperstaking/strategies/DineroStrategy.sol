@@ -80,6 +80,11 @@ contract DineroStrategy is IStrategy, PirexIntegration {
 
     // ========= View ========= //
 
+    /// @inheritdoc IStrategy
+    function revenueAsset() external view returns(address) {
+        return AUTO_PX_ETH;
+    }
+
     /// Return current stake to asset ratio (eth/apxEth price)
     function convertToAllocation(uint256 stakeAmount_) public view returns (uint256) {
         return _convertEthToApxEth(stakeAmount_);

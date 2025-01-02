@@ -28,7 +28,7 @@ contract ReserveStrategy is IStrategy, Ownable {
     Currency public stake;
 
     /// Token used as revenue asset sent in exchange for the stake
-    IERC20 public asset;
+    address public revenueAsset;
 
     /// Price of the asset
     uint256 public assetPrice;
@@ -91,15 +91,15 @@ contract ReserveStrategy is IStrategy, Ownable {
     constructor(
         address diamond_,
         Currency memory stake_,
-        IERC20Metadata asset_,
+        IERC20Metadata revenueAsset_,
         uint256 assetPrice_
     ) Ownable(msg.sender) {
         require(stake_.decimals() == 18, BadStakeDecimals());
-        require(IERC20Metadata(asset_).decimals() == 18, BadAssetDecimals());
+        require(IERC20Metadata(revenueAsset_).decimals() == 18, BadAssetDecimals());
 
         DIAMOND = diamond_;
         stake = stake_;
-        asset = asset_;
+        revenueAsset = address(revenueAsset_);
         assetPrice = assetPrice_;
         assetReserve = 0;
     }
@@ -117,7 +117,7 @@ contract ReserveStrategy is IStrategy, Ownable {
         assetReserve -= allocation;
 
         stake.transferFrom(DIAMOND, address(this), stakeAmount_);
-        asset.safeIncreaseAllowance(DIAMOND, allocation);
+        IERC20(revenueAsset).safeIncreaseAllowance(DIAMOND, allocation);
 
         emit Allocate(user_, stakeAmount_, allocation);
     }
@@ -131,7 +131,7 @@ contract ReserveStrategy is IStrategy, Ownable {
         exitAmount = convertToStake(assetAllocation_);
         assetReserve += exitAmount;
 
-        asset.transferFrom(DIAMOND, address(this), assetAllocation_);
+        IERC20(revenueAsset).transferFrom(DIAMOND, address(this), assetAllocation_);
         stake.transfer(DIAMOND, exitAmount);
 
         emit Exit(user_, assetAllocation_, exitAmount);
@@ -158,22 +158,22 @@ contract ReserveStrategy is IStrategy, Ownable {
     function supplyRevenueAsset(uint256 amount_) external onlyOwner {
         assetReserve += amount_;
 
-        asset.safeTransferFrom(msg.sender, address(this), amount_);
+        IERC20(revenueAsset).safeTransferFrom(msg.sender, address(this), amount_);
 
-        emit RevenueAssetSupply(msg.sender, address(asset), amount_);
+        emit RevenueAssetSupply(msg.sender, revenueAsset, amount_);
     }
 
     function withdrawRevenueAsset(uint256 amount_) external onlyOwner {
         assetReserve -= amount_;
 
-        asset.transfer(msg.sender, amount_);
+        IERC20(revenueAsset).transfer(msg.sender, amount_);
 
-        emit RevenueAssetWithdraw(msg.sender, address(asset), amount_);
+        emit RevenueAssetWithdraw(msg.sender, revenueAsset, amount_);
     }
 
     function setAssetPrice(uint256 assetPrice_) external onlyOwner {
         assetPrice = assetPrice_;
 
-        emit AssetPriceSet(msg.sender, address(asset), assetPrice_);
+        emit AssetPriceSet(msg.sender, revenueAsset, assetPrice_);
     }
 }

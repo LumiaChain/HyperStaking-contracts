@@ -33,14 +33,13 @@ describe("VaultToken", function () {
     await factory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
       reserveStrategy,
-      testReserveAsset,
       defaultRevenueFee,
     );
 
     const vaultTokenAddress = (await tier2.vaultTier2Info(reserveStrategy)).vaultToken;
     const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
 
-    const lpTokenAddress = await interchainFactory.lpTokens(vaultTokenAddress);
+    const lpTokenAddress = await interchainFactory.getLpToken(vaultTokenAddress);
     const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
 
     /* eslint-disable object-property-newline */
@@ -54,6 +53,49 @@ describe("VaultToken", function () {
     };
     /* eslint-enable object-property-newline */
   }
+
+  describe("InterchainFactory", function () {
+    it("test tokens enumerable map", async function () {
+      const {
+        diamond, factory, tier2, interchainFactory, nativeTokenAddress, ethPoolId, vaultToken,
+        lpToken, strategyVaultManager,
+      } = await loadFixture(deployHyperStaking);
+
+      const testAsset2 = await shared.deloyTestERC20("Test Asset2", "tRaETH2");
+      const testAsset3 = await shared.deloyTestERC20("Test Asset3", "tRaETH3");
+
+      const reserveStrategy2 = await shared.createReserveStrategy(
+        diamond, nativeTokenAddress, await testAsset2.getAddress(), parseEther("2"),
+      );
+      const reserveStrategy3 = await shared.createReserveStrategy(
+        diamond, nativeTokenAddress, await testAsset3.getAddress(), parseEther("3"),
+      );
+
+      // by adding new stategies more lpTokens should be created
+
+      await factory.connect(strategyVaultManager).addStrategy(
+        ethPoolId,
+        reserveStrategy2,
+        0,
+      );
+
+      await factory.connect(strategyVaultManager).addStrategy(
+        ethPoolId,
+        reserveStrategy3,
+        0,
+      );
+
+      const vaultToken2 = (await tier2.vaultTier2Info(reserveStrategy2)).vaultToken;
+      const vaultToken3 = (await tier2.vaultTier2Info(reserveStrategy3)).vaultToken;
+
+      const lpToken2 = await interchainFactory.getLpToken(vaultToken2);
+      const lpToken3 = await interchainFactory.getLpToken(vaultToken3);
+
+      expect(await interchainFactory.tokensMapAt(0)).to.deep.equal([vaultToken.target, lpToken.target]);
+      expect(await interchainFactory.tokensMapAt(1)).to.deep.equal([vaultToken2, lpToken2]);
+      expect(await interchainFactory.tokensMapAt(2)).to.deep.equal([vaultToken3, lpToken3]);
+    });
+  });
 
   describe("Tier2", function () {
     it("it shouldn't be possible to mint shares apart from the diamond", async function () {
@@ -175,7 +217,7 @@ describe("VaultToken", function () {
       await lpToken.connect(alice).approve(interchainFactory, lpBalance);
       const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, bob, lpBalance);
       await interchainFactory.connect(alice).redeemLpTokensDispatch(
-        lpToken, alice, lpBalance, { value: dispatchFee },
+        vaultToken, alice, lpBalance, { value: dispatchFee },
       );
 
       expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
@@ -188,7 +230,7 @@ describe("VaultToken", function () {
       // alice approve factory and bob excutes redeem for her
       await lpToken.connect(alice).approve(interchainFactory, lpBalance);
       await interchainFactory.connect(bob).redeemLpTokensDispatch(
-        lpToken, alice, lpBalance, { value: dispatchFee },
+        vaultToken, alice, lpBalance, { value: dispatchFee },
       );
 
       expect(await vaultToken.allowance(alice, bob)).to.be.eq(0);
@@ -256,7 +298,7 @@ describe("VaultToken", function () {
       await lpToken.connect(bob).approve(interchainFactory, expectedBobShares);
       const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, bob, expectedBobShares);
       await expect(interchainFactory.connect(bob).redeemLpTokensDispatch(
-        lpToken, bob, expectedBobShares, { value: dispatchFee },
+        vaultToken, bob, expectedBobShares, { value: dispatchFee },
       ))
         .to.changeEtherBalance(bob, expectedNewBobStake);
 
@@ -329,7 +371,7 @@ describe("VaultToken", function () {
       await lpToken.connect(alice).approve(interchainFactory, shares);
       const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, alice, shares);
       await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(
-        lpToken, alice, shares, { value: dispatchFee },
+        vaultToken, alice, shares, { value: dispatchFee },
       ))
         .to.changeEtherBalances([alice], [expectedStake]);
     });

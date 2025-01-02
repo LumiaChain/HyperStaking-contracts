@@ -35,7 +35,6 @@ describe("Lockbox", function () {
     await factory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
       reserveStrategy,
-      testReserveAsset,
       defaultRevenueFee,
     );
 
@@ -46,7 +45,8 @@ describe("Lockbox", function () {
     const vaultTokenAddress = (await tier2.vaultTier2Info(reserveStrategy)).vaultToken;
     const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
 
-    const lpTokenAddress = await interchainFactory.lpTokens(vaultTokenAddress);
+    const lpTokenAddress = await interchainFactory.getLpToken(vaultTokenAddress);
+
     const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
 
     /* eslint-disable object-property-newline */
@@ -109,7 +109,6 @@ describe("Lockbox", function () {
       await expect(factory.connect(strategyVaultManager).addStrategy(
         ethPoolId,
         strategy2,
-        asset2,
         0n,
       )).to.be.reverted;
 
@@ -120,7 +119,6 @@ describe("Lockbox", function () {
       await factory.connect(strategyVaultManager).addStrategy(
         ethPoolId,
         strategy2,
-        asset2,
         0n,
         { value: mailboxFee },
       );
@@ -139,7 +137,7 @@ describe("Lockbox", function () {
         ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
       ))
         .to.emit(interchainFactory, "TokenBridged")
-        .withArgs(vaultToken.target, lpToken.target, alice.address, expectedLpAmount);
+        .withArgs(vaultToken, lpToken, alice.address, expectedLpAmount);
 
       const lpAfter = await lpToken.balanceOf(alice);
       expect(lpAfter).to.eq(expectedLpAmount);
@@ -147,15 +145,18 @@ describe("Lockbox", function () {
       await lpToken.connect(alice).approve(interchainFactory, lpAfter);
 
       await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(
-        lpToken.target, alice, lpAfter,
+        vaultToken, alice, lpAfter,
       ))
         .to.be.revertedWithCustomError(mailbox, "DispatchUnderpaid");
 
       const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, alice, lpAfter);
 
+      await expect(interchainFactory.redeemLpTokensDispatch(ZeroAddress, alice, lpAfter))
+        .to.be.revertedWithCustomError(interchainFactory, "UnrecognizedVaultToken");
+
       // redeem should return stakeAmount
       const redeemTx = interchainFactory.connect(alice).redeemLpTokensDispatch(
-        lpToken, alice, lpAfter, { value: dispatchFee },
+        vaultToken, alice, lpAfter, { value: dispatchFee },
       );
 
       // lpToken -> vaultAsset -> strategy allocation -> stake withdraw

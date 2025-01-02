@@ -91,7 +91,7 @@ contract VaultToken is ERC4626, Ownable2Step {
         uint256 shares,
         address receiver,
         address owner
-    ) public virtual override onlyOwner returns (uint256 asserts) {
+    ) public virtual override onlyOwner returns (uint256 assets) {
         // return assets;
         return super.redeem(shares, receiver, owner);
     }

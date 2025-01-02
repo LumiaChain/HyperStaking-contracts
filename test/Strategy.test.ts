@@ -48,7 +48,6 @@ describe("Strategy", function () {
     await factory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
       reserveStrategy,
-      testWstETH,
       defaultRevenueFee,
     );
 
@@ -67,7 +66,6 @@ describe("Strategy", function () {
     await factory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
       dineroStrategy,
-      autoPxEth,
       defaultRevenueFee,
     );
 
@@ -346,13 +344,16 @@ describe("Strategy", function () {
           factory, ethPoolId, reserveStrategy, alice, defaultRevenueFee,
         } = await loadFixture(deployHyperStaking);
 
-        await expect(factory.addStrategy(ethPoolId, reserveStrategy, ZeroAddress, defaultRevenueFee))
+        await expect(factory.addStrategy(
+          ethPoolId,
+          reserveStrategy,
+          defaultRevenueFee,
+        ))
           .to.be.reverted;
 
         await expect(factory.connect(alice).addStrategy(
           ethPoolId,
           reserveStrategy,
-          ZeroAddress,
           defaultRevenueFee,
         ))
           // hardhat unfortunately does not recognize custom errors from child contracts
@@ -374,12 +375,9 @@ describe("Strategy", function () {
           factory, strategyVaultManager, ethPoolId, reserveStrategy, defaultRevenueFee,
         } = await loadFixture(deployHyperStaking);
 
-        const randomToken = "0x8Da05a7A689c2C054246B186bEe1C75fcD1df0bC";
-
         await expect(factory.connect(strategyVaultManager).addStrategy(
           ethPoolId,
           reserveStrategy,
-          randomToken,
           defaultRevenueFee,
         ))
           .to.be.revertedWithCustomError(factory, "VaultAlreadyExist");

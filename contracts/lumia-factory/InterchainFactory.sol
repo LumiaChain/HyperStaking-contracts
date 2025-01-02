@@ -8,6 +8,7 @@ import {IMailbox} from "../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../external/hyperlane/libs/TypeCasts.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {EnumerableMap} from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
 import {
     MessageType, HyperlaneMailboxMessages
 } from "../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
@@ -19,6 +20,7 @@ import {
  * #TODO Diamond Proxy 2
  */
 contract InterchainFactory is IInterchainFactory, Ownable {
+    using EnumerableMap for EnumerableMap.AddressToAddressMap;
     using HyperlaneMailboxMessages for bytes;
 
     /// Hyperlane Mailbox
@@ -33,9 +35,8 @@ contract InterchainFactory is IInterchainFactory, Ownable {
     address public lastSender;
     bytes public lastData;
 
-    // TODO enumerable map
-    mapping(LumiaLPToken lpToken => address originVaultToken) public vaultTokens;
-    mapping(address originVaultToken => LumiaLPToken lpTokens) public lpTokens;
+    // Enumerable map storing the relation between origin vaultTokens and minted lpTokens
+    EnumerableMap.AddressToAddressMap private tokensMap;
 
     //============================================================================================//
     //                                         Modifiers                                          //
@@ -102,17 +103,17 @@ contract InterchainFactory is IInterchainFactory, Ownable {
 
     /// @inheritdoc IInterchainFactory
     function redeemLpTokensDispatch(
-        LumiaLPToken lpToken_,
+        address vaultToken_,
         address spender_,
         uint256 shares_
     ) external payable {
-        address vaultToken = vaultTokens[lpToken_];
-        require(vaultToken != address(0), UnrecognizedVaultToken());
+        (bool exists, address lpToken) = tokensMap.tryGet(vaultToken_);
+        require(exists, UnrecognizedVaultToken());
 
         // burn lpTokens
-        lpToken_.burnFrom(spender_, shares_);
+        LumiaLPToken(lpToken).burnFrom(spender_, shares_);
 
-        bytes memory body = generateTokenRedeemBody(vaultToken, spender_, shares_);
+        bytes memory body = generateTokenRedeemBody(vaultToken_, spender_, shares_);
 
         // address left-padded to bytes32 for compatibility with hyperlane
         bytes32 recipientBytes32 = TypeCasts.addressToBytes32(originLockbox);
@@ -120,7 +121,7 @@ contract InterchainFactory is IInterchainFactory, Ownable {
         // msg.value should already include fee calculated
         mailbox.dispatch{value: msg.value}(destination, recipientBytes32, body);
 
-        emit RedeemTokenDispatched(address(mailbox), originLockbox, vaultToken, spender_, shares_);
+        emit RedeemTokenDispatched(address(mailbox), originLockbox, vaultToken_, spender_, shares_);
     }
 
     // ========= Owner ========= //
@@ -149,6 +150,16 @@ contract InterchainFactory is IInterchainFactory, Ownable {
     }
 
     // ========= View ========= //
+
+    /// @inheritdoc IInterchainFactory
+    function getLpToken(address vaultToken_) external view returns (address lpToken) {
+        lpToken = tokensMap.get(vaultToken_);
+    }
+
+    /// @inheritdoc IInterchainFactory
+    function tokensMapAt(uint256 index) external view returns (address key, address value) {
+        (key, value) = tokensMap.at(index);
+    }
 
     /// @inheritdoc IInterchainFactory
     function quoteDispatchTokenRedeem(
@@ -183,11 +194,11 @@ contract InterchainFactory is IInterchainFactory, Ownable {
 
     /// @notice Handle specific TokenDeploy message
     function _handleTokenDeploy(bytes calldata data_) internal {
-        address tokenAddress = data_.tokenAddress();
+        address tokenAddress = data_.tokenAddress(); // origin vault token address
         string memory name = data_.name();
         string memory symbol = data_.symbol();
 
-        require(address(lpTokens[tokenAddress]) == address(0), TokenAlreadyDeployed());
+        require(tokensMap.contains(tokenAddress) == false, TokenAlreadyDeployed());
 
         LumiaLPToken lpToken = new LumiaLPToken({
             interchainFactory_: address(this),
@@ -196,8 +207,7 @@ contract InterchainFactory is IInterchainFactory, Ownable {
         });
 
         // save in the storage # TODO
-        vaultTokens[lpToken] = tokenAddress;
-        lpTokens[tokenAddress] = lpToken;
+        tokensMap.set(tokenAddress, address(lpToken));
 
         emit TokenDeployed(tokenAddress, address(lpToken), name, symbol);
     }
@@ -208,11 +218,12 @@ contract InterchainFactory is IInterchainFactory, Ownable {
         address sender = data_.sender();
         uint256 amount = data_.amount();
 
-        LumiaLPToken lpToken = lpTokens[vaultToken];
+        // revert if key in not present in the map
+        address lpToken = tokensMap.get(vaultToken);
 
         // mint LP tokens for the specified user
-        lpToken.mint(sender, amount);
+        LumiaLPToken(lpToken).mint(sender, amount);
 
-        emit TokenBridged(vaultToken, address(lpToken), sender, amount);
+        emit TokenBridged(vaultToken, lpToken, sender, amount);
     }
 }

@@ -3,6 +3,7 @@ pragma solidity =0.8.27;
 
 import {IVaultFactory} from "../interfaces/IVaultFactory.sol";
 import {ILockbox} from "../interfaces/ILockbox.sol";
+import {IStrategy} from "../interfaces/IStrategy.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -38,10 +39,12 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
     function addStrategy(
         uint256 poolId,
         address strategy,
-        IERC20Metadata asset,
         uint256 tier1RevenueFee
     ) external payable onlyStrategyVaultManager nonReentrant {
-        _createVault(poolId, strategy, asset, tier1RevenueFee);
+        // The ERC20-compliant asset associated with the strategy
+        address asset = IStrategy(strategy).revenueAsset();
+
+        _createVault(poolId, strategy, IERC20Metadata(asset), tier1RevenueFee);
     }
 
     // ========= View ========= //
@@ -123,9 +126,7 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
         IERC20Metadata asset,
         uint256 tier1RevenueFee
     ) internal {
-
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-
         require(v.vaultInfo[strategy].poolId == 0, VaultAlreadyExist());
 
         // create a new VaultInfo and store it in storage

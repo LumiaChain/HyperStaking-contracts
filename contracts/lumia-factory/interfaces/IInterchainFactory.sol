@@ -2,7 +2,6 @@
 pragma solidity =0.8.27;
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
-import {LumiaLPToken} from "../LumiaLPToken.sol";
 
 /**
  * @title IInterchainFactory
@@ -73,12 +72,12 @@ interface IInterchainFactory {
     /**
      * @notice Initiates token redemption
      * @dev Handles cross-chain unstaking via hyperlane bridge
-     * @param lpToken_ Address of the token to redeem
+     * @param vaultToken_ Address of the vault token (on the origin chain) to redeem
      * @param spender_ Address of the user whose process is initiated
      * @param shares_ Amount of shares to redeem
      */
     function redeemLpTokensDispatch(
-        LumiaLPToken lpToken_,
+        address vaultToken_,
         address spender_,
         uint256 shares_
     ) external payable;
@@ -113,7 +112,23 @@ interface IInterchainFactory {
 
     function lastData() external view returns(bytes memory);
 
-    // TODO enuberable map getters
+    /**
+     * @dev Utilizes the `.get` function from OpenZeppelin EnumerableMap to retrieve
+     *      the lpToken associated with a given vaultToken.
+     *
+     * @param vaultToken_ The address of the vaultToken to look up.
+     * @return lpToken The address of the lpToken corresponding to the provided vaultToken.
+     */
+    function getLpToken(address vaultToken_) external view returns (address lpToken);
+
+    /**
+     * @dev Utilizes the `.at` function from OpenZeppelin EnumerableMap
+     *
+     * @param index The position in the map to retrieve the key-value pair from
+     * @return key The key (vaultToken) at the specified position
+     * @return value The value (lpToken) at the specified position
+     */
+    function tokensMapAt(uint256 index) external view returns (address key, address value);
 
     /// @notice Helper: separated function for getting mailbox dispatch quote
     function quoteDispatchTokenRedeem(
