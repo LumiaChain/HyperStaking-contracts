@@ -2,6 +2,7 @@ import { ignition, ethers } from "hardhat";
 import { Contract, ZeroAddress, parseEther } from "ethers";
 
 import HyperStakingModule from "../ignition/modules/HyperStaking";
+import LumiaDiamondModule from "../ignition/modules/LumiaDiamond";
 import OneChainMailboxModule from "../ignition/modules/test/OneChainMailbox";
 
 import TestERC20Module from "../ignition/modules/test/TestERC20";
@@ -12,6 +13,8 @@ import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/facets
 import { IERC20 } from "../typechain-types";
 
 export async function deployTestHyperStaking(mailboxFee: bigint) {
+  const testDestination = 31337; // the same for both sides of the test "oneChain" bridge
+
   const { mailbox } = await ignition.deploy(OneChainMailboxModule, {
     parameters: {
       OneChainMailboxModule: {
@@ -19,24 +22,30 @@ export async function deployTestHyperStaking(mailboxFee: bigint) {
       },
     },
   });
-
   const mailboxAddress = await mailbox.getAddress();
-
-  const interchainFactory = await ethers.deployContract("InterchainFactory", [mailboxAddress]);
-
-  const testDestination = 31337;
 
   const { diamond, staking, factory, tier1, tier2, lockbox } = await ignition.deploy(HyperStakingModule, {
     parameters: {
       HyperStakingModule: {
         lockboxMailbox: mailboxAddress,
         lockboxDestination: testDestination,
-        lockboxRecipient: await interchainFactory.getAddress(),
       },
     },
   });
 
-  await interchainFactory.setOriginLockbox(await diamond.getAddress());
+  const { /* lumiaDiamond, */ interchainFactory } = await ignition.deploy(LumiaDiamondModule, {
+    parameters: {
+      LumiaDiamondModule: {
+        lumiaMailbox: mailboxAddress,
+        lumiaDestination: testDestination,
+        originLockbox: await lockbox.getAddress(),
+      },
+    },
+  });
+
+  // finish setup for hyperstaking
+  const strategyVaultManager = (await ethers.getSigners())[2];
+  await lockbox.connect(strategyVaultManager).setLumiaFactory(interchainFactory.target);
 
   return { mailbox, interchainFactory, diamond, staking, factory, tier1, tier2, lockbox };
 }

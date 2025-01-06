@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
+import {LastMessage} from "../libraries/LibInterchainFactory.sol";
 
 /**
  * @title IInterchainFactory
@@ -43,7 +44,6 @@ interface IInterchainFactory {
     //                                          Errors                                            //
     //============================================================================================//
 
-    error NotFromMailbox(address from);
     error NotFromLumiaLockbox(address sender);
 
     error OriginLockboxNotSet();
@@ -64,62 +64,66 @@ interface IInterchainFactory {
      * @notice Function called by the Mailbox contract when a message is received
      */
     function handle(
-        uint32 origin_,
-        bytes32 sender_,
-        bytes calldata data_
+        uint32 origin,
+        bytes32 sender,
+        bytes calldata data
     ) external payable;
 
     /**
      * @notice Initiates token redemption
      * @dev Handles cross-chain unstaking via hyperlane bridge
-     * @param vaultToken_ Address of the vault token (on the origin chain) to redeem
-     * @param spender_ Address of the user whose process is initiated
-     * @param shares_ Amount of shares to redeem
+     * @param vaultToken Address of the vault token (on the origin chain) to redeem
+     * @param spender Address of the user whose process is initiated
+     * @param shares Amount of shares to redeem
      */
     function redeemLpTokensDispatch(
-        address vaultToken_,
-        address spender_,
-        uint256 shares_
+        address vaultToken,
+        address spender,
+        uint256 shares
     ) external payable;
 
     /**
      * @notice Updates the mailbox address used for interchain messaging
-     * @param newMailbox_ The new mailbox address
+     * @param newMailbox The new mailbox address
      */
-    function setMailbox(address newMailbox_) external;
+    function setMailbox(address newMailbox) external;
 
     /**
      * @notice Updates the destination chain ID for the route
-     * @param destination The new destination chain ID
+     * @param newDestination The new destination chain ID
      */
-    function setDestination(uint32 destination) external;
+    function setDestination(uint32 newDestination) external;
 
     /**
      * @notice Updates the origin lockbox address
-     * @param newLockbox_ The new origin lockbox address
+     * @param newLockbox The new origin lockbox address
      */
-    function setOriginLockbox(address newLockbox_) external;
+    function setOriginLockbox(address newLockbox) external;
 
     //============================================================================================//
     //                                           View                                             //
     //============================================================================================//
 
+    /// @notice Returns the mailbox saved in storage
     function mailbox() external view returns(IMailbox);
 
+    /// @notice Returns the destination saved in storage
+    function destination() external view returns(uint32);
+
+    /// @notice Returns the origin lockbox saved in storage
     function originLockbox() external view returns(address);
 
-    function lastSender() external view returns(address);
-
-    function lastData() external view returns(bytes memory);
+    /// @notice Returns the last message saved in storage
+    function lastMessage() external view returns(LastMessage memory);
 
     /**
      * @dev Utilizes the `.get` function from OpenZeppelin EnumerableMap to retrieve
      *      the lpToken associated with a given vaultToken.
      *
-     * @param vaultToken_ The address of the vaultToken to look up.
+     * @param vaultToken The address of the vaultToken to look up.
      * @return lpToken The address of the lpToken corresponding to the provided vaultToken.
      */
-    function getLpToken(address vaultToken_) external view returns (address lpToken);
+    function getLpToken(address vaultToken) external view returns (address lpToken);
 
     /**
      * @dev Utilizes the `.at` function from OpenZeppelin EnumerableMap

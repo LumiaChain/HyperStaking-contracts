@@ -8,8 +8,12 @@
   },
   "HyperStakingModule": {
     "lockboxMailbox": "0x46f7C5D896bbeC89bE1B19e4485e59b4Be49e9Cc",
-    "lockboxDestination": 1952959480,
-    "lockboxRecipient": "0x0000000000000000000000000000000000000001"
+    "lockboxDestination": 1952959480
+  },
+  "LumiaDiamondModule": {
+    "lumiaMailbox": "0x0000000000000000000000000000000000000000",
+    "lumiaDestination": 123,
+    "originLockbox": "0x0000000000000000000000000000000000000000"
   },
   "General": {
     "diamond": "0xB71cCcF6D425d6fd306f4Cad41F50dBe3f135e6a",

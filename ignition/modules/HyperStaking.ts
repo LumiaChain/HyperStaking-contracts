@@ -17,7 +17,6 @@ const STRATEGY_VAULT_MANAGER_ROLE = keccak256(
 const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const mailbox = m.getParameter("lockboxMailbox");
   const destination = m.getParameter("lockboxDestination");
-  const lumiaFactory = m.getParameter("lockboxRecipient");
 
   const { diamond } = m.useModule(DiamondModule);
 
@@ -133,13 +132,6 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
     "setDestination",
     [destination],
     { id: "setDestination", after: [diamondCutFuture], from: strategyVaultManager },
-  );
-
-  m.call(
-    lockbox,
-    "setLumiaFactory",
-    [lumiaFactory],
-    { id: "setLumiaFactory", after: [diamondCutFuture], from: strategyVaultManager },
   );
 
   // --- return
