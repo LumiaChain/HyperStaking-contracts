@@ -118,7 +118,10 @@ export async function createReserveStrategy(
   });
 
   const reserveStrategySupply = parseEther("30");
-  const asset = (await ethers.getContractAt("IERC20", assetAddress)) as IERC20;
+
+  // because there are two differnet vesions of IERC20 used in the project
+  const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";
+  const asset = (await ethers.getContractAt(fullyQualifiedIERC20, assetAddress)) as IERC20;
 
   await asset.approve(reserveStrategy.target, reserveStrategySupply);
   await reserveStrategy.supplyRevenueAsset(reserveStrategySupply);
