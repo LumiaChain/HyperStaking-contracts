@@ -45,7 +45,9 @@ const config: HardhatUserConfig = {
 
   defaultNetwork: "hardhat",
   networks: {
-    hardhat: {},
+    hardhat: {
+      allowUnlimitedContractSize: true,
+    },
     localhost: {
       url: process.env.LOCAL_RPC_URL,
       chainId: 31337,

@@ -41,14 +41,14 @@ contract VaultToken is ERC4626, Ownable2Step {
     //============================================================================================//
 
     constructor(
-        address diamond_,
-        address strategy_,
-        IERC20 asset_,
+        address diamond,
+        address strategy,
+        IERC20 asset,
         string memory sharesName,
         string memory sharesSymbol
-    ) ERC4626(asset_) ERC20(sharesName, sharesSymbol) Ownable(diamond_) {
-        DIAMOND = diamond_;
-        STRATEGY = strategy_;
+    ) ERC4626(asset) ERC20(sharesName, sharesSymbol) Ownable(diamond) {
+        DIAMOND = diamond;
+        STRATEGY = strategy;
     }
 
     //============================================================================================//

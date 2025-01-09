@@ -380,19 +380,24 @@ contract SuperPositions is ISuperPositions, ERC1155A, Broadcastable {
         string memory symbol = IBaseForm(superform).superformYieldTokenSymbol();
         uint8 decimal = uint8(IBaseForm(superform).getVaultDecimals());
         aErc20Token = address(new aERC20(name, symbol, decimal));
-        /// @dev broadcast and deploy to the other destination chains
-        BroadcastMessage memory transmuterPayload = BroadcastMessage(
-            "SUPER_POSITIONS",
-            DEPLOY_NEW_AERC20,
-            abi.encode(CHAIN_ID, ++xChainPayloadCounter, id, name, symbol, decimal)
-        );
 
-        _broadcast(
-            superRegistry.getAddress(keccak256("BROADCAST_REGISTRY")),
-            superRegistry.getAddress(keccak256("PAYMASTER")),
-            abi.encode(transmuterPayload),
-            IPaymentHelper(superRegistry.getAddress(keccak256("PAYMENT_HELPER"))).getRegisterTransmuterAMBData()
-        );
+        /*************************************************************************/
+        /*  _broadcast has been commented out, contract for test purposes only!  */
+        /*************************************************************************/
+
+        /// @dev broadcast and deploy to the other destination chains
+        // BroadcastMessage memory transmuterPayload = BroadcastMessage(
+        //     "SUPER_POSITIONS",
+        //     DEPLOY_NEW_AERC20,
+        //     abi.encode(CHAIN_ID, ++xChainPayloadCounter, id, name, symbol, decimal)
+        // );
+
+        // _broadcast(
+        //     superRegistry.getAddress(keccak256("BROADCAST_REGISTRY")),
+        //     superRegistry.getAddress(keccak256("PAYMASTER")),
+        //     abi.encode(transmuterPayload),
+        //     IPaymentHelper(superRegistry.getAddress(keccak256("PAYMENT_HELPER"))).getRegisterTransmuterAMBData()
+        // );
 
         emit AERC20TokenRegistered(id, aErc20Token);
 

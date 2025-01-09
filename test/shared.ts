@@ -50,16 +50,21 @@ export async function deployTestHyperStaking(mailboxFee: bigint) {
   return { mailbox, interchainFactory, diamond, staking, factory, tier1, tier2, lockbox };
 }
 
-export async function deloyTestERC20(name: string, symbol: string): Promise<Contract> {
+export async function deloyTestERC20(name: string, symbol: string, decimals: number = 18): Promise<Contract> {
   const { testERC20 } = await ignition.deploy(TestERC20Module, {
     parameters: {
       TestERC20Module: {
         name,
         symbol,
+        decimals,
       },
     },
   });
   return testERC20;
+}
+
+export async function deloyTestERC4626Vault(asset: Contract): Promise<Contract> {
+  return ethers.deployContract("TestERC4626", [await asset.getAddress()]) as unknown as Promise<Contract>;
 }
 
 export async function deloyTestXERC20(mailbox: string, name: string, symbol: string): Promise<Contract> {
@@ -121,7 +126,7 @@ export async function createReserveStrategy(
 
   // because there are two differnet vesions of IERC20 used in the project
   const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";
-  const asset = (await ethers.getContractAt(fullyQualifiedIERC20, assetAddress)) as IERC20;
+  const asset = (await ethers.getContractAt(fullyQualifiedIERC20, assetAddress)) as unknown as IERC20;
 
   await asset.approve(reserveStrategy.target, reserveStrategySupply);
   await reserveStrategy.supplyRevenueAsset(reserveStrategySupply);
