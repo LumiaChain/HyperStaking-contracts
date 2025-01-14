@@ -596,7 +596,7 @@ describe("Strategy", function () {
         expect(await superPositions.balanceOf(alice.address, superformId)).to.be.gt(outputAmountSlipped);
       });
 
-      it.only("It should be possible to transmute superPositions to aERC20", async function () {
+      it("It should be possible to transmute superPositions to aERC20", async function () {
         const { superform, superformId, superPositions, alice } = await loadFixture(getMockedSuperform);
 
         const amount = parseUnits("100", 6);
