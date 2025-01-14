@@ -52,11 +52,15 @@ describe("Strategy", function () {
 
   const superUSDCDeposit = async (
     amount: bigint,
-    outputAmount: bigint,
-    maxSlippage: bigint,
     receiver: Signer,
+    outputAmount?: bigint,
+    maxSlippage: bigint = 50n, // 0.5%
   ) => {
-    const { superformRouter, testUSDC, superformId } = await loadFixture(getMockedSuperform);
+    const { superformRouter, superform, testUSDC, superformId } = await loadFixture(getMockedSuperform);
+
+    if (!outputAmount) {
+      outputAmount = await superform.previewDepositTo(amount);
+    }
 
     await testUSDC.connect(receiver).approve(superformRouter, amount);
     const routerReq: SingleDirectSingleVaultStateReqStruct = {
@@ -587,23 +591,21 @@ describe("Strategy", function () {
         // deposit amount
         const amount = parseUnits("100", 6);
 
-        const maxSlippage = 50n; // 0.5%
+        const maxSlippage = 100n; // 1%
         const outputAmount = await superform.previewDepositTo(amount);
 
-        await superUSDCDeposit(amount, outputAmount, maxSlippage, alice);
+        await superUSDCDeposit(amount, alice, outputAmount, maxSlippage);
 
         const outputAmountSlipped = outputAmount * (10000n - maxSlippage) / 10000n;
         expect(await superPositions.balanceOf(alice.address, superformId)).to.be.gt(outputAmountSlipped);
       });
 
       it("It should be possible to transmute superPositions to aERC20", async function () {
-        const { superform, superformId, superPositions, alice } = await loadFixture(getMockedSuperform);
+        const { superformId, superPositions, alice } = await loadFixture(getMockedSuperform);
 
-        const amount = parseUnits("100", 6);
-        const maxSlippage = 50n; // 0.5%
-        const outputAmount = await superform.previewDepositTo(amount);
+        const amount = parseUnits("200", 6);
 
-        await superUSDCDeposit(amount, outputAmount, maxSlippage, alice);
+        await superUSDCDeposit(amount, alice);
 
         const balance = await superPositions.balanceOf(alice, superformId);
 
@@ -633,6 +635,50 @@ describe("Strategy", function () {
 
         expect(await superPositions.connect(alice).balanceOf(alice, superformId)).to.be.eq(balance);
         expect(await aerc20.balanceOf(alice)).to.be.eq(0);
+      });
+
+      it("It should be possible to withdraw superPositions", async function () {
+        const { superformRouter, superform, superformId, superPositions, testUSDC, alice } = await loadFixture(getMockedSuperform);
+
+        const amount = parseUnits("100", 6);
+        await superUSDCDeposit(amount, alice);
+
+        const superBalance = await superPositions.balanceOf(alice, superformId);
+        expect(superBalance).to.be.gt(0);
+
+        const maxSlippage = 100n; // 1%
+        const outputAmount = await superform.previewWithdrawFrom(superBalance);
+
+        const testUSDCBalanceBefore = await testUSDC.balanceOf(alice);
+
+        const routerReq: SingleDirectSingleVaultStateReqStruct = {
+          superformData: {
+            superformId,
+            amount: superBalance,
+            outputAmount,
+            maxSlippage,
+            liqRequest: {
+              txData: "0x",
+              token: testUSDC,
+              interimToken: ZeroAddress,
+              bridgeId: 1,
+              liqDstChainId: 0,
+              nativeAmount: 0,
+            },
+            permit2data: "0x",
+            hasDstSwap: false,
+            retain4626: false,
+            receiverAddress: alice,
+            receiverAddressSP: alice,
+            extraFormData: "0x",
+          },
+        };
+
+        await superPositions.connect(alice).setApprovalForOne(superformRouter, superformId, superBalance);
+        await superformRouter.connect(alice).singleDirectSingleVaultWithdraw(routerReq);
+
+        expect(await superPositions.balanceOf(alice, superformId)).to.be.eq(0);
+        expect(await testUSDC.balanceOf(alice)).to.be.gt(testUSDCBalanceBefore);
       });
     });
   });
