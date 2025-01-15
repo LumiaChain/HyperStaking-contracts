@@ -1,0 +1,247 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity =0.8.27;
+
+import {ISuperformIntegration} from "../interfaces/ISuperformIntegration.sol";
+import {HyperStakingAcl} from "../HyperStakingAcl.sol";
+
+import {LibSuperform, SuperformStorage} from "../libraries/LibSuperform.sol";
+
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+
+import {IBaseRouterImplementation} from "../../external/superform/core/interfaces/IBaseRouterImplementation.sol";
+import {ISuperformFactory} from "../../external/superform/core/interfaces/ISuperformFactory.sol";
+import {ISuperPositions} from "../../external/superform/core/interfaces/ISuperPositions.sol";
+import {IBaseForm} from "../../external/superform/core/interfaces/IBaseForm.sol";
+
+import {
+    SingleDirectSingleVaultStateReq, SingleVaultSFData, LiqRequest
+} from "../../external/superform/core/types/DataTypes.sol";
+import {DataLib} from "../../external/superform/core/libraries/DataLib.sol";
+
+/**
+ * @title SuperformIntegration
+ * @dev Integration with Superform, providing deposits and withdrawals from single vaults
+ */
+contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
+    using EnumerableSet for EnumerableSet.AddressSet;
+    using SafeERC20 for IERC20;
+    using DataLib for uint256;
+
+    //============================================================================================//
+    //                                         Modifiers                                          //
+    //============================================================================================//
+
+    /// @notice Only accept messages from superform strategies
+    modifier onlyStrategy() {
+        SuperformStorage storage s = LibSuperform.diamondStorage();
+
+        require(s.superformStrategies.contains(msg.sender), NotFromStrategy(msg.sender));
+        _;
+    }
+
+    //============================================================================================//
+    //                                      Public Functions                                      //
+    //============================================================================================//
+
+    /// @inheritdoc ISuperformIntegration
+    function singleVaultDeposit(
+        uint256 superformId,
+        uint256 assetAmount,
+        address receiver,
+        address receiverSP
+    ) external returns (uint256 superPositionReceived) {
+        SuperformStorage storage s = LibSuperform.diamondStorage();
+
+        require(s.superformFactory.isSuperform(superformId), InvalidSuperformId(superformId));
+        require(receiver != address(0), ZeroAddress());
+        require(receiverSP != address(0), ZeroAddress());
+        require(assetAmount > 0, ZeroAmount());
+
+        (address superformAddress,,) = superformId.getSuperform();
+        IBaseForm superform = IBaseForm(superformAddress);
+
+        address asset = superform.getVaultAsset();
+
+        // use superform function similar to ERC4626, to determine output amount
+        uint256 outputAmount = superform.previewDepositTo(assetAmount);
+
+        uint256 superPositionsBefore = s.superPositions.balanceOf(receiverSP, superformId);
+
+        s.superformRouter.singleDirectSingleVaultDeposit(
+            _generateReq(
+                superformId,
+                assetAmount,
+                outputAmount,
+                asset,
+                receiver,
+                receiverSP
+            )
+        );
+
+        superPositionReceived =
+            s.superPositions.balanceOf(receiverSP, superformId) - superPositionsBefore;
+
+        emit SuperformSingleVaultDeposit(
+            superformId,
+            assetAmount,
+            receiver,
+            receiverSP,
+            superPositionReceived
+        );
+    }
+
+    /**
+     * @notice Withdraws assets from a single vault
+     * @return assetReceived Amount of assets withdrawn from the vault
+     */
+    function singleVaultWithdraw(
+        uint256 superformId,
+        uint256 superPositionAmount,
+        address receiver,
+        address receiverSP
+    ) external returns (uint256 assetReceived) {
+        SuperformStorage storage s = LibSuperform.diamondStorage();
+
+        require(s.superformFactory.isSuperform(superformId), InvalidSuperformId(superformId));
+        require(receiver != address(0), ZeroAddress());
+        require(receiverSP != address(0), ZeroAddress());
+        require(superPositionAmount > 0, ZeroAmount());
+
+        (address superformAddress,,) = superformId.getSuperform();
+        IBaseForm superform = IBaseForm(superformAddress);
+
+        address asset = superform.getVaultAsset();
+
+        // use superform function similar to ERC4626, to determine output amount
+        uint256 outputAmount = superform.previewWithdrawFrom(superPositionAmount);
+
+        uint256 assetBefore = IERC20(asset).balanceOf(receiverSP);
+
+        s.superformRouter.singleDirectSingleVaultDeposit(
+            _generateReq(
+                superformId,
+                superPositionAmount,
+                outputAmount,
+                asset,
+                receiver,
+                receiverSP
+            )
+        );
+
+        assetReceived = IERC20(asset).balanceOf(receiverSP) - assetBefore;
+
+        emit SuperformSingleVaultWithdraw(
+            superformId,
+            superPositionAmount,
+            receiver,
+            receiverSP,
+            assetReceived
+        );
+    }
+
+    /* ========== Strategy Manager  ========== */
+
+    /// @inheritdoc ISuperformIntegration
+    function updateSuperformStrategies(
+        address strategy,
+        bool status
+    ) external onlyStrategyVaultManager {
+        SuperformStorage storage s = LibSuperform.diamondStorage();
+
+        if (status) {
+            s.superformStrategies.add(strategy);
+        } else {
+            s.superformStrategies.remove(strategy);
+        }
+
+        emit SuperformStrategyUpdated(strategy, status);
+    }
+
+    /// @inheritdoc ISuperformIntegration
+    function setMaxSlippage(uint256 newMaxSlippage) external onlyStrategyVaultManager {
+        require(newMaxSlippage > 0, "Max slippage must be greater than 0");
+
+        SuperformStorage storage s = LibSuperform.diamondStorage();
+        emit MaxSlippageUpdated(s.maxSlippage, newMaxSlippage);
+
+        s.maxSlippage = newMaxSlippage;
+    }
+
+    // ========= View ========= //
+
+    function superformStrategyAt(uint256 index) external view returns (address) {
+        return LibSuperform.diamondStorage().superformStrategies.at(index);
+    }
+
+    function superformStrategiesLength() external view returns (uint256) {
+        return LibSuperform.diamondStorage().superformStrategies.length();
+    }
+
+    function getMaxSlippage() external view returns (uint256) {
+        return LibSuperform.diamondStorage().maxSlippage;
+    }
+
+    function superformFactory() external view returns (ISuperformFactory) {
+        return LibSuperform.diamondStorage().superformFactory;
+    }
+
+    function superformRouter() external view returns (IBaseRouterImplementation) {
+        return LibSuperform.diamondStorage().superformRouter;
+    }
+
+    function superPositions() external view returns (ISuperPositions) {
+        return LibSuperform.diamondStorage().superPositions;
+    }
+
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
+    /**
+     * @dev Constructs a request for single vault operations,
+     *      a `SingleDirectSingleVaultStateReq` struct
+     *
+     * @param superformId ID of the Superform entity involved in the operation
+     * @param amount Amount involved in the operation
+     * @param outputAmount Expected output from the operation
+     * @param asset Address of the asset used
+     * @param receiver Address receiving the operation result
+     * @param receiverSP Address for SuperPositions, if applicable
+     * @return req Struct with operation details
+     */
+    function _generateReq(
+        uint256 superformId,
+        uint256 amount,
+        uint256 outputAmount,
+        address asset,
+        address receiver,
+        address receiverSP
+    ) internal view returns (SingleDirectSingleVaultStateReq memory req) {
+        SuperformStorage storage s = LibSuperform.diamondStorage();
+
+        req = SingleDirectSingleVaultStateReq ({
+            superformData: SingleVaultSFData({
+                superformId: superformId,
+                amount: amount,
+                outputAmount: outputAmount,
+                maxSlippage: s.maxSlippage,
+                liqRequest: LiqRequest({
+                    txData: bytes(""),
+                    token: asset,
+                    interimToken: address(0),
+                    bridgeId: 1,
+                    liqDstChainId: 0,
+                    nativeAmount: 0
+                }),
+                permit2data: bytes(""),
+                hasDstSwap: false,
+                retain4626: false,
+                receiverAddress: receiver,
+                receiverAddressSP: receiverSP,
+                extraFormData: bytes("")
+            })
+        });
+    }
+}
