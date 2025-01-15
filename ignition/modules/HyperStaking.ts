@@ -3,20 +3,14 @@ import { getSelectors, FacetCutAction } from "../../scripts/libraries/diamond";
 import { getContractInterface } from "../../scripts/libraries/hardhat";
 
 import DiamondModule from "./Diamond";
-import { solidityPacked, keccak256 } from "ethers";
-
-const STAKING_MANAGER_ROLE = keccak256(
-  solidityPacked(["string"], ["STAKING_MANAGER_ROLE"]),
-);
-
-const STRATEGY_VAULT_MANAGER_ROLE = keccak256(
-  solidityPacked(["string"], ["STRATEGY_VAULT_MANAGER_ROLE"]),
-);
 
 // HyperStakingModule is in fact a proxy upgrade which adds the Facets to the Diamond
 const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const mailbox = m.getParameter("lockboxMailbox");
   const destination = m.getParameter("lockboxDestination");
+  const superformFactory = m.getParameter("superformFactory");
+  const superformRouter = m.getParameter("superformRouter");
+  const superPositions = m.getParameter("superPositions");
 
   const { diamond } = m.useModule(DiamondModule);
 
@@ -80,63 +74,35 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   // --- cut init
 
   const hyperStakingInit = m.contract("HyperStakingInit");
-  const hyperStakingInitInterface = getContractInterface("HyperStakingInit");
-  const initCall = hyperStakingInitInterface.encodeFunctionData("init");
+  const initCall = m.encodeFunctionCall(
+    hyperStakingInit, "init", [
+      stakingManager,
+      strategyVaultManager,
+      mailbox,
+      destination,
+      superformFactory,
+      superformRouter,
+      superPositions,
+    ],
+  );
 
   const diamondCut = m.contractAt("IDiamondCut", diamond);
-  const diamondCutFuture = m.call(
+  m.call(
     diamondCut, "diamondCut", [cut, hyperStakingInit, initCall], { from: owner },
   );
 
   // --- init facets
 
+  const acl = m.contractAt("HyperStakingAcl", diamond);
   const staking = m.contractAt("IStaking", diamond);
   const factory = m.contractAt("IVaultFactory", diamond);
   const tier1 = m.contractAt("ITier1Vault", diamond);
   const tier2 = m.contractAt("ITier2Vault", diamond);
   const lockbox = m.contractAt("ILockbox", diamond);
 
-  // const roles = m.contractAt("IHyperStakingRoles", diamond);
-  // const STAKING_MANAGER_ROLE = m.staticCall(roles, "STAKING_MANAGER_ROLE", [], 0);
-  // const STRATEGY_VAULT_MANAGER_ROLE = m.staticCall(roles, "STRATEGY_VAULT_MANAGER_ROLE", [], 0);
-
-  const acl = m.contractAt("HyperStakingAcl", diamond);
-
-  // --- grant roles
-
-  m.call(
-    acl,
-    "grantRole",
-    [STAKING_MANAGER_ROLE, stakingManager],
-    { id: "grantRoleStakingManager", after: [diamondCutFuture] },
-  );
-
-  m.call(
-    acl,
-    "grantRole",
-    [STRATEGY_VAULT_MANAGER_ROLE, strategyVaultManager],
-    { id: "grantRoleStrategyVaultManager", after: [diamondCutFuture] },
-  );
-
-  // --- setup lockbox bridge
-
-  m.call(
-    lockbox,
-    "setMailbox",
-    [mailbox],
-    { id: "setMailbox", after: [diamondCutFuture], from: strategyVaultManager },
-  );
-
-  m.call(
-    lockbox,
-    "setDestination",
-    [destination],
-    { id: "setDestination", after: [diamondCutFuture], from: strategyVaultManager },
-  );
-
   // --- return
 
-  return { diamond, staking, factory, tier1, tier2, lockbox };
+  return { diamond, acl, staking, factory, tier1, tier2, lockbox };
 });
 
 export default HyperStakingModule;

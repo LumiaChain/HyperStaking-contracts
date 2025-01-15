@@ -4,6 +4,7 @@ import { Contract, ZeroAddress, parseEther } from "ethers";
 import HyperStakingModule from "../ignition/modules/HyperStaking";
 import LumiaDiamondModule from "../ignition/modules/LumiaDiamond";
 import OneChainMailboxModule from "../ignition/modules/test/OneChainMailbox";
+import SuperformMockModule from "../ignition/modules/test/SuperformMock";
 
 import TestERC20Module from "../ignition/modules/test/TestERC20";
 import LumiaXERC20Module from "../ignition/modules/LumiaXERC20";
@@ -12,7 +13,7 @@ import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/facets/StakingFacet";
 import { IERC20 } from "../typechain-types";
 
-export async function deployTestHyperStaking(mailboxFee: bigint) {
+export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: Contract) {
   const testDestination = 31337; // the same for both sides of the test "oneChain" bridge
 
   const { mailbox } = await ignition.deploy(OneChainMailboxModule, {
@@ -24,11 +25,22 @@ export async function deployTestHyperStaking(mailboxFee: bigint) {
   });
   const mailboxAddress = await mailbox.getAddress();
 
+  const { superformFactory, superformRouter, superPositions } = await ignition.deploy(SuperformMockModule, {
+    parameters: {
+      SuperformMockModule: {
+        erc4626VaultAddress: await erc4626Vault.getAddress(),
+      },
+    },
+  });
+
   const { diamond, staking, factory, tier1, tier2, lockbox } = await ignition.deploy(HyperStakingModule, {
     parameters: {
       HyperStakingModule: {
         lockboxMailbox: mailboxAddress,
         lockboxDestination: testDestination,
+        superformFactory: await superformFactory.getAddress(),
+        superformRouter: await superformRouter.getAddress(),
+        superPositions: await superPositions.getAddress(),
       },
     },
   });
@@ -45,7 +57,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint) {
 
   // finish setup for hyperstaking
   const strategyVaultManager = (await ethers.getSigners())[2];
-  await lockbox.connect(strategyVaultManager).setLumiaFactory(interchainFactory.target);
+  await lockbox.connect(strategyVaultManager).setLumiaFactory(interchainFactory);
 
   return { mailbox, interchainFactory, diamond, staking, factory, tier1, tier2, lockbox };
 }

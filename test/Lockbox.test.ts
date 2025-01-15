@@ -9,13 +9,16 @@ describe("Lockbox", function () {
   async function deployHyperStaking() {
     const [owner, stakingManager, strategyVaultManager, bob, alice] = await ethers.getSigners();
 
-    const {
-      mailbox, interchainFactory, diamond, staking, factory, tier1, tier2, lockbox,
-    } = await shared.deployTestHyperStaking(0n);
-
     // --------------------- Deploy Tokens ----------------------
 
     const testReserveAsset = await shared.deloyTestERC20("Test Reserve Asset", "tRaETH");
+    const erc4626Vault = await shared.deloyTestERC4626Vault(testReserveAsset);
+
+    // --------------------- Hyperstaking Diamond --------------------
+
+    const {
+      mailbox, interchainFactory, diamond, staking, factory, tier1, tier2, lockbox,
+    } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // ------------------ Create Staking Pools ------------------
 
@@ -82,7 +85,7 @@ describe("Lockbox", function () {
       expect(lpAfter).to.be.gt(lpBefore);
 
       // more accurate amount calculation
-      const allocation = await reserveStrategy.convertToAllocation(stakeAmount);
+      const allocation = await reserveStrategy.previewAllocation(stakeAmount);
       const lpAmount = await vaultToken.previewDeposit(allocation);
 
       expect(lpAfter).to.be.eq(lpBefore + lpAmount);

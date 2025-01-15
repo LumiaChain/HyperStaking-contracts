@@ -3,8 +3,8 @@ pragma solidity =0.8.27;
 
 /**
  * @title IStrategy
- * @notice Interface for staking strategies used within the protocol.
- * Defines standard functions for managing the allocation and exit of revenue assets.
+ * @notice Interface for staking strategies used within the protocol
+ * Defines standard functions for managing the allocation and exit of revenue assets
  */
 interface IStrategy {
     //============================================================================================//
@@ -50,12 +50,12 @@ interface IStrategy {
     //                                           View                                             //
     //============================================================================================//
 
-    /// @return The address of the revenue-accumulating asset.
+    /// @return The address of the revenue-accumulating asset
     function revenueAsset() external view returns(address);
 
-    /// @dev Return current stake to asset allocation ratio (price)
-    function convertToAllocation(uint256 stakeAmount_) external view returns (uint256);
+    /// @dev Preview the asset allocation for a given stake amount
+    function previewAllocation(uint256 stakeAmount_) external view returns (uint256 allocation);
 
-    /// @dev Return current asset to stake ratio (price)
-    function convertToStake(uint256 assetAllocation_) external view returns (uint256);
+    /// @dev Preview the stake amount that would be received in exchange for a given allocation
+    function previewExit(uint256 assetAllocation_) external view returns (uint256 stakeAmount);
 }

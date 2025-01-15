@@ -9,11 +9,14 @@ describe("VaultToken", function () {
   async function deployHyperStaking() {
     const [owner, stakingManager, strategyVaultManager, bob, alice] = await ethers.getSigners();
 
-    const { interchainFactory, diamond, staking, factory, tier1, tier2 } = await shared.deployTestHyperStaking(0n);
-
     // --------------------- Deploy Tokens ----------------------
 
     const testReserveAsset = await shared.deloyTestERC20("Test Reserve Asset", "tRaETH");
+    const erc4626Vault = await shared.deloyTestERC4626Vault(testReserveAsset);
+
+    // --------------------- Hyperstaking Diamond --------------------
+
+    const { interchainFactory, diamond, staking, factory, tier1, tier2 } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // ------------------ Create Staking Pools ------------------
 
@@ -126,7 +129,7 @@ describe("VaultToken", function () {
       expect(lpAfter).to.be.gt(lpBefore);
 
       // more accurate amount calculation
-      const allocation = await reserveStrategy.convertToAllocation(stakeAmount);
+      const allocation = await reserveStrategy.previewAllocation(stakeAmount);
       const lpAmount = await vaultToken.previewDeposit(allocation);
 
       expect(lpAfter).to.be.eq(lpBefore + lpAmount);
@@ -287,7 +290,7 @@ describe("VaultToken", function () {
       expectedBobAllocation += allocationFee;
 
       const precisionError = 1n;
-      const expectedNewBobStake = await reserveStrategy.convertToStake(expectedBobAllocation - precisionError);
+      const expectedNewBobStake = await reserveStrategy.previewExit(expectedBobAllocation - precisionError);
 
       expect(await vaultToken.totalAssets()).to.be.eq(expectedBobAllocation);
       expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).shares).to.be.eq(expectedBobShares);

@@ -76,6 +76,7 @@ interface ITier2Vault {
 
     /**
      * @notice Retrieves tier2 vault information specific to a user within a given strategy
+     * @dev Checks shares only on the chain from which it is called
      * @param strategy The address of the strategy
      * @param user The address of the user
      * @return A UserTier2Info struct containing the user's specific vault details

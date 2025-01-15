@@ -28,19 +28,6 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
     using HyperlaneMailboxMessages for bytes;
 
     //============================================================================================//
-    //                                        Constructor                                         //
-    //============================================================================================//
-
-    /**
-     * @param mailbox_ The address of the mailbox contract, used for cross-chain communication
-     */
-    // TODO proxy instead of owner
-    // init function?
-    // constructor(address mailbox_) Ownable(msg.sender) {
-    //    setMailbox(mailbox_);
-    // }
-
-    //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
 

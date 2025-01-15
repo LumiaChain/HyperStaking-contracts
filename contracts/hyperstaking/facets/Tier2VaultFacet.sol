@@ -14,9 +14,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
-import {
-    LibStaking, StakingStorage, StakingPoolInfo
-} from "../libraries/LibStaking.sol";
+import {LibStaking, StakingStorage, StakingPoolInfo} from "../libraries/LibStaking.sol";
 import {
     LibStrategyVault, StrategyVaultStorage, VaultInfo, VaultTier2, UserTier2Info
 } from "../libraries/LibStrategyVault.sol";
@@ -131,7 +129,6 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     function userTier2Info(
         address strategy,
         address user
-        // TODO specify shares - taken from other chain
     ) external view returns (UserTier2Info memory) {
         VaultTier2 storage tier2 = LibStrategyVault.diamondStorage().vaultTier2Info[strategy];
         uint256 shares = tier2.vaultToken.balanceOf(user);
@@ -147,7 +144,7 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         VaultTier2 storage tier2 = LibStrategyVault.diamondStorage().vaultTier2Info[strategy];
 
         uint256 allocation = tier2.vaultToken.convertToAssets(shares);
-        uint256 stake = IStrategy(strategy).convertToStake(allocation);
+        uint256 stake = IStrategy(strategy).previewExit(allocation);
 
         return UserTier2Info({
             shares: shares,

@@ -3,8 +3,7 @@ pragma solidity =0.8.27;
 
 import {IStrategy} from "../interfaces/IStrategy.sol";
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {PirexIntegration} from "./PirexIntegration.sol";
 
@@ -23,7 +22,6 @@ contract DineroStrategy is IStrategy, PirexIntegration {
     //============================================================================================//
 
     error NotLumiaDiamond();
-
     error BadAllocationValue();
 
     //============================================================================================//
@@ -86,12 +84,12 @@ contract DineroStrategy is IStrategy, PirexIntegration {
     }
 
     /// Return current stake to asset ratio (eth/apxEth price)
-    function convertToAllocation(uint256 stakeAmount_) public view returns (uint256) {
+    function previewAllocation(uint256 stakeAmount_) public view returns (uint256) {
         return _convertEthToApxEth(stakeAmount_);
     }
 
     /// Return current asset to stake ratio (apxEth/eth price)
-    function convertToStake(uint256 assetAllocation_) public view returns (uint256) {
+    function previewExit(uint256 assetAllocation_) public view returns (uint256) {
         return _convertApxEthToEth(assetAllocation_);
     }
 }

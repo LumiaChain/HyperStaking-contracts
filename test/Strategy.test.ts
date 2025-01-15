@@ -50,52 +50,17 @@ describe("Strategy", function () {
     return { superformFactory, superformRouter, superVault, superPositions, superformId, superform, superManager, testUSDC, erc4626Vault, alice };
   }
 
-  const superUSDCDeposit = async (
-    amount: bigint,
-    receiver: Signer,
-    outputAmount?: bigint,
-    maxSlippage: bigint = 50n, // 0.5%
-  ) => {
-    const { superformRouter, superform, testUSDC, superformId } = await loadFixture(getMockedSuperform);
-
-    if (!outputAmount) {
-      outputAmount = await superform.previewDepositTo(amount);
-    }
-
-    await testUSDC.connect(receiver).approve(superformRouter, amount);
-    const routerReq: SingleDirectSingleVaultStateReqStruct = {
-      superformData: {
-        superformId,
-        amount,
-        outputAmount,
-        maxSlippage,
-        liqRequest: {
-          txData: "0x",
-          token: testUSDC,
-          interimToken: ZeroAddress,
-          bridgeId: 1,
-          liqDstChainId: 0,
-          nativeAmount: 0,
-        },
-        permit2data: "0x",
-        hasDstSwap: false,
-        retain4626: false,
-        receiverAddress: receiver,
-        receiverAddressSP: receiver,
-        extraFormData: "0x",
-      },
-    };
-
-    await superformRouter.connect(receiver).singleDirectSingleVaultDeposit(routerReq);
-  };
-
   async function deployHyperStaking() {
     const [owner, stakingManager, strategyVaultManager, bob, alice] = await ethers.getSigners();
-    const { diamond, staking, factory, tier1, tier2 } = await shared.deployTestHyperStaking(0n);
 
     // --------------------- Deploy Tokens ----------------------
 
     const testWstETH = await shared.deloyTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
+    const erc4626Vault = await shared.deloyTestERC4626Vault(testWstETH);
+
+    // --------------------- Hyperstaking Diamond --------------------
+
+    const { diamond, staking, factory, tier1, tier2 } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // ------------------ Create Staking Pools ------------------
 
@@ -162,7 +127,7 @@ describe("Strategy", function () {
 
       expect(await testWstETH.balanceOf(factory.target)).to.equal(0);
       expect(await reserveStrategy.assetPrice()).to.equal(reserveAssetPrice);
-      expect(await reserveStrategy.convertToAllocation(ownerAmount)).to.equal(ownerAmount * parseEther("1") / reserveAssetPrice);
+      expect(await reserveStrategy.previewAllocation(ownerAmount)).to.equal(ownerAmount * parseEther("1") / reserveAssetPrice);
 
       // event
       await expect(staking.stakeDeposit(ethPoolId, reserveStrategy, ownerAmount, owner, { value: ownerAmount }))
@@ -188,7 +153,7 @@ describe("Strategy", function () {
       expect((await staking.userPoolInfo(ethPoolId, alice)).stakeLocked).to.equal(aliceAmount);
       expect((await tier1.userTier1Info(reserveStrategy, alice)).stakeLocked).to.equal(aliceAmount);
       expect((await tier1.userTier1Info(reserveStrategy, alice)).allocationPoint)
-        .to.equal(await reserveStrategy.convertToAllocation(parseEther("1")));
+        .to.equal(await reserveStrategy.previewAllocation(parseEther("1")));
       expect(await tier1.userContribution(reserveStrategy, alice)).to.equal(parseEther("0.8")); // 80%
 
       // VaultInfo
@@ -228,7 +193,7 @@ describe("Strategy", function () {
 
       expect((await tier1.userTier1Info(reserveStrategy, owner)).stakeLocked).to.equal(diffAmount);
       expect((await tier1.userTier1Info(reserveStrategy, owner)).allocationPoint)
-        .to.equal(await reserveStrategy.convertToAllocation(parseEther("1")));
+        .to.equal(await reserveStrategy.previewAllocation(parseEther("1")));
       expect(await tier1.userContribution(reserveStrategy, owner)).to.equal(parseEther("1"));
 
       // TiersInfo
@@ -556,6 +521,45 @@ describe("Strategy", function () {
 
   describe("Superform Strategy", function () {
     describe("Superform Mock", function () {
+      const superUSDCDeposit = async (
+        amount: bigint,
+        receiver: Signer,
+        outputAmount?: bigint,
+        maxSlippage: bigint = 50n, // 0.5%
+      ) => {
+        const { superformRouter, superform, testUSDC, superformId } = await loadFixture(getMockedSuperform);
+
+        if (!outputAmount) {
+          outputAmount = await superform.previewDepositTo(amount);
+        }
+
+        await testUSDC.connect(receiver).approve(superformRouter, amount);
+        const routerReq: SingleDirectSingleVaultStateReqStruct = {
+          superformData: {
+            superformId,
+            amount,
+            outputAmount,
+            maxSlippage,
+            liqRequest: {
+              txData: "0x",
+              token: testUSDC,
+              interimToken: ZeroAddress,
+              bridgeId: 1,
+              liqDstChainId: 0,
+              nativeAmount: 0,
+            },
+            permit2data: "0x",
+            hasDstSwap: false,
+            retain4626: false,
+            receiverAddress: receiver,
+            receiverAddressSP: receiver,
+            extraFormData: "0x",
+          },
+        };
+
+        await superformRouter.connect(receiver).singleDirectSingleVaultDeposit(routerReq);
+      };
+
       it("overall tests of the mock", async function () {
         const { superformFactory, superVault, superPositions, testUSDC, erc4626Vault } = await loadFixture(getMockedSuperform);
         const [, alice] = await ethers.getSigners();

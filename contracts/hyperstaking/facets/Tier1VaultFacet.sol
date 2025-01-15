@@ -209,7 +209,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
 
         uint256 fee = allocationFee(strategy, gain);
 
-        return IStrategy(strategy).convertToStake(gain - fee);
+        return IStrategy(strategy).previewExit(gain - fee);
     }
 
     //============================================================================================//
@@ -316,7 +316,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         address strategy,
         uint256 stake
     ) internal view returns (uint256) {
-        uint256 newAllocation = IStrategy(strategy).convertToAllocation(stake);
+        uint256 newAllocation = IStrategy(strategy).previewAllocation(stake);
 
         // Weighted average calculation for the updated allocation point
         return (
@@ -357,6 +357,6 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
 
         // current allocation price (stake to asset)
         uint8 stakeDecimals = pool.currency.decimals();
-        return IStrategy(strategy).convertToAllocation(10 ** stakeDecimals);
+        return IStrategy(strategy).previewAllocation(10 ** stakeDecimals);
     }
 }

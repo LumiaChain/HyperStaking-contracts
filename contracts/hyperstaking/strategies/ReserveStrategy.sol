@@ -113,7 +113,7 @@ contract ReserveStrategy is IStrategy, Ownable {
         uint256 stakeAmount_,
         address user_
     ) external payable onlyLumiaDiamond() returns (uint256 allocation) {
-        allocation = convertToAllocation(stakeAmount_);
+        allocation = previewAllocation(stakeAmount_);
         assetReserve -= allocation;
 
         stake.transferFrom(DIAMOND, address(this), stakeAmount_);
@@ -128,7 +128,7 @@ contract ReserveStrategy is IStrategy, Ownable {
         uint256 assetAllocation_,
         address user_
     ) external onlyLumiaDiamond() returns (uint256 exitAmount) {
-        exitAmount = convertToStake(assetAllocation_);
+        exitAmount = previewExit(assetAllocation_);
         assetReserve += exitAmount;
 
         IERC20(revenueAsset).transferFrom(DIAMOND, address(this), assetAllocation_);
@@ -144,12 +144,12 @@ contract ReserveStrategy is IStrategy, Ownable {
     // ========= View ========= //
 
     /// Return current stake to asset conversion (amount * price)
-    function convertToAllocation(uint256 stakeAmount_) public view returns (uint256) {
+    function previewAllocation(uint256 stakeAmount_) public view returns (uint256) {
         return stakeAmount_ * PRECISSION_FACTOR / assetPrice;
     }
 
     /// Return current asset to stake conversion (amount / price)
-    function convertToStake(uint256 assetAllocation_) public view returns (uint256) {
+    function previewExit(uint256 assetAllocation_) public view returns (uint256) {
         return assetAllocation_ * assetPrice / PRECISSION_FACTOR;
     }
 

@@ -21,12 +21,16 @@ describe("Staking", function () {
 
   async function deployHyperStaking() {
     const [owner, stakingManager, strategyVaultManager, alice, bob] = await ethers.getSigners();
-    const { diamond, staking, factory } = await shared.deployTestHyperStaking(0n);
 
     // --------------------- Deploy Tokens --------------------
 
     const testERC20 = await shared.deloyTestERC20("Test ERC20 Token", "tERC20");
     const testWstETH = await shared.deloyTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
+    const erc4626Vault = await shared.deloyTestERC4626Vault(testERC20);
+
+    // --------------------- Hyperstaking Diamond --------------------
+
+    const { diamond, staking, factory } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // ------------------ Create Staking Pools ------------------
 
