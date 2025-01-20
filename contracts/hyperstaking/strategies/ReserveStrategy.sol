@@ -112,7 +112,7 @@ contract ReserveStrategy is IStrategy, Ownable {
     function allocate(
         uint256 stakeAmount_,
         address user_
-    ) external payable onlyLumiaDiamond() returns (uint256 allocation) {
+    ) external payable onlyLumiaDiamond returns (uint256 allocation) {
         allocation = previewAllocation(stakeAmount_);
         assetReserve -= allocation;
 
@@ -127,7 +127,7 @@ contract ReserveStrategy is IStrategy, Ownable {
     function exit(
         uint256 assetAllocation_,
         address user_
-    ) external onlyLumiaDiamond() returns (uint256 exitAmount) {
+    ) external onlyLumiaDiamond returns (uint256 exitAmount) {
         exitAmount = previewExit(assetAllocation_);
         assetReserve += exitAmount;
 

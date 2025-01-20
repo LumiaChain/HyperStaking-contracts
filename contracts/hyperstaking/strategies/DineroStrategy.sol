@@ -55,7 +55,7 @@ contract DineroStrategy is IStrategy, PirexIntegration {
     function allocate(
         uint256 amount_,
         address user_
-    ) external payable onlyLumiaDiamond() returns (uint256 allocation) {
+    ) external payable onlyLumiaDiamond returns (uint256 allocation) {
         require(amount_ == msg.value, BadAllocationValue());
 
         // mint apx and allow Diamond (Vault) to fetch it
@@ -69,7 +69,7 @@ contract DineroStrategy is IStrategy, PirexIntegration {
     function exit(
         uint256 shares_,
         address user_
-    ) external onlyLumiaDiamond() returns (uint256 exitAmount) {
+    ) external onlyLumiaDiamond returns (uint256 exitAmount) {
         IERC20(AUTO_PX_ETH).transferFrom(DIAMOND, address(this), shares_);
         exitAmount = redeem(shares_, DIAMOND); // transfer amount back to the Diamond
 

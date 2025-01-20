@@ -15,15 +15,11 @@ import {
     PausableUpgradeable
 } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
-import {IBaseRouterImplementation} from "../external/superform/core/interfaces/IBaseRouterImplementation.sol";
-import {ISuperformFactory} from "../external/superform/core/interfaces/ISuperformFactory.sol";
-import {ISuperPositions} from "../external/superform/core/interfaces/ISuperPositions.sol";
-
 import {IMailbox} from "../external/hyperlane/interfaces/IMailbox.sol";
 
 import {LibAcl} from "./libraries/LibAcl.sol";
 import {LibStrategyVault, LockboxData} from "./libraries/LibStrategyVault.sol";
-import {LibSuperform, SuperformStorage} from "./libraries/LibSuperform.sol";
+import {LibSuperform} from "./libraries/LibSuperform.sol";
 
 
 /**
@@ -71,16 +67,7 @@ contract HyperStakingInit is AccessControlEnumerableUpgradeable, ReentrancyGuard
         box.destination = lockboxDestination;
         box.mailbox = IMailbox(lockboxMailbox);
 
-        // initialize Superform integration
-
-        require(superformFactory != address(0), ZeroAddress());
-        require(superformRouter != address(0), ZeroAddress());
-        require(superPositions != address(0), ZeroAddress());
-        SuperformStorage storage ss = LibSuperform.diamondStorage();
-
-        ss.superformFactory = ISuperformFactory(superformFactory);
-        ss.superformRouter = IBaseRouterImplementation(superformRouter);
-        ss.superPositions = ISuperPositions(superPositions);
-        ss.maxSlippage = 50; // 0.5%
+        // initialize superform-integration storage
+        LibSuperform.init(superformFactory, superformRouter, superPositions);
     }
 }

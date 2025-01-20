@@ -45,13 +45,15 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
     //                                      Public Functions                                      //
     //============================================================================================//
 
+    /* ========== Strategy ========== */
+
     /// @inheritdoc ISuperformIntegration
     function singleVaultDeposit(
         uint256 superformId,
         uint256 assetAmount,
         address receiver,
         address receiverSP
-    ) external returns (uint256 superPositionReceived) {
+    ) external onlyStrategy returns (uint256 superPositionReceived) {
         SuperformStorage storage s = LibSuperform.diamondStorage();
 
         require(s.superformFactory.isSuperform(superformId), InvalidSuperformId(superformId));
@@ -101,7 +103,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         uint256 superPositionAmount,
         address receiver,
         address receiverSP
-    ) external returns (uint256 assetReceived) {
+    ) external onlyStrategy returns (uint256 assetReceived) {
         SuperformStorage storage s = LibSuperform.diamondStorage();
 
         require(s.superformFactory.isSuperform(superformId), InvalidSuperformId(superformId));
@@ -138,6 +140,30 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
             receiver,
             receiverSP,
             assetReceived
+        );
+    }
+
+    /// @inheritdoc ISuperformIntegration
+    function transmuteToERC20(
+        address owner,
+        uint256 superformId,
+        uint256 assetAmount,
+        address receiver
+    ) external onlyStrategy {
+        LibSuperform.diamondStorage().superPositions.transmuteToERC20(
+            owner, superformId, assetAmount, receiver
+        );
+    }
+
+    /// @inheritdoc ISuperformIntegration
+    function transmuteToERC1155A(
+        address owner,
+        uint256 superformId,
+        uint256 superPositionAmount,
+        address receiver
+    ) external onlyStrategy {
+        LibSuperform.diamondStorage().superPositions.transmuteToERC1155A(
+            owner, superformId, superPositionAmount, receiver
         );
     }
 
@@ -194,6 +220,39 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
     function superPositions() external view returns (ISuperPositions) {
         return LibSuperform.diamondStorage().superPositions;
     }
+
+    /// @inheritdoc ISuperformIntegration
+    function previewDepositTo(
+        uint256 superformId,
+        uint256 assetAmount
+    ) external view returns (uint256) {
+        (address superformAddress,,) = superformId.getSuperform();
+        IBaseForm superform = IBaseForm(superformAddress);
+
+        return superform.previewDepositTo(assetAmount);
+    }
+
+    /// @inheritdoc ISuperformIntegration
+    function previewWithdrawFrom(
+        uint256 superformId,
+        uint256 superPositionAmount
+    ) external view returns (uint256) {
+        (address superformAddress,,) = superformId.getSuperform();
+        IBaseForm superform = IBaseForm(superformAddress);
+
+        return superform.previewWithdrawFrom(superPositionAmount);
+    }
+
+    /// @inheritdoc ISuperformIntegration
+    function aERC20Token(uint256 superformId) external view returns (address) {
+        SuperformStorage storage s = LibSuperform.diamondStorage();
+
+        address token = s.superPositions.getERC20TokenAddress(superformId);
+        require(token != address(0), AERC20NotRegistered());
+
+        return token;
+    }
+
 
     //============================================================================================//
     //                                     Internal Functions                                     //

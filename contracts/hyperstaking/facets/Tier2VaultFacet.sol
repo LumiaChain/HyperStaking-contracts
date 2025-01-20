@@ -98,7 +98,7 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         address strategy,
         address user,
         uint256 allocation
-    ) external onlyVaultToken(strategy) returns (uint256 withdrawAmount) {
+    ) external onlyVaultToken(strategy) nonReentrant returns (uint256 withdrawAmount) {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
         VaultTier2 storage tier2 = v.vaultTier2Info[strategy];

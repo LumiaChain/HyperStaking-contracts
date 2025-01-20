@@ -11,6 +11,8 @@ import {ISuperPositions} from "../../external/superform/core/interfaces/ISuperPo
 //                                           Storage                                              //
 //================================================================================================//
 
+error ZeroAddress();
+
 struct SuperformStorage {
     EnumerableSet.AddressSet superformStrategies;
     uint256 maxSlippage; // 10000 = 100%
@@ -29,5 +31,23 @@ library LibSuperform {
         assembly {
             s.slot := position
         }
+    }
+
+    /// initialize this storage
+    function init(
+        address superformFactory,
+        address superformRouter,
+        address superPositions
+    ) internal {
+        require(superformFactory != address(0), ZeroAddress());
+        require(superformRouter != address(0), ZeroAddress());
+        require(superPositions != address(0), ZeroAddress());
+
+        SuperformStorage storage s = LibSuperform.diamondStorage();
+
+        s.superformFactory = ISuperformFactory(superformFactory);
+        s.superformRouter = IBaseRouterImplementation(superformRouter);
+        s.superPositions = ISuperPositions(superPositions);
+        s.maxSlippage = 50; // 0.5%
     }
 }

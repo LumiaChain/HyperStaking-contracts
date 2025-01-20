@@ -43,10 +43,6 @@ interface IStaking {
     //                                          Errors                                            //
     //============================================================================================//
 
-    /// TODO adjust contracts to other decimals
-    /// @notice Thrown when creating pool with currency decimals other than 18
-    error BadCurrencyDecimals();
-
     /// @notice Thrown when attempting to access a non-existent staking pool
     error PoolDoesNotExist();
 

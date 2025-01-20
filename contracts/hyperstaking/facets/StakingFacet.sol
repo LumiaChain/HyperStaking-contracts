@@ -211,8 +211,6 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     ) internal returns (uint256 poolId) {
         StakingStorage storage s = LibStaking.diamondStorage();
 
-        require(currency.decimals() == 18, BadCurrencyDecimals());
-
         // use current count as idx
         uint96 idx = s.stakeTokenPoolCount[currency.token];
         poolId = generatePoolId(currency, idx);

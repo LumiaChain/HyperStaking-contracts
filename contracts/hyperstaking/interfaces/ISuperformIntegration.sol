@@ -45,15 +45,14 @@ interface ISuperformIntegration {
     error ZeroAmount();
     error ZeroAddress();
     error NotFromStrategy(address);
+    error AERC20NotRegistered();
 
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
 
-    /**
-     * @notice Deposits assets into a single vault
-     * @return superPositionReceived Amount of Superform positions minted
-     */
+    /// @notice Deposits assets into a single vault
+    /// @return superPositionReceived Amount of Superform positions minted
     function singleVaultDeposit(
         uint256 superformId_,
         uint256 assetAmount_,
@@ -61,10 +60,8 @@ interface ISuperformIntegration {
         address receiverSP_
     ) external returns (uint256 superPositionReceived);
 
-    /**
-     * @notice Withdraws assets from a single vault
-     * @return assetReceived Amount of assets withdrawn from the vault
-     */
+    /// @notice Withdraws assets from a single vault
+    /// @return assetReceived Amount of assets withdrawn from the vault
     function singleVaultWithdraw(
         uint256 superformId_,
         uint256 superPositionAmount_,
@@ -72,16 +69,28 @@ interface ISuperformIntegration {
         address receiverSP_
     ) external returns (uint256 assetReceived);
 
-    /**
-     * @dev Updates the status of a Superform strategy
-     * @param strategy The address of the strategy to update
-     * @param status The new status of the strategy (true to enable, false to disable)
-     */
+    /// @dev Use SuperPositions ERC1155A functionaliy to transmute token
+    function transmuteToERC20(
+        address owner,
+        uint256 superformId,
+        uint256 assetAmount,
+        address receiver
+    ) external;
+
+    /// @dev Use SuperPositions ERC1155A functionaliy to transmute token
+    function transmuteToERC1155A(
+        address owner,
+        uint256 superformId,
+        uint256 superPositionAmount,
+        address receiver
+    ) external;
+
+    ///  @dev Updates the status of a Superform strategy
+    ///  @param strategy The address of the strategy to update
+    ///  @param status The new status of the strategy (true to enable, false to disable)
     function updateSuperformStrategies(address strategy, bool status) external;
 
-    /**
-     * @dev Sets the maximum slippage used in superform, where 10000 = 100%
-     */
+    /// @dev Sets the maximum slippage used in superform, where 10000 = 100%
     function setMaxSlippage(uint256 newMaxSlippage) external;
 
     //============================================================================================//
@@ -99,4 +108,20 @@ interface ISuperformIntegration {
     function superformRouter() external view returns (IBaseRouterImplementation);
 
     function superPositions() external view returns (ISuperPositions);
+
+    /// @dev Using the underlying superform function with the same name
+    function previewDepositTo(
+        uint256 superformId,
+        uint256 assetAmount
+    ) external view returns (uint256);
+
+    /// @dev Using the underlying superform function with the same name
+    function previewWithdrawFrom(
+        uint256 superformId,
+        uint256 superPositionAmount
+    ) external view returns (uint256);
+
+    /// @dev Returns the address of the ERC-20 token for a given Superform ID
+    ///      Ensures the token is registered; reverts if not
+    function aERC20Token(uint256 superformId) external view returns (address);
 }
