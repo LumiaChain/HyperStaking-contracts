@@ -7,7 +7,6 @@ import OneChainMailboxModule from "../ignition/modules/test/OneChainMailbox";
 import SuperformMockModule from "../ignition/modules/test/SuperformMock";
 
 import TestERC20Module from "../ignition/modules/test/TestERC20";
-import LumiaXERC20Module from "../ignition/modules/LumiaXERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
 
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/facets/StakingFacet";
@@ -25,7 +24,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   });
   const mailboxAddress = await mailbox.getAddress();
 
-  const { superformFactory, superformRouter, superPositions } = await ignition.deploy(SuperformMockModule, {
+  const { superformFactory, superformRouter, superVault, superPositions } = await ignition.deploy(SuperformMockModule, {
     parameters: {
       SuperformMockModule: {
         erc4626VaultAddress: await erc4626Vault.getAddress(),
@@ -33,7 +32,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     },
   });
 
-  const { diamond, staking, factory, tier1, tier2, lockbox } = await ignition.deploy(HyperStakingModule, {
+  const { diamond, staking, factory, tier1, tier2, lockbox, superformIntegration } = await ignition.deploy(HyperStakingModule, {
     parameters: {
       HyperStakingModule: {
         lockboxMailbox: mailboxAddress,
@@ -59,7 +58,9 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   const strategyVaultManager = (await ethers.getSigners())[2];
   await lockbox.connect(strategyVaultManager).setLumiaFactory(interchainFactory);
 
-  return { mailbox, interchainFactory, diamond, staking, factory, tier1, tier2, lockbox };
+  return {
+    mailbox, interchainFactory, diamond, staking, factory, tier1, tier2, lockbox, superVault, superformIntegration,
+  };
 }
 
 export async function deloyTestERC20(name: string, symbol: string, decimals: number = 18): Promise<Contract> {
@@ -77,19 +78,6 @@ export async function deloyTestERC20(name: string, symbol: string, decimals: num
 
 export async function deloyTestERC4626Vault(asset: Contract): Promise<Contract> {
   return ethers.deployContract("TestERC4626", [await asset.getAddress()]) as unknown as Promise<Contract>;
-}
-
-export async function deloyTestXERC20(mailbox: string, name: string, symbol: string): Promise<Contract> {
-  const { xERC20 } = await ignition.deploy(LumiaXERC20Module, {
-    parameters: {
-      LumiaXERC20Module: {
-        mailbox,
-        name,
-        symbol,
-      },
-    },
-  });
-  return xERC20;
 }
 
 export async function createNativeStakingPool(staking: Contract) {
