@@ -315,7 +315,7 @@ describe("Superform", function () {
   });
 
   describe("Strategy", function () {
-    it.only("Superform strategy with vault should be created along with LP token on lumia side", async function () {
+    it("Superform strategy with vault should be created along with LP token on lumia side", async function () {
       const { diamond, factory, tier2, superformStrategy, interchainFactory, testUSDC, usdcPoolId, superformId } = await deployHyperStaking();
 
       expect(await superformStrategy.DIAMOND()).to.equal(diamond);
