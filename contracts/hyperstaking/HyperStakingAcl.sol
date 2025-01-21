@@ -54,14 +54,6 @@ contract HyperStakingAcl is AccessControlEnumerableUpgradeable, IHyperStakingRol
         _;
     }
 
-    /// @dev Only allows access for the `Rewards Manager` role
-    modifier onlyRewardsManager() {
-        if (!hasRole(REWARDS_MANAGER_ROLE(), msg.sender)) {
-            revert OnlyRewardsManager();
-        }
-        _;
-    }
-
     //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
@@ -74,9 +66,5 @@ contract HyperStakingAcl is AccessControlEnumerableUpgradeable, IHyperStakingRol
 
     function STRATEGY_VAULT_MANAGER_ROLE() public pure returns (bytes32) {
         return LibAcl.STRATEGY_VAULT_MANAGER_ROLE;
-    }
-
-    function REWARDS_MANAGER_ROLE() public pure returns (bytes32) {
-        return LibAcl.REWARDS_MANAGER_ROLE;
     }
 }

@@ -407,5 +407,31 @@ describe("Superform", function () {
 
       expect(await lpToken.balanceOf(alice)).to.be.eq(0);
     });
+
+    it("Revenue from superform strategy", async function () {
+      const { staking, superformStrategy, testUSDC, usdcPoolId, alice, interchainFactory, erc4626Vault, vault, lpToken } = await deployHyperStaking();
+
+      const amount = parseUnits("100", 6);
+
+      await testUSDC.connect(alice).approve(staking, amount);
+      await staking.connect(alice).stakeDepositTier2(usdcPoolId, superformStrategy, amount, alice);
+
+      // lpToken on the Lumia chain side
+      const lpBalance = await lpToken.balanceOf(alice);
+
+      // change the ratio of the vault, increase the revenue
+      const currentVaultAssets = await erc4626Vault.totalAssets();
+      await testUSDC.transfer(erc4626Vault, currentVaultAssets); // double the assets
+
+      const newRatio = parseUnits("2", 6);
+      const expectedNewAmount = newRatio * amount / parseUnits("1", 6) - 1n; // minus precision error
+
+      await lpToken.connect(alice).approve(interchainFactory, lpBalance);
+      await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(vault, alice, lpBalance))
+        .to.changeTokenBalances(testUSDC,
+          [alice, erc4626Vault], [expectedNewAmount, -expectedNewAmount]);
+
+      expect(await lpToken.balanceOf(alice)).to.be.eq(0);
+    });
   });
 });

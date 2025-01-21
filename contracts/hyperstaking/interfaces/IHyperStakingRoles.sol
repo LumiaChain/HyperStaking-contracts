@@ -14,7 +14,6 @@ interface IHyperStakingRoles {
     error OnlyDiamondInternal();
     error OnlyStakingManager();
     error OnlyStrategyVaultManager();
-    error OnlyRewardsManager();
 
     //============================================================================================//
     //                                           View                                             //
@@ -22,5 +21,4 @@ interface IHyperStakingRoles {
 
     function STAKING_MANAGER_ROLE() external view returns (bytes32);
     function STRATEGY_VAULT_MANAGER_ROLE() external view returns (bytes32);
-    function REWARDS_MANAGER_ROLE() external view returns (bytes32);
 }

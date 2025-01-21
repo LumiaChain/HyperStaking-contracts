@@ -118,7 +118,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         address asset = superform.getVaultAsset();
 
         // use superform function similar to ERC4626, to determine output amount
-        uint256 outputAmount = superform.previewWithdrawFrom(superPositionAmount);
+        uint256 outputAmount = superform.previewRedeemFrom(superPositionAmount);
 
         uint256 assetBefore = IERC20(asset).balanceOf(receiverSP);
 
@@ -247,7 +247,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         (address superformAddress,,) = superformId.getSuperform();
         IBaseForm superform = IBaseForm(superformAddress);
 
-        return superform.previewWithdrawFrom(superPositionAmount);
+        return superform.previewRedeemFrom(superPositionAmount);
     }
 
     /// @inheritdoc ISuperformIntegration

@@ -44,7 +44,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     },
   });
 
-  const { /* lumiaDiamond, */ interchainFactory } = await ignition.deploy(LumiaDiamondModule, {
+  const { lumiaDiamond, interchainFactory } = await ignition.deploy(LumiaDiamondModule, {
     parameters: {
       LumiaDiamondModule: {
         lumiaMailbox: mailboxAddress,
@@ -57,6 +57,14 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   // finish setup for hyperstaking
   const strategyVaultManager = (await ethers.getSigners())[2];
   await lockbox.connect(strategyVaultManager).setLumiaFactory(interchainFactory);
+
+  // finish setup for lumia diamond
+  const lumiaFactoryManager = (await ethers.getSigners())[3];
+  const lumiaAcl = await ethers.getContractAt("LumiaDiamondAcl", lumiaDiamond);
+  await lumiaAcl.grantRole(
+    await lumiaAcl.LUMIA_FACTORY_MANAGER_ROLE(),
+    await lumiaFactoryManager.getAddress(),
+  );
 
   return {
     mailbox, interchainFactory, diamond, staking, factory, tier1, tier2, lockbox, superVault, superformIntegration,

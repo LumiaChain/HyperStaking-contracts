@@ -7,7 +7,7 @@ import * as shared from "./shared";
 
 describe("Lockbox", function () {
   async function deployHyperStaking() {
-    const [owner, stakingManager, strategyVaultManager, bob, alice] = await ethers.getSigners();
+    const [owner, stakingManager, strategyVaultManager, lumiaFactoryManager, bob, alice] = await ethers.getSigners();
 
     // --------------------- Deploy Tokens ----------------------
 
@@ -59,12 +59,29 @@ describe("Lockbox", function () {
       mailbox, interchainFactory, testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
       ethPoolId, // ids
       defaultRevenueFee, reserveAssetPrice, mailboxFee, // values
-      nativeTokenAddress, owner, stakingManager, strategyVaultManager, alice, bob, // addresses
+      nativeTokenAddress, owner, stakingManager, strategyVaultManager, lumiaFactoryManager, alice, bob, // addresses
     };
     /* eslint-enable object-property-newline */
   }
 
   describe("Lockbox", function () {
+    it.only("interchain factory acl", async function () {
+      const { interchainFactory, lockbox, lumiaFactoryManager } = await loadFixture(deployHyperStaking);
+
+      // errors
+      await expect(interchainFactory.setDestination(123)).to.be.reverted;
+      await expect(interchainFactory.setOriginLockbox(ZeroAddress)).to.be.reverted;
+
+      // events
+      await expect(interchainFactory.connect(lumiaFactoryManager).setDestination(123))
+        .to.emit(interchainFactory, "DestinationUpdated")
+        .withArgs(31337, 123);
+
+      await expect(interchainFactory.connect(lumiaFactoryManager).setOriginLockbox(ZeroAddress))
+        .to.emit(interchainFactory, "OriginLockboxUpdated")
+        .withArgs(lockbox.target, ZeroAddress);
+    });
+
     it("stake deposit to tier2 with non-zero mailbox fee", async function () {
       const {
         staking, ethPoolId, reserveStrategy, vaultToken, lpToken, mailboxFee, owner, alice,
