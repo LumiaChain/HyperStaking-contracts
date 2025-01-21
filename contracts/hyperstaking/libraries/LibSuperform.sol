@@ -7,6 +7,9 @@ import {IBaseRouterImplementation} from "../../external/superform/core/interface
 import {ISuperformFactory} from "../../external/superform/core/interfaces/ISuperformFactory.sol";
 import {ISuperPositions} from "../../external/superform/core/interfaces/ISuperPositions.sol";
 
+import {LibDiamond} from "../../diamond/libraries/LibDiamond.sol";
+import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
+
 //================================================================================================//
 //                                           Storage                                              //
 //================================================================================================//
@@ -49,5 +52,9 @@ library LibSuperform {
         s.superformRouter = IBaseRouterImplementation(superformRouter);
         s.superPositions = ISuperPositions(superPositions);
         s.maxSlippage = 50; // 0.5%
+
+        // add IERC1155Receiver to supportedInterfaces
+        LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
+        ds.supportedInterfaces[type(IERC1155Receiver).interfaceId] = true;
     }
 }

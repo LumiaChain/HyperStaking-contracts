@@ -42,6 +42,8 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
 
   const superformIntegrationFacet = m.contract("SuperformIntegrationFacet");
   const superformIntegrationFacetInterface = getContractInterface("ISuperformIntegration");
+  const superformIntegrationFacetSelectors = getSelectors(superformIntegrationFacetInterface)
+    .remove(["supportsInterface(bytes4)"]);
 
   // --- cut struct
 
@@ -75,7 +77,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
     {
       facetAddress: superformIntegrationFacet,
       action: FacetCutAction.Add,
-      functionSelectors: getSelectors(superformIntegrationFacetInterface),
+      functionSelectors: superformIntegrationFacetSelectors,
     },
   ];
 

@@ -71,6 +71,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
 
         uint256 superPositionsBefore = s.superPositions.balanceOf(receiverSP, superformId);
 
+        IERC20(asset).safeIncreaseAllowance(address(s.superformRouter), assetAmount);
         s.superformRouter.singleDirectSingleVaultDeposit(
             _generateReq(
                 superformId,
@@ -121,7 +122,13 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
 
         uint256 assetBefore = IERC20(asset).balanceOf(receiverSP);
 
-        s.superformRouter.singleDirectSingleVaultDeposit(
+        // approve superPosition for router
+        s.superPositions.setApprovalForOne(
+            address(s.superformRouter),
+            superformId,
+            superPositionAmount
+        );
+        s.superformRouter.singleDirectSingleVaultWithdraw(
             _generateReq(
                 superformId,
                 superPositionAmount,
@@ -253,6 +260,35 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         return token;
     }
 
+    function onERC1155Received(
+        address,
+        address,
+        uint256,
+        uint256,
+        bytes calldata
+    )
+        external
+        pure
+        override
+        returns (bytes4)
+    {
+        return this.onERC1155Received.selector;
+    }
+
+    function onERC1155BatchReceived(
+        address,
+        address,
+        uint256[] calldata,
+        uint256[] calldata,
+        bytes calldata
+    )
+        external
+        pure
+        override
+        returns (bytes4)
+    {
+        return this.onERC1155BatchReceived.selector;
+    }
 
     //============================================================================================//
     //                                     Internal Functions                                     //

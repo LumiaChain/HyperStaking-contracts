@@ -5,11 +5,13 @@ import {IBaseRouterImplementation} from "../../external/superform/core/interface
 import {ISuperformFactory} from "../../external/superform/core/interfaces/ISuperformFactory.sol";
 import {ISuperPositions} from "../../external/superform/core/interfaces/ISuperPositions.sol";
 
+import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
+
 /**
  * @title ISuperformIntegration
  * @dev Interface for SuperformIntegrationFacet
  */
-interface ISuperformIntegration {
+interface ISuperformIntegration is IERC1155Receiver {
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
