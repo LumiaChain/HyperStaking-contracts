@@ -265,18 +265,6 @@ td {
     content: "";
   }
 
-  pre,
-  blockquote {
-    border: 1px solid #999;
-    padding-right: 1em;
-    page-break-inside: avoid;
-  }
-
-  tr,
-  img {
-    page-break-inside: avoid;
-  }
-
   img {
     max-width: 100% !important;
   }
@@ -289,15 +277,29 @@ td {
     margin: 15mm 10mm 15mm 20mm;
   }
 
-  p,
-  h2,
-  h3 {
+  p, h2, h3 {
     orphans: 3;
     widows: 3;
   }
 
-  h2,
-  h3 {
-    page-break-after: avoid;
+  /* Force page breaks before certain elements */
+  h2, h3 {
+    page-break-before: always;
   }
+}
+
+/* Avoid breaking tables and images across pages */
+pre, blockquote {
+  border: 1px solid #999;
+  padding-right: 1em;
+  page-break-inside: avoid;
+}
+
+table, img {
+  page-break-inside: avoid;
+}
+
+/* Avoid breaking specific sections */
+.avoid-break {
+  page-break-inside: avoid;
 }

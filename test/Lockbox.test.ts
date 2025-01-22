@@ -65,7 +65,7 @@ describe("Lockbox", function () {
   }
 
   describe("Lockbox", function () {
-    it.only("interchain factory acl", async function () {
+    it("interchain factory acl", async function () {
       const { interchainFactory, lockbox, lumiaFactoryManager } = await loadFixture(deployHyperStaking);
 
       // errors

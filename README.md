@@ -50,6 +50,14 @@ The project is set up to deploy contracts using Hardhat Ignition. You can deploy
 npx hardhat ignition deploy ignition/modules/HyperStaking.ts --network holesky
 ```
 
+Lumia Diamond:
+
+```bash
+npx hardhat ignition deploy ignition/modules/LumiaDiamond.ts --parameters ignition/parameters.holesky.json --network holesky
+```
+
+Check the `package.json` for deployment scripts related to strategies.
+
 ## Foundry Integration
 
 The foundry-plugin has been added to this project to enhance testing and development, allowing for the integration of external tools and libraries, such as Solmate.
