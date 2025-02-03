@@ -17,7 +17,7 @@ describe("Lockbox", function () {
     // --------------------- Hyperstaking Diamond --------------------
 
     const {
-      mailbox, interchainFactory, diamond, staking, factory, tier1, tier2, lockbox,
+      mailbox, interchainFactory, diamond, staking, vaultFactory, tier1, tier2, lockbox,
     } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // ------------------ Create Staking Pools ------------------
@@ -35,7 +35,7 @@ describe("Lockbox", function () {
       diamond, nativeTokenAddress, await testReserveAsset.getAddress(), reserveAssetPrice,
     );
 
-    await factory.connect(strategyVaultManager).addStrategy(
+    await vaultFactory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
       reserveStrategy,
       "reserve eth vault 1",
@@ -47,16 +47,14 @@ describe("Lockbox", function () {
     const mailboxFee = parseEther("0.05");
     await mailbox.connect(owner).setFee(mailboxFee);
 
-    const vaultTokenAddress = (await tier2.vaultTier2Info(reserveStrategy)).vaultToken;
-    const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
-
-    const lpTokenAddress = await interchainFactory.getLpToken(vaultTokenAddress);
-    const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
+    const { vaultToken, lpToken } = await shared.getDerivedTokens(
+      tier2, interchainFactory, await reserveStrategy.getAddress(),
+    );
 
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      staking, factory, tier1, tier2, lockbox, // diamond facets
+      staking, vaultFactory, tier1, tier2, lockbox, // diamond facets
       mailbox, interchainFactory, testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
       ethPoolId, // ids
       defaultRevenueFee, reserveAssetPrice, mailboxFee, // values
@@ -66,6 +64,47 @@ describe("Lockbox", function () {
   }
 
   describe("Lockbox", function () {
+    it("lp token properties should be derived from vault token", async function () {
+      const {
+        diamond, tier2, vaultFactory, interchainFactory, mailbox, ethPoolId, nativeTokenAddress, vaultToken, lpToken, strategyVaultManager, owner,
+      } = await loadFixture(deployHyperStaking);
+
+      expect(await lpToken.name()).to.equal(await vaultToken.name());
+      expect(await lpToken.symbol()).to.equal(await vaultToken.symbol());
+      expect(await lpToken.decimals()).to.equal(await vaultToken.decimals());
+
+      {
+        const strangeToken = await shared.deloyTestERC20("Test 14 dec Coin", "t14c", 14);
+        const reserveStrategy2 = await shared.createReserveStrategy(
+          diamond, nativeTokenAddress, await strangeToken.getAddress(), parseEther("1"),
+        );
+
+        const vname = "strange vault";
+        const vsymbol = "sv";
+
+        await mailbox.connect(owner).setFee(0n);
+        await vaultFactory.connect(strategyVaultManager).addStrategy(
+          ethPoolId,
+          reserveStrategy2,
+          vname,
+          vsymbol,
+          0n,
+        );
+
+        const tokens2 = await shared.getDerivedTokens(
+          tier2, interchainFactory, await reserveStrategy2.getAddress(),
+        );
+
+        expect(await tokens2.vaultToken.name()).to.equal(vname);
+        expect(await tokens2.vaultToken.symbol()).to.equal(vsymbol);
+        expect(await tokens2.vaultToken.decimals()).to.equal(14); // 14
+
+        expect(await tokens2.lpToken.name()).to.equal(vname);
+        expect(await tokens2.lpToken.symbol()).to.equal(vsymbol);
+        expect(await tokens2.lpToken.decimals()).to.equal(14); // 14
+      }
+    });
+
     it("interchain factory acl", async function () {
       const { interchainFactory, lockbox, lumiaFactoryManager } = await loadFixture(deployHyperStaking);
 
@@ -115,7 +154,7 @@ describe("Lockbox", function () {
 
     it("mailbox fee is needed when adding strategy too", async function () {
       const {
-        diamond, staking, factory, lockbox, mailboxFee, strategyVaultManager,
+        diamond, staking, vaultFactory, lockbox, mailboxFee, strategyVaultManager,
       } = await loadFixture(deployHyperStaking);
 
       // new pool and strategy
@@ -127,7 +166,7 @@ describe("Lockbox", function () {
       );
 
       // revert if mailbox fee is not sent
-      await expect(factory.connect(strategyVaultManager).addStrategy(
+      await expect(vaultFactory.connect(strategyVaultManager).addStrategy(
         ethPoolId,
         strategy2,
         "vault2",
@@ -136,10 +175,10 @@ describe("Lockbox", function () {
       )).to.be.reverted;
 
       expect( // in a real scenario fee could depend on the token address, correct name and symbol
-        await lockbox.quoteDispatchTokenDeploy(ZeroAddress, "Test Reserve Asset 2", "t2"),
+        await lockbox.quoteDispatchTokenDeploy(ZeroAddress, "Test Reserve Asset 2", "t2", 18),
       ).to.equal(mailboxFee);
 
-      await factory.connect(strategyVaultManager).addStrategy(
+      await vaultFactory.connect(strategyVaultManager).addStrategy(
         ethPoolId,
         strategy2,
         "vault3",
@@ -211,6 +250,7 @@ describe("Lockbox", function () {
         tokenAddress: ZeroAddress,
         name: "Test Token",
         symbol: "TT",
+        decimals: 2,
         metadata: "0x1234",
       };
 
@@ -218,6 +258,7 @@ describe("Lockbox", function () {
         message1.tokenAddress,
         message1.name,
         message1.symbol,
+        message1.decimals,
         message1.metadata,
       );
 
@@ -279,6 +320,7 @@ describe("Lockbox", function () {
         tokenAddress: ZeroAddress,
         name: "Test Token with a little longer name than usual, still working?",
         symbol: "TTSYMBOLEXTENDED 123456789",
+        decimals: 15,
         metadata: "0x",
       };
 
@@ -286,6 +328,7 @@ describe("Lockbox", function () {
         message.tokenAddress,
         message.name,
         message.symbol,
+        message.decimals,
         message.metadata,
       );
 

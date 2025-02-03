@@ -70,19 +70,22 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
     function _dispatchTokenDeploy(
         address vaultToken,
         string memory name,
-        string memory symbol
+        string memory symbol,
+        uint8 decimals
     ) internal {
         // quote message fee for forwarding a TokenDeploy message across chains
         uint256 fee = ILockbox(address(this)).quoteDispatchTokenDeploy(
             vaultToken,
             name,
-            symbol
+            symbol,
+            decimals
         );
 
         ILockbox(address(this)).tokenDeployDispatch{value: fee}(
             vaultToken,
             name,
-            symbol
+            symbol,
+            decimals
         );
     }
 
@@ -97,7 +100,6 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
         string memory name,
         string memory symbol
     ) internal returns (IERC4626 vaultToken) {
-
         vaultToken = new VaultToken(
             address(this),
             strategy,
@@ -106,7 +108,8 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
             symbol
         );
 
-        _dispatchTokenDeploy(address(vaultToken), name, symbol);
+        uint8 assetDecimals = IERC20Metadata(asset).decimals();
+        _dispatchTokenDeploy(address(vaultToken), name, symbol, assetDecimals);
     }
 
     /**

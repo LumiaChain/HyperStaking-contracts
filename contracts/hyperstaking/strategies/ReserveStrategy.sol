@@ -88,15 +88,14 @@ contract ReserveStrategy is IStrategy, Ownable {
     //============================================================================================//
     //                                        Constructor                                         //
     //============================================================================================//
+
+    // @param assetPrice_ should be provided with 18 decimal precision
     constructor(
         address diamond_,
         Currency memory stake_,
         IERC20Metadata revenueAsset_,
         uint256 assetPrice_
     ) Ownable(msg.sender) {
-        require(stake_.decimals() == 18, BadStakeDecimals());
-        require(IERC20Metadata(revenueAsset_).decimals() == 18, BadAssetDecimals());
-
         DIAMOND = diamond_;
         stake = stake_;
         revenueAsset = address(revenueAsset_);

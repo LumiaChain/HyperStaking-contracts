@@ -46,12 +46,13 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     function tokenDeployDispatch(
         address tokenAddress,
         string memory name,
-        string memory symbol
+        string memory symbol,
+        uint8 decimals
     ) external payable diamondInternal {
         LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
         require(box.lumiaFactory != address(0), RecipientUnset());
 
-        bytes memory body = generateTokenDeployBody(tokenAddress, name, symbol);
+        bytes memory body = generateTokenDeployBody(tokenAddress, name, symbol, decimals);
 
         // address left-padded to bytes32 for compatibility with hyperlane
         bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.lumiaFactory);
@@ -59,7 +60,14 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         // msg.value should already include fee calculated
         box.mailbox.dispatch{value: msg.value}(box.destination, recipientBytes32, body);
 
-        emit TokenDeployDispatched(address(box.mailbox), box.lumiaFactory, tokenAddress, name, symbol);
+        emit TokenDeployDispatched(
+            address(box.mailbox),
+            box.lumiaFactory,
+            tokenAddress,
+            name,
+            symbol,
+            decimals
+        );
     }
 
     /// @inheritdoc ILockbox
@@ -158,13 +166,14 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     function quoteDispatchTokenDeploy(
         address tokenAddress,
         string memory name,
-        string memory symbol
+        string memory symbol,
+        uint8 decimals
     ) external view returns (uint256) {
         LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
         return box.mailbox.quoteDispatch(
             box.destination,
             TypeCasts.addressToBytes32(box.lumiaFactory),
-            generateTokenDeployBody(tokenAddress, name, symbol)
+            generateTokenDeployBody(tokenAddress, name, symbol, decimals)
         );
     }
 
@@ -204,12 +213,14 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     function generateTokenDeployBody(
         address tokenAddress,
         string memory name,
-        string memory symbol
+        string memory symbol,
+        uint8 decimals
     ) public pure returns (bytes memory body) {
         body = HyperlaneMailboxMessages.serializeTokenDeploy(
             tokenAddress,
             name,
             symbol,
+            decimals,
             bytes("") // no metadata
         );
     }

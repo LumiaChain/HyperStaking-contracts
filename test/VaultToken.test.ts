@@ -16,7 +16,7 @@ describe("VaultToken", function () {
 
     // --------------------- Hyperstaking Diamond --------------------
 
-    const { interchainFactory, diamond, staking, factory, tier1, tier2 } = await shared.deployTestHyperStaking(0n, erc4626Vault);
+    const { interchainFactory, diamond, staking, vaultFactory, tier1, tier2 } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // ------------------ Create Staking Pools ------------------
 
@@ -36,7 +36,7 @@ describe("VaultToken", function () {
     const vaultTokenName = "eth vault1";
     const vaultTokenSymbol = "vETH1";
 
-    await factory.connect(strategyVaultManager).addStrategy(
+    await vaultFactory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
       reserveStrategy,
       vaultTokenName,
@@ -53,7 +53,7 @@ describe("VaultToken", function () {
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      staking, factory, tier1, tier2, interchainFactory, // diamond facets
+      staking, vaultFactory, tier1, tier2, interchainFactory, // diamond facets
       testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
       ethPoolId, // ids
       defaultRevenueFee, reserveAssetPrice, vaultTokenName, vaultTokenSymbol, // values
@@ -75,7 +75,7 @@ describe("VaultToken", function () {
 
     it("test tokens enumerable map", async function () {
       const {
-        diamond, factory, tier2, interchainFactory, nativeTokenAddress, ethPoolId, vaultToken,
+        diamond, vaultFactory, tier2, interchainFactory, nativeTokenAddress, ethPoolId, vaultToken,
         lpToken, strategyVaultManager,
       } = await loadFixture(deployHyperStaking);
 
@@ -91,7 +91,7 @@ describe("VaultToken", function () {
 
       // by adding new stategies more lpTokens should be created
 
-      await factory.connect(strategyVaultManager).addStrategy(
+      await vaultFactory.connect(strategyVaultManager).addStrategy(
         ethPoolId,
         reserveStrategy2,
         "eth vault2",
@@ -99,7 +99,7 @@ describe("VaultToken", function () {
         0,
       );
 
-      await factory.connect(strategyVaultManager).addStrategy(
+      await vaultFactory.connect(strategyVaultManager).addStrategy(
         ethPoolId,
         reserveStrategy3,
         "eth vault3",

@@ -8,17 +8,34 @@ import {ERC20, ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensio
  * @title LumiaLPToken
  */
 contract LumiaLPToken is Ownable, ERC20Burnable {
+    uint8 private immutable DECIMALS;
+
     address public interchainFactory;
 
     constructor(
         address interchainFactory_,
         string memory name_,
-        string memory symbol_
+        string memory symbol_,
+        uint8 decimals_
     ) Ownable(interchainFactory_) ERC20(name_, symbol_) {
+        DECIMALS = decimals_;
         interchainFactory = interchainFactory_;
     }
 
+    //============================================================================================//
+    //                                      Public Functions                                      //
+    //============================================================================================//
+
+    // ========= Owner ========= //
+
     function mint(address to_, uint256 amount_) public onlyOwner {
         _mint(to_, amount_);
+    }
+
+    // ========= View ========= //
+
+    /// override default 18 dec
+    function decimals() public view override returns (uint8) {
+        return DECIMALS;
     }
 }

@@ -11,11 +11,11 @@ contract TestHyperlaneMessages {
 
     // ========= Helper ========= //
 
-    function stringToBytes32(string memory source) external pure returns (bytes32 result) {
+    function stringToBytes32(string memory source) external pure returns (uint8 size, bytes32 result) {
         return HyperlaneMailboxMessages.stringToBytes32(source);
     }
 
-    function stringToBytes64(string memory source) external pure returns (bytes32[2] memory result) {
+    function stringToBytes64(string memory source) external pure returns (uint8 size, bytes32[2] memory result) {
         return HyperlaneMailboxMessages.stringToBytes64(source);
     }
 
@@ -25,12 +25,14 @@ contract TestHyperlaneMessages {
         address tokenAddress_,
         string memory name_,
         string memory symbol_,
+        uint8 decimals_,
         bytes memory metadata_
     ) external pure returns (bytes memory) {
         return HyperlaneMailboxMessages.serializeTokenDeploy(
             tokenAddress_,
             name_,
             symbol_,
+            decimals_,
             metadata_
         );
     }
@@ -81,6 +83,10 @@ contract TestHyperlaneMessages {
 
     function symbol(bytes calldata message) external pure returns (string calldata) {
         return message.symbol();
+    }
+
+    function decimals(bytes calldata message) internal pure returns (uint8) {
+        return message.decimals();
     }
 
     function tokenDeployMetadata(bytes calldata message) external pure returns (bytes calldata) {

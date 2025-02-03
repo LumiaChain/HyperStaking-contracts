@@ -101,7 +101,7 @@ describe("Superform", function () {
     // --------------------- Hyperstaking Diamond --------------------
 
     const {
-      diamond, staking, factory, tier1, tier2, interchainFactory, superVault, superformIntegration,
+      diamond, staking, vaultFactory, tier1, tier2, interchainFactory, superVault, superformIntegration,
     } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // ------------------ Create Staking Pools ------------------
@@ -139,7 +139,7 @@ describe("Superform", function () {
     const vaultTokenName = "Lumia USD Superform Position";
     const vaultTokenSymbol = "lspUSD";
 
-    await factory.connect(strategyVaultManager).addStrategy(
+    await vaultFactory.connect(strategyVaultManager).addStrategy(
       usdcPoolId,
       superformStrategy,
       vaultTokenName,
@@ -165,11 +165,11 @@ describe("Superform", function () {
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      staking, factory, tier1, tier2, superformIntegration, // diamond facets
+      staking, vaultFactory, tier1, tier2, superformIntegration, // diamond facets
       vault, testUSDC, superformStrategy, erc4626Vault, aerc20, // test contracts
       interchainFactory, lpToken, // lumia
       usdcPoolId, superformId, // ids
-      defaultRevenueFee, // values
+      defaultRevenueFee, vaultTokenName, vaultTokenSymbol, // values
       owner, stakingManager, strategyVaultManager, alice, bob, // addresses
     };
     /* eslint-enable object-property-newline */
@@ -343,7 +343,7 @@ describe("Superform", function () {
 
   describe("Strategy", function () {
     it("Superform strategy with vault should be created along with LP token on lumia side", async function () {
-      const { diamond, factory, tier2, superformStrategy, interchainFactory, testUSDC, usdcPoolId, superformId } = await deployHyperStaking();
+      const { diamond, vaultFactory, tier2, superformStrategy, interchainFactory, testUSDC, usdcPoolId, superformId } = await deployHyperStaking();
 
       expect(await superformStrategy.DIAMOND()).to.equal(diamond);
       expect(await superformStrategy.SUPERFORM_ID()).to.equal(superformId);
@@ -353,9 +353,9 @@ describe("Superform", function () {
       expect(revenueAsset).to.not.equal(ZeroAddress);
 
       // VaultInfo
-      expect((await factory.vaultInfo(superformStrategy)).strategy).to.equal(superformStrategy);
-      expect((await factory.vaultInfo(superformStrategy)).poolId).to.equal(usdcPoolId);
-      expect((await factory.vaultInfo(superformStrategy)).asset).to.equal(revenueAsset);
+      expect((await vaultFactory.vaultInfo(superformStrategy)).strategy).to.equal(superformStrategy);
+      expect((await vaultFactory.vaultInfo(superformStrategy)).poolId).to.equal(usdcPoolId);
+      expect((await vaultFactory.vaultInfo(superformStrategy)).asset).to.equal(revenueAsset);
 
       const [vaultToken] = await tier2.vaultTier2Info(superformStrategy);
       expect(vaultToken).to.not.equal(ZeroAddress);
@@ -414,7 +414,7 @@ describe("Superform", function () {
     });
 
     it("Revenue from superform strategy", async function () {
-      const { staking, superformStrategy, testUSDC, usdcPoolId, alice, interchainFactory, erc4626Vault, vault, lpToken } = await deployHyperStaking();
+      const { staking, superformStrategy, testUSDC, usdcPoolId, alice, interchainFactory, erc4626Vault, vault, lpToken, vaultTokenName, vaultTokenSymbol } = await deployHyperStaking();
 
       const amount = parseUnits("100", 6);
 
@@ -436,9 +436,9 @@ describe("Superform", function () {
         .to.changeTokenBalances(testUSDC,
           [alice, erc4626Vault], [expectedNewAmount, -expectedNewAmount]);
 
-      console.log("Lp name:", await lpToken.name());
-      console.log("Lp symbol:", await lpToken.symbol());
-      console.log("Lp decimals:", await lpToken.decimals());
+      expect(await lpToken.name()).to.be.eq(vaultTokenName);
+      expect(await lpToken.symbol()).to.be.eq(vaultTokenSymbol);
+      expect(await lpToken.decimals()).to.be.eq(6);
 
       expect(await lpToken.balanceOf(alice)).to.be.eq(0);
     });

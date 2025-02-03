@@ -17,7 +17,8 @@ interface ILockbox {
         address lumiaFactory,
         address tokenAddress,
         string name,
-        string symbol
+        string symbol,
+        uint8 decimals
     );
 
     event BridgeTokenDispatched(
@@ -65,7 +66,8 @@ interface ILockbox {
     function tokenDeployDispatch(
         address tokenAddress,
         string memory name,
-        string memory symbol
+        string memory symbol,
+        uint8 decimals
     ) external payable;
 
     /**
@@ -116,7 +118,8 @@ interface ILockbox {
     function quoteDispatchTokenDeploy(
         address tokenAddress,
         string memory name,
-        string memory symbol
+        string memory symbol,
+        uint8 decimals
     ) external view returns (uint256);
 
     /// @notice Helper: separated function for getting mailbox dispatch quote
@@ -139,7 +142,8 @@ interface ILockbox {
     function generateTokenDeployBody(
         address tokenAddress,
         string memory name,
-        string memory symbol
+        string memory symbol,
+        uint8 decimals
     ) external pure returns (bytes memory body);
 
     /// @notice Helper: separated function for generating hyperlane message body

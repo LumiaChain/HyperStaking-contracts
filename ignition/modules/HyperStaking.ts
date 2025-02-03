@@ -105,7 +105,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
 
   const acl = m.contractAt("HyperStakingAcl", diamond);
   const staking = m.contractAt("IStaking", diamond);
-  const factory = m.contractAt("IVaultFactory", diamond);
+  const vaultFactory = m.contractAt("IVaultFactory", diamond);
   const tier1 = m.contractAt("ITier1Vault", diamond);
   const tier2 = m.contractAt("ITier2Vault", diamond);
   const lockbox = m.contractAt("ILockbox", diamond);
@@ -113,7 +113,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
 
   // --- return
 
-  return { diamond, acl, staking, factory, tier1, tier2, lockbox, superformIntegration };
+  return { diamond, acl, staking, vaultFactory, tier1, tier2, lockbox, superformIntegration };
 });
 
 export default HyperStakingModule;

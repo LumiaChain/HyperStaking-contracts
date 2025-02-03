@@ -196,16 +196,17 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
         address tokenAddress = data.tokenAddress(); // origin vault token address
         string memory name = data.name();
         string memory symbol = data.symbol();
+        uint8 decimals = data.decimals();
 
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
 
         require(ifs.tokensMap.contains(tokenAddress) == false, TokenAlreadyDeployed());
 
-        address lpToken = address(new LumiaLPToken(address(this), name, symbol));
+        address lpToken = address(new LumiaLPToken(address(this), name, symbol, decimals));
 
         ifs.tokensMap.set(tokenAddress, lpToken);
 
-        emit TokenDeployed(tokenAddress, lpToken, name, symbol);
+        emit TokenDeployed(tokenAddress, lpToken, name, symbol, decimals);
     }
 
     /// @notice Handle specific TokenBridge message

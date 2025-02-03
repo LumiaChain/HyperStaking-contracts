@@ -32,7 +32,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     },
   });
 
-  const { diamond, staking, factory, tier1, tier2, lockbox, superformIntegration } = await ignition.deploy(HyperStakingModule, {
+  const { diamond, staking, vaultFactory, tier1, tier2, lockbox, superformIntegration } = await ignition.deploy(HyperStakingModule, {
     parameters: {
       HyperStakingModule: {
         lockboxMailbox: mailboxAddress,
@@ -67,7 +67,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   );
 
   return {
-    mailbox, interchainFactory, diamond, staking, factory, tier1, tier2, lockbox, superVault, superformIntegration,
+    mailbox, interchainFactory, diamond, staking, vaultFactory, tier1, tier2, lockbox, superVault, superformIntegration,
   };
 }
 
@@ -148,9 +148,12 @@ export async function createReserveStrategy(
   return reserveStrategy;
 }
 
-export async function getLpToken(tier2: Contract, interchainFactory: Contract, strategy: string) {
+export async function getDerivedTokens(tier2: Contract, interchainFactory: Contract, strategy: string) {
   const vaultTokenAddress = (await tier2.vaultTier2Info(strategy)).vaultToken;
-  const lpTokenAddress = await interchainFactory.getLpToken(vaultTokenAddress);
+  const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
 
-  return ethers.getContractAt("LumiaLPToken", lpTokenAddress);
+  const lpTokenAddress = await interchainFactory.getLpToken(vaultTokenAddress);
+  const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
+
+  return { vaultToken, lpToken };
 }

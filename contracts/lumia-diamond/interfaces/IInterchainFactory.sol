@@ -20,7 +20,14 @@ interface IInterchainFactory {
         string message
     );
 
-    event TokenDeployed(address originToken, address lpToken, string name, string symbol);
+    event TokenDeployed(
+        address originToken,
+        address lpToken,
+        string name,
+        string symbol,
+        uint8 decimals
+    );
+
     event TokenBridged(
         address indexed originToken,
         address indexed lpToken,

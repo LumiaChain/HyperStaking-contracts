@@ -30,7 +30,7 @@ describe("Staking", function () {
 
     // --------------------- Hyperstaking Diamond --------------------
 
-    const { diamond, staking, factory } = await shared.deployTestHyperStaking(0n, erc4626Vault);
+    const { diamond, staking, vaultFactory } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // ------------------ Create Staking Pools ------------------
 
@@ -49,7 +49,7 @@ describe("Staking", function () {
     );
 
     // strategy with neutral to eth 1:1 asset price
-    await factory.connect(strategyVaultManager).addStrategy(
+    await vaultFactory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
       reserveStrategy1,
       "eth vault1",
@@ -58,7 +58,7 @@ describe("Staking", function () {
     );
 
     // strategy with erc20 staking token and 2:1 asset price
-    await factory.connect(strategyVaultManager).addStrategy(
+    await vaultFactory.connect(strategyVaultManager).addStrategy(
       erc20PoolId,
       reserveStrategy2,
       "erc20 vault2",
@@ -69,7 +69,7 @@ describe("Staking", function () {
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      staking, factory, // diamond facets
+      staking, vaultFactory, // diamond facets
       testERC20, testWstETH, reserveStrategy1, reserveStrategy2, // test contracts
       ethPoolId, erc20PoolId, // ids
       nativeTokenAddress, owner, stakingManager, strategyVaultManager, alice, bob, // addresses
