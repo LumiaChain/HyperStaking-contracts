@@ -52,6 +52,8 @@ describe("Staking", function () {
     await factory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
       reserveStrategy1,
+      "eth vault1",
+      "vETH1",
       defaultRevenueFee,
     );
 
@@ -59,6 +61,8 @@ describe("Staking", function () {
     await factory.connect(strategyVaultManager).addStrategy(
       erc20PoolId,
       reserveStrategy2,
+      "erc20 vault2",
+      "vERC2",
       defaultRevenueFee,
     );
 

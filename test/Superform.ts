@@ -136,9 +136,14 @@ describe("Superform", function () {
 
     // -------
 
+    const vaultTokenName = "Lumia USD Superform Position";
+    const vaultTokenSymbol = "lspUSD";
+
     await factory.connect(strategyVaultManager).addStrategy(
       usdcPoolId,
       superformStrategy,
+      vaultTokenName,
+      vaultTokenSymbol,
       defaultRevenueFee,
     );
 
@@ -430,6 +435,10 @@ describe("Superform", function () {
       await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(vault, alice, lpBalance))
         .to.changeTokenBalances(testUSDC,
           [alice, erc4626Vault], [expectedNewAmount, -expectedNewAmount]);
+
+      console.log("Lp name:", await lpToken.name());
+      console.log("Lp symbol:", await lpToken.symbol());
+      console.log("Lp decimals:", await lpToken.decimals());
 
       expect(await lpToken.balanceOf(alice)).to.be.eq(0);
     });

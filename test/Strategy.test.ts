@@ -52,6 +52,8 @@ describe("Strategy", function () {
     await factory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
       reserveStrategy,
+      "eth reserve vault1",
+      "rETH1",
       defaultRevenueFee,
     );
 
@@ -70,6 +72,8 @@ describe("Strategy", function () {
     await factory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
       dineroStrategy,
+      "eth vault2",
+      "dETH2",
       defaultRevenueFee,
     );
 
@@ -351,6 +355,8 @@ describe("Strategy", function () {
         await expect(factory.addStrategy(
           ethPoolId,
           reserveStrategy,
+          "vault3",
+          "V3",
           defaultRevenueFee,
         ))
           .to.be.reverted;
@@ -358,6 +364,8 @@ describe("Strategy", function () {
         await expect(factory.connect(alice).addStrategy(
           ethPoolId,
           reserveStrategy,
+          "vault4",
+          "V4",
           defaultRevenueFee,
         ))
           // hardhat unfortunately does not recognize custom errors from child contracts
@@ -382,6 +390,8 @@ describe("Strategy", function () {
         await expect(factory.connect(strategyVaultManager).addStrategy(
           ethPoolId,
           reserveStrategy,
+          "vault5",
+          "V5",
           defaultRevenueFee,
         ))
           .to.be.revertedWithCustomError(factory, "VaultAlreadyExist");

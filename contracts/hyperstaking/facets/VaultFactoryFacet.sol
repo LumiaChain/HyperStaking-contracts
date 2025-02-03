@@ -39,12 +39,15 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
     function addStrategy(
         uint256 poolId,
         address strategy,
+        string memory vaultTokenName,
+        string memory vaultTokenSymbol,
         uint256 tier1RevenueFee
     ) external payable onlyStrategyVaultManager nonReentrant {
         // The ERC20-compliant asset associated with the strategy
         address asset = IStrategy(strategy).revenueAsset();
 
-        _createVault(poolId, strategy, IERC20Metadata(asset), tier1RevenueFee);
+        IERC4626 vaultToken = _deployVaultToken(asset, strategy, vaultTokenName, vaultTokenSymbol);
+        _storeVault(poolId, strategy, asset, tier1RevenueFee, vaultToken);
     }
 
     // ========= View ========= //
@@ -60,71 +63,68 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
     //============================================================================================//
 
     /**
-     * @notice Dispatches an interchain message to instruct the deployment of an LP token on the
-     *         destination chain
-     * @dev Uses the Lockbox Facet to send a message containing required details for deploying
-     *      the LP token
-     * @param vaultToken The address of the Vault token that the LP token will represent
-     * @param name The name of the LP token to be deployed
-     * @param symbol The symbol of the LP token to be deployed
+     * @notice Dispatches an interchain message to instruct the deployment on the destination chain
+     * @dev Uses the Lockbox Facet to send a message containing required details
+     * @param vaultToken The address of the Vault token that the new LP token will represent
      */
     function _dispatchTokenDeploy(
-        IERC4626 vaultToken,
+        address vaultToken,
         string memory name,
         string memory symbol
     ) internal {
         // quote message fee for forwarding a TokenDeploy message across chains
         uint256 fee = ILockbox(address(this)).quoteDispatchTokenDeploy(
-            address(vaultToken),
+            vaultToken,
             name,
             symbol
         );
 
         ILockbox(address(this)).tokenDeployDispatch{value: fee}(
-            address(vaultToken),
+            vaultToken,
             name,
             symbol
         );
     }
 
     /**
-     * @notice Deploys a new vault token for a given asset
-     * @dev Creates a new `LiquidVaultToken` instance with names and symbols derived from the asset
-     * @param asset The underlying asset for the vault token, which provides name and symbol info
+     * @notice Deploys a new vault ERC4626 token for a given asset and strategy
+     * @param asset The underlying asset for the vault token
      * @return vaultToken The newly created vault token that conforms to the IERC4626 standard
      */
     function _deployVaultToken(
-        IERC20Metadata asset,
-        address strategy
+        address asset,
+        address strategy,
+        string memory name,
+        string memory symbol
     ) internal returns (IERC4626 vaultToken) {
 
-        string memory sharesName = _concat("Lumia Liquid ", asset.name());
-        string memory sharesSymbol = _concat("ll", asset.symbol());
         vaultToken = new VaultToken(
             address(this),
             strategy,
             IERC20(asset),
-            sharesName,
-            sharesSymbol
+            name,
+            symbol
         );
 
-        _dispatchTokenDeploy(vaultToken, sharesName, sharesSymbol);
+        _dispatchTokenDeploy(address(vaultToken), name, symbol);
     }
 
     /**
-     * @notice Creates a new vault for a specific asset and strategy
      * @dev Initializes the vault storage for a given pool, sets the strategy and asset details,
      *      and applies the Tier 1 revenue fee
      * @param poolId The ID of the staking pool for which this vault is created
      * @param strategy The strategy address associated with this vault
-     * @param asset The asset for the vault, whose metadata will define the vault's token
+     * @param asset The asset for the vault
      * @param tier1RevenueFee The revenue fee applied to Tier 1 users in this vault
+     * @param vaultToken ERC4626 which represent shares to this strategy vault
+
      */
-    function _createVault(
+    function _storeVault(
         uint256 poolId,
         address strategy,
-        IERC20Metadata asset,
-        uint256 tier1RevenueFee
+        address asset,
+        uint256 tier1RevenueFee,
+        IERC4626 vaultToken
     ) internal {
         StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
         require(v.vaultInfo[strategy].poolId == 0, VaultAlreadyExist());
@@ -133,7 +133,7 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
         v.vaultInfo[strategy] = VaultInfo({
             poolId: poolId,
             strategy: strategy,
-            asset: asset
+            asset: IERC20Metadata(asset)
         });
 
         // init tier1
@@ -144,10 +144,6 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
         });
 
         // init tier2
-
-        // deploy vaultToken which represent shares to this strategy vault
-        IERC4626 vaultToken = _deployVaultToken(asset, strategy);
-
         v.vaultTier2Info[strategy] = VaultTier2({
             vaultToken: vaultToken
         });
@@ -159,12 +155,5 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
             address(asset),
             address(vaultToken)
         );
-    }
-
-    // ========= Pure ========= //
-
-    /// @notice Helper function for string concatenation
-    function _concat(string memory a, string memory b) internal pure returns (string memory) {
-        return string(abi.encodePacked(a, b));
     }
 }

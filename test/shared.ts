@@ -147,3 +147,10 @@ export async function createReserveStrategy(
 
   return reserveStrategy;
 }
+
+export async function getLpToken(tier2: Contract, interchainFactory: Contract, strategy: string) {
+  const vaultTokenAddress = (await tier2.vaultTier2Info(strategy)).vaultToken;
+  const lpTokenAddress = await interchainFactory.getLpToken(vaultTokenAddress);
+
+  return ethers.getContractAt("LumiaLPToken", lpTokenAddress);
+}

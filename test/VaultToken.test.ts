@@ -33,9 +33,14 @@ describe("VaultToken", function () {
       diamond, nativeTokenAddress, await testReserveAsset.getAddress(), reserveAssetPrice,
     );
 
+    const vaultTokenName = "eth vault1";
+    const vaultTokenSymbol = "vETH1";
+
     await factory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
       reserveStrategy,
+      vaultTokenName,
+      vaultTokenSymbol,
       defaultRevenueFee,
     );
 
@@ -51,13 +56,23 @@ describe("VaultToken", function () {
       staking, factory, tier1, tier2, interchainFactory, // diamond facets
       testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
       ethPoolId, // ids
-      defaultRevenueFee, reserveAssetPrice, // values
+      defaultRevenueFee, reserveAssetPrice, vaultTokenName, vaultTokenSymbol, // values
       nativeTokenAddress, owner, stakingManager, strategyVaultManager, alice, bob, // addresses
     };
     /* eslint-enable object-property-newline */
   }
 
   describe("InterchainFactory", function () {
+    it("vault token name, symbol and decimals", async function () {
+      const { testReserveAsset, vaultToken, vaultTokenName, vaultTokenSymbol } = await loadFixture(deployHyperStaking);
+
+      expect(await vaultToken.name()).to.equal(vaultTokenName);
+      expect(await vaultToken.symbol()).to.equal(vaultTokenSymbol);
+
+      expect(await testReserveAsset.decimals()).to.equal(18);
+      expect(await testReserveAsset.decimals()).to.equal(await vaultToken.decimals());
+    });
+
     it("test tokens enumerable map", async function () {
       const {
         diamond, factory, tier2, interchainFactory, nativeTokenAddress, ethPoolId, vaultToken,
@@ -79,12 +94,16 @@ describe("VaultToken", function () {
       await factory.connect(strategyVaultManager).addStrategy(
         ethPoolId,
         reserveStrategy2,
+        "eth vault2",
+        "vETH2",
         0,
       );
 
       await factory.connect(strategyVaultManager).addStrategy(
         ethPoolId,
         reserveStrategy3,
+        "eth vault3",
+        "vETH3",
         0,
       );
 

@@ -38,11 +38,15 @@ interface IVaultFactory {
      *      payable for dispatching interchain "TokenDeploy" messages to other chains
      * @param poolId The ID of the staking pool to assign this strategy to
      * @param strategy The address of the strategy being added
+     * @param vaultTokenName The name of the vault token to be deployed
+     * @param vaultTokenSymbol The symbol of the vault token to be deployed
      * @param tier1RevenueFee The revenue fee for Tier 1 users, specified as an 18-decimal fraction
      */
     function addStrategy(
         uint256 poolId,
         address strategy,
+        string memory vaultTokenName,
+        string memory vaultTokenSymbol,
         uint256 tier1RevenueFee
     ) external payable;
 

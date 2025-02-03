@@ -25,10 +25,14 @@ async function main() {
 
   const factoryFacet = await ethers.getContractAt("IVaultFactory", diamond);
 
+  const vaultTokenName = "eth vault";
+  const vaultTokenSymbol = "vETH";
+
   const tx = await factoryFacet.connect(strategyVaultManager).addStrategy(
     poolId,
     strategy,
-    vaultAsset,
+    vaultTokenName,
+    vaultTokenSymbol,
     REVENUE_FEE,
   );
 

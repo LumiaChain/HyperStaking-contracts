@@ -38,6 +38,8 @@ describe("Lockbox", function () {
     await factory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
       reserveStrategy,
+      "reserve eth vault 1",
+      "rETH1",
       defaultRevenueFee,
     );
 
@@ -49,7 +51,6 @@ describe("Lockbox", function () {
     const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
 
     const lpTokenAddress = await interchainFactory.getLpToken(vaultTokenAddress);
-
     const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
 
     /* eslint-disable object-property-newline */
@@ -129,6 +130,8 @@ describe("Lockbox", function () {
       await expect(factory.connect(strategyVaultManager).addStrategy(
         ethPoolId,
         strategy2,
+        "vault2",
+        "v2",
         0n,
       )).to.be.reverted;
 
@@ -139,6 +142,8 @@ describe("Lockbox", function () {
       await factory.connect(strategyVaultManager).addStrategy(
         ethPoolId,
         strategy2,
+        "vault3",
+        "v3",
         0n,
         { value: mailboxFee },
       );
