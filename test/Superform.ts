@@ -141,6 +141,7 @@ describe("Superform", function () {
 
     await vaultFactory.connect(strategyVaultManager).addStrategy(
       usdcPoolId,
+      shared.erc20Currency(await testUSDC.getAddress()),
       superformStrategy,
       vaultTokenName,
       vaultTokenSymbol,

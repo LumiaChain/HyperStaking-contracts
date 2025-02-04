@@ -37,6 +37,7 @@ describe("Lockbox", function () {
 
     await vaultFactory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
+      shared.nativeCurrency(),
       reserveStrategy,
       "reserve eth vault 1",
       "rETH1",
@@ -85,6 +86,7 @@ describe("Lockbox", function () {
         await mailbox.connect(owner).setFee(0n);
         await vaultFactory.connect(strategyVaultManager).addStrategy(
           ethPoolId,
+          shared.nativeCurrency(),
           reserveStrategy2,
           vname,
           vsymbol,
@@ -168,6 +170,7 @@ describe("Lockbox", function () {
       // revert if mailbox fee is not sent
       await expect(vaultFactory.connect(strategyVaultManager).addStrategy(
         ethPoolId,
+        shared.nativeCurrency(),
         strategy2,
         "vault2",
         "v2",
@@ -180,6 +183,7 @@ describe("Lockbox", function () {
 
       await vaultFactory.connect(strategyVaultManager).addStrategy(
         ethPoolId,
+        shared.nativeCurrency(),
         strategy2,
         "vault3",
         "v3",

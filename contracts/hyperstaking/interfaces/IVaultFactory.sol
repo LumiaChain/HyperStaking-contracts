@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {VaultInfo} from "../libraries/LibStrategyVault.sol";
+import {Currency} from "../libraries/CurrencyHandler.sol";
 
 /**
  * @title IVaultFactory
@@ -36,6 +37,10 @@ interface IVaultFactory {
      * @notice Adds a new strategy and links it to a specific staking pool
      * @dev Sets up the strategy with an associated asset and a revenue fee for Tier 1 users
      *      payable for dispatching interchain "TokenDeploy" messages to other chains
+     *
+     * @param currency The currency which will be used as stake for this strategy
+     * @dev For native coin use currency with address(0) token.
+     *
      * @param poolId The ID of the staking pool to assign this strategy to
      * @param strategy The address of the strategy being added
      * @param vaultTokenName The name of the vault token to be deployed
@@ -44,6 +49,7 @@ interface IVaultFactory {
      */
     function addStrategy(
         uint256 poolId,
+        Currency calldata currency,
         address strategy,
         string memory vaultTokenName,
         string memory vaultTokenSymbol,

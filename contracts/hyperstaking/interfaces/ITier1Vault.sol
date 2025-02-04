@@ -40,7 +40,7 @@ interface ITier1Vault {
     error InvalidRevenueFeeValue();
 
     /// @notice Thrown when attempting to withdraw more stake than user has
-    error InsufficientStakeLocked();
+    error InsufficientStake();
 
     //============================================================================================//
     //                                          Mutable                                           //

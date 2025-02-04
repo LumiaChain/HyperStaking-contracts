@@ -152,11 +152,11 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         UserTier1Info memory userVault = v.userInfo[strategy][user];
         VaultTier1 memory tier1 = v.vaultTier1Info[strategy];
 
-        if (userVault.stakeLocked == 0) {
+        if (userVault.stake== 0) {
             return 0;
         }
 
-        return userVault.stakeLocked * LibStrategyVault.PERCENT_PRECISION / tier1.totalStakeLocked;
+        return userVault.stake * LibStrategyVault.PERCENT_PRECISION / tier1.totalStake;
     }
 
     /// @inheritdoc ITier1Vault
@@ -200,7 +200,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         UserTier1Info storage userVault = v.userInfo[strategy][user];
 
         // use the whole user locked stake
-        uint256 gain = allocationGain(strategy, user, userVault.stakeLocked);
+        uint256 gain = allocationGain(strategy, user, userVault.stake);
 
         // no revenue is generated
         if (gain == 0) {
@@ -218,7 +218,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
 
     /**
      * @notice Locks a specified stake amount for a user across pool, vault, and tier
-     * @dev Increases `stakeLocked` values in `userPool`, `userVault`, and `tier1`
+     * @dev Increases `stake` values in `userPool`, `userVault`, and `tier1`
      * @param userPool The user's pool info where locked stake is tracked
      * @param userVault The user's vault info where locked stake is tracked
      * @param tier1 The Tier 1 vault tracking total locked stake
@@ -231,13 +231,13 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         uint256 stake
     ) internal {
         userPool.stakeLocked += stake;
-        userVault.stakeLocked += stake;
-        tier1.totalStakeLocked += stake;
+        userVault.stake += stake;
+        tier1.totalStake += stake;
     }
 
     /**
      * @notice Unlocks a specified stake amount for a user across pool, vault, and tier
-     * @dev Decreases `stakeLocked` values in `userPool`, `userVault`, and `tier1`
+     * @dev Decreases `stake` values in `userPool`, `userVault`, and `tier1`
      * @param userPool The user's pool info where locked stake is tracked
      * @param userVault The user's vault info where locked stake is tracked
      * @param tier1 The Tier 1 vault tracking total locked stake
@@ -250,8 +250,8 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         uint256 stake
     ) internal {
         userPool.stakeLocked -= stake;
-        userVault.stakeLocked -= stake;
-        tier1.totalStakeLocked -= stake;
+        userVault.stake -= stake;
+        tier1.totalStake -= stake;
     }
 
     /**
@@ -274,7 +274,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         StakingStorage storage s = LibStaking.diamondStorage();
         UserPoolInfo storage userPool = s.userInfo[vault.poolId][user];
 
-        require(userPool.stakeLocked >= stake, InsufficientStakeLocked());
+        require(userPool.stakeLocked >= stake, InsufficientStake());
 
         uint256 allocation = _convertToAllocation(tier1, stake);
         tier1.assetAllocation -= allocation;
@@ -320,14 +320,14 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
 
         // Weighted average calculation for the updated allocation point
         return (
-            userVault.stakeLocked * userVault.allocationPoint
+            userVault.stake * userVault.allocationPoint
             + newAllocation * LibStrategyVault.PERCENT_PRECISION
-        ) / (userVault.stakeLocked + stake);
+        ) / (userVault.stake + stake);
     }
 
     /**
      * @notice Converts stake amount to its Tier 1 allocation based on the total locked stake
-     * @dev Calculates the allocation ratio of `stake` relative to `totalStakeLocked` and
+     * @dev Calculates the allocation ratio of `stake` relative to `totalStake` and
      *      applies it to `assetAllocation`
      * @param tier1 The Tier 1 vault information, containing total locked stake and allocation
      * @param stake The stake amount to convert to Tier 1 allocation
@@ -338,7 +338,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         uint256 stake
     ) internal view returns (uint256) {
         // amout ratio of the total stake locked in vault
-        uint256 amountRatio = stake * LibStrategyVault.PERCENT_PRECISION / tier1.totalStakeLocked;
+        uint256 amountRatio = stake * LibStrategyVault.PERCENT_PRECISION / tier1.totalStake;
         return amountRatio * tier1.assetAllocation / LibStrategyVault.PERCENT_PRECISION;
     }
 

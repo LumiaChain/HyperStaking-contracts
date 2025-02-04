@@ -88,6 +88,16 @@ export async function deloyTestERC4626Vault(asset: Contract): Promise<Contract> 
   return ethers.deployContract("TestERC4626", [await asset.getAddress()]) as unknown as Promise<Contract>;
 }
 
+export function nativeCurrency(): CurrencyStruct {
+  const nativeTokenAddress = ZeroAddress;
+  return { token: nativeTokenAddress };
+}
+
+/// token contract address
+export function erc20Currency(token: string): CurrencyStruct {
+  return { token };
+}
+
 export async function createNativeStakingPool(staking: Contract) {
   const stakingManager = (await ethers.getSigners())[1];
 

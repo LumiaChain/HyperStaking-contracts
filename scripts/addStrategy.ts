@@ -1,5 +1,7 @@
 import { ethers } from "hardhat";
-import { parseEther } from "ethers";
+import { parseEther, ZeroAddress } from "ethers";
+
+import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/facets/StakingFacet";
 
 import * as holeskyAddresses from "../ignition/parameters.holesky.json";
 
@@ -23,6 +25,9 @@ async function main() {
   console.log("pool id:", poolId);
   console.log("revenue fee:", REVENUE_FEE.toString());
 
+  const nativeTokenAddress = ZeroAddress;
+  const stakeCurency = { token: nativeTokenAddress } as CurrencyStruct;
+
   const factoryFacet = await ethers.getContractAt("IVaultFactory", diamond);
 
   const vaultTokenName = "eth vault";
@@ -30,6 +35,7 @@ async function main() {
 
   const tx = await factoryFacet.connect(strategyVaultManager).addStrategy(
     poolId,
+    stakeCurency,
     strategy,
     vaultTokenName,
     vaultTokenSymbol,

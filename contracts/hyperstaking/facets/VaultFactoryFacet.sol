@@ -15,6 +15,7 @@ import {
 } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
+import {Currency} from "../libraries/CurrencyHandler.sol";
 import {
     LibStrategyVault, StrategyVaultStorage, VaultInfo, VaultTier1, VaultTier2
 } from "../libraries/LibStrategyVault.sol";
@@ -38,6 +39,7 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
     /// @inheritdoc IVaultFactory
     function addStrategy(
         uint256 poolId,
+        Currency calldata currency,
         address strategy,
         string memory vaultTokenName,
         string memory vaultTokenSymbol,
@@ -47,7 +49,7 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
         address asset = IStrategy(strategy).revenueAsset();
 
         IERC4626 vaultToken = _deployVaultToken(asset, strategy, vaultTokenName, vaultTokenSymbol);
-        _storeVault(poolId, strategy, asset, tier1RevenueFee, vaultToken);
+        _storeVault(poolId, currency, strategy, asset, tier1RevenueFee, vaultToken);
     }
 
     // ========= View ========= //
@@ -115,6 +117,8 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
     /**
      * @dev Initializes the vault storage for a given pool, sets the strategy and asset details,
      *      and applies the Tier 1 revenue fee
+     *
+     * @param currency The currency used as stake for this strategy
      * @param poolId The ID of the staking pool for which this vault is created
      * @param strategy The strategy address associated with this vault
      * @param asset The asset for the vault
@@ -124,6 +128,7 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
      */
     function _storeVault(
         uint256 poolId,
+        Currency calldata currency,
         address strategy,
         address asset,
         uint256 tier1RevenueFee,
@@ -135,6 +140,7 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
         // create a new VaultInfo and store it in storage
         v.vaultInfo[strategy] = VaultInfo({
             poolId: poolId,
+            stakeCurrency: currency,
             strategy: strategy,
             asset: IERC20Metadata(asset)
         });
@@ -142,7 +148,7 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
         // init tier1
         v.vaultTier1Info[strategy] = VaultTier1({
             assetAllocation: 0,
-            totalStakeLocked: 0,
+            totalStake: 0,
             revenueFee: tier1RevenueFee
         });
 

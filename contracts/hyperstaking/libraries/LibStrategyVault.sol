@@ -4,6 +4,8 @@ pragma solidity =0.8.27;
 import {IERC4626} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
+import {Currency} from "../libraries/CurrencyHandler.sol";
+
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 
 //================================================================================================//
@@ -12,7 +14,7 @@ import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 
 /// @notice Info of each user (Tier1)
 struct UserTier1Info {
-    uint256 stakeLocked;
+    uint256 stake;
     uint256 allocationPoint; // average asset price - maturity
 }
 
@@ -28,7 +30,7 @@ struct UserTier2Info {
 
 struct VaultTier1 {
     uint256 assetAllocation;
-    uint256 totalStakeLocked; // all users in this tier
+    uint256 totalStake; // all users stake in this tier
     uint256 revenueFee; // 18 dec precision
 }
 
@@ -38,8 +40,13 @@ struct VaultTier2 {
     IERC4626 vaultToken;
 }
 
+/// Main vault details.
+/// @param stakeCurrency Currency used for staking
+/// @param strategy Address of the strategy contract
+/// @param asset ERC-20 token used in the vault
 struct VaultInfo {
     uint256 poolId;
+    Currency stakeCurrency;
     address strategy;
     IERC20Metadata asset;
 }

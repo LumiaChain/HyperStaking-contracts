@@ -38,6 +38,7 @@ describe("VaultToken", function () {
 
     await vaultFactory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
+      shared.nativeCurrency(),
       reserveStrategy,
       vaultTokenName,
       vaultTokenSymbol,
@@ -93,6 +94,7 @@ describe("VaultToken", function () {
 
       await vaultFactory.connect(strategyVaultManager).addStrategy(
         ethPoolId,
+        shared.nativeCurrency(),
         reserveStrategy2,
         "eth vault2",
         "vETH2",
@@ -101,6 +103,7 @@ describe("VaultToken", function () {
 
       await vaultFactory.connect(strategyVaultManager).addStrategy(
         ethPoolId,
+        shared.nativeCurrency(),
         reserveStrategy3,
         "eth vault3",
         "vETH3",
@@ -351,7 +354,7 @@ describe("VaultToken", function () {
 
       // is should not be possible to migrate more than staked
       await expect(tier1.connect(alice).migrateToTier2(reserveStrategy, stakeAmount + 1n))
-        .to.be.revertedWithCustomError(tier1, "InsufficientStakeLocked");
+        .to.be.revertedWithCustomError(tier1, "InsufficientStake");
 
       const allocationFee = await tier1.allocationFee(
         reserveStrategy,
@@ -361,9 +364,9 @@ describe("VaultToken", function () {
       await tier1.connect(alice).migrateToTier2(reserveStrategy, stakeAmount);
 
       // check Tier1 values
-      expect((await tier1.userTier1Info(reserveStrategy, alice)).stakeLocked).to.equal(0);
+      expect((await tier1.userTier1Info(reserveStrategy, alice)).stake).to.equal(0);
       expect((await tier1.vaultTier1Info(reserveStrategy)).assetAllocation).to.equal(0);
-      expect((await tier1.vaultTier1Info(reserveStrategy)).totalStakeLocked).to.equal(0);
+      expect((await tier1.vaultTier1Info(reserveStrategy)).totalStake).to.equal(0);
 
       // assets
       expect(await ethers.provider.getBalance(staking)).to.equal(0);

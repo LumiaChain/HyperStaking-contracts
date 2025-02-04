@@ -51,6 +51,7 @@ describe("Staking", function () {
     // strategy with neutral to eth 1:1 asset price
     await vaultFactory.connect(strategyVaultManager).addStrategy(
       ethPoolId,
+      shared.nativeCurrency(),
       reserveStrategy1,
       "eth vault1",
       "vETH1",
@@ -60,6 +61,7 @@ describe("Staking", function () {
     // strategy with erc20 staking token and 2:1 asset price
     await vaultFactory.connect(strategyVaultManager).addStrategy(
       erc20PoolId,
+      shared.erc20Currency(await testERC20.getAddress()),
       reserveStrategy2,
       "erc20 vault2",
       "vERC2",
