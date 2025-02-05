@@ -34,7 +34,7 @@ struct VaultTier1 {
     uint256 revenueFee; // 18 dec precision
 }
 
-// Users at Tier2 don't have stake stored in the pool anymore,
+// Users at Tier2 don't have stake stored in the pool (storage) anymore,
 // as it is represented by ERC4626 vault token - liquid shares
 struct VaultTier2 {
     IERC4626 vaultToken;
@@ -45,7 +45,6 @@ struct VaultTier2 {
 /// @param strategy Address of the strategy contract
 /// @param asset ERC-20 token used in the vault
 struct VaultInfo {
-    uint256 poolId;
     Currency stakeCurrency;
     address strategy;
     IERC20Metadata asset;
@@ -67,7 +66,7 @@ struct LockboxData {
 //                                           Storage                                              //
 //================================================================================================//
 
-struct StrategyVaultStorage {
+struct HyperStakingStorage {
     /// @notice Info of each user that stakes using vault
     mapping (address strategy => mapping (address user => UserTier1Info)) userInfo;
 
@@ -84,15 +83,15 @@ struct StrategyVaultStorage {
     LockboxData lockboxData;
 }
 
-library LibStrategyVault {
+library LibHyperStaking {
     bytes32 constant internal STRATEGY_VAULT_STORAGE_POSITION
-        = keccak256("hyperstaking-strategy-vault.storage");
+        = keccak256("hyperstaking-0.1.storage");
 
+    // 1e18 as a scaling factor, e.g. for allocation, percent, e.g. 0.1 ETH (1e17) == 10%
     uint256 constant internal ALLOCATION_POINT_PRECISION = 1e18;
-
     uint256 constant internal PERCENT_PRECISION = 1e18; // represent 100%
 
-    function diamondStorage() internal pure returns (StrategyVaultStorage storage s) {
+    function diamondStorage() internal pure returns (HyperStakingStorage storage s) {
         bytes32 position = STRATEGY_VAULT_STORAGE_POSITION;
         assembly {
             s.slot := position

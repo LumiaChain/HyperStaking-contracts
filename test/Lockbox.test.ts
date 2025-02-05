@@ -9,20 +9,16 @@ describe("Lockbox", function () {
   async function deployHyperStaking() {
     const [owner, stakingManager, strategyVaultManager, lumiaFactoryManager, bob, alice] = await ethers.getSigners();
 
-    // --------------------- Deploy Tokens ----------------------
+    // -------------------- Deploy Tokens --------------------
 
     const testReserveAsset = await shared.deloyTestERC20("Test Reserve Asset", "tRaETH");
     const erc4626Vault = await shared.deloyTestERC4626Vault(testReserveAsset);
 
-    // --------------------- Hyperstaking Diamond --------------------
+    // -------------------- Hyperstaking Diamond --------------------
 
     const {
       mailbox, interchainFactory, diamond, staking, vaultFactory, tier1, tier2, lockbox,
     } = await shared.deployTestHyperStaking(0n, erc4626Vault);
-
-    // ------------------ Create Staking Pools ------------------
-
-    const { nativeTokenAddress, ethPoolId } = await shared.createNativeStakingPool(staking);
 
     // -------------------- Apply Strategies --------------------
 
@@ -32,12 +28,10 @@ describe("Lockbox", function () {
     const reserveAssetPrice = parseEther("2");
 
     const reserveStrategy = await shared.createReserveStrategy(
-      diamond, nativeTokenAddress, await testReserveAsset.getAddress(), reserveAssetPrice,
+      diamond, shared.nativeTokenAddress, await testReserveAsset.getAddress(), reserveAssetPrice,
     );
 
     await vaultFactory.connect(strategyVaultManager).addStrategy(
-      ethPoolId,
-      shared.nativeCurrency(),
       reserveStrategy,
       "reserve eth vault 1",
       "rETH1",
@@ -57,9 +51,8 @@ describe("Lockbox", function () {
       diamond, // diamond
       staking, vaultFactory, tier1, tier2, lockbox, // diamond facets
       mailbox, interchainFactory, testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
-      ethPoolId, // ids
       defaultRevenueFee, reserveAssetPrice, mailboxFee, // values
-      nativeTokenAddress, owner, stakingManager, strategyVaultManager, lumiaFactoryManager, alice, bob, // addresses
+      owner, stakingManager, strategyVaultManager, lumiaFactoryManager, alice, bob, // addresses
     };
     /* eslint-enable object-property-newline */
   }
@@ -67,7 +60,7 @@ describe("Lockbox", function () {
   describe("Lockbox", function () {
     it("lp token properties should be derived from vault token", async function () {
       const {
-        diamond, tier2, vaultFactory, interchainFactory, mailbox, ethPoolId, nativeTokenAddress, vaultToken, lpToken, strategyVaultManager, owner,
+        diamond, tier2, vaultFactory, interchainFactory, mailbox, vaultToken, lpToken, strategyVaultManager, owner,
       } = await loadFixture(deployHyperStaking);
 
       expect(await lpToken.name()).to.equal(await vaultToken.name());
@@ -77,7 +70,7 @@ describe("Lockbox", function () {
       {
         const strangeToken = await shared.deloyTestERC20("Test 14 dec Coin", "t14c", 14);
         const reserveStrategy2 = await shared.createReserveStrategy(
-          diamond, nativeTokenAddress, await strangeToken.getAddress(), parseEther("1"),
+          diamond, shared.nativeTokenAddress, await strangeToken.getAddress(), parseEther("1"),
         );
 
         const vname = "strange vault";
@@ -85,8 +78,6 @@ describe("Lockbox", function () {
 
         await mailbox.connect(owner).setFee(0n);
         await vaultFactory.connect(strategyVaultManager).addStrategy(
-          ethPoolId,
-          shared.nativeCurrency(),
           reserveStrategy2,
           vname,
           vsymbol,
@@ -126,7 +117,7 @@ describe("Lockbox", function () {
 
     it("stake deposit to tier2 with non-zero mailbox fee", async function () {
       const {
-        staking, ethPoolId, reserveStrategy, vaultToken, lpToken, mailboxFee, owner, alice,
+        staking, tier1, reserveStrategy, vaultToken, lpToken, mailboxFee, owner, alice,
       } = await loadFixture(deployHyperStaking);
 
       const lpBefore = await lpToken.balanceOf(alice);
@@ -135,10 +126,10 @@ describe("Lockbox", function () {
 
       const tier2 = 2;
       await expect(staking.stakeDepositTier2(
-        ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
+        reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
       ))
         .to.emit(staking, "StakeDeposit")
-        .withArgs(owner, alice, ethPoolId, reserveStrategy, stakeAmount, tier2);
+        .withArgs(owner, alice, reserveStrategy, stakeAmount, tier2);
 
       const lpAfter = await lpToken.balanceOf(alice);
       expect(lpAfter).to.be.gt(lpBefore);
@@ -149,28 +140,25 @@ describe("Lockbox", function () {
 
       expect(lpAfter).to.be.eq(lpBefore + lpAmount);
 
-      // stake values should be 0 in tier2
-      expect((await staking.userPoolInfo(ethPoolId, alice)).stakeLocked).to.equal(0);
-      expect((await staking.poolInfo(ethPoolId)).totalStake).to.equal(0);
+      // stake values should be 0 in tier1
+      expect((await tier1.userTier1Info(reserveStrategy, alice)).stake).to.equal(0);
+      expect((await tier1.vaultTier1Info(reserveStrategy)).totalStake).to.equal(0);
     });
 
     it("mailbox fee is needed when adding strategy too", async function () {
       const {
-        diamond, staking, vaultFactory, lockbox, mailboxFee, strategyVaultManager,
+        diamond, vaultFactory, lockbox, mailboxFee, strategyVaultManager,
       } = await loadFixture(deployHyperStaking);
 
       // new pool and strategy
-      const { nativeTokenAddress, ethPoolId } = await shared.createNativeStakingPool(staking);
       const asset2 = await shared.deloyTestERC20("Test Reserve Asset 2", "t2");
 
       const strategy2 = await shared.createReserveStrategy(
-        diamond, nativeTokenAddress, await asset2.getAddress(), parseEther("1"),
+        diamond, shared.nativeTokenAddress, await asset2.getAddress(), parseEther("1"),
       );
 
       // revert if mailbox fee is not sent
       await expect(vaultFactory.connect(strategyVaultManager).addStrategy(
-        ethPoolId,
-        shared.nativeCurrency(),
         strategy2,
         "vault2",
         "v2",
@@ -182,8 +170,6 @@ describe("Lockbox", function () {
       ).to.equal(mailboxFee);
 
       await vaultFactory.connect(strategyVaultManager).addStrategy(
-        ethPoolId,
-        shared.nativeCurrency(),
         strategy2,
         "vault3",
         "v3",
@@ -194,7 +180,7 @@ describe("Lockbox", function () {
 
     it("redeem on the should triger tier2 leave on the origin chain - non-zero mailbox fee", async function () {
       const {
-        staking, ethPoolId, reserveStrategy, mailbox, vaultToken, interchainFactory,
+        staking, reserveStrategy, mailbox, vaultToken, interchainFactory,
         testReserveAsset, lpToken, mailboxFee, reserveAssetPrice, alice,
       } = await loadFixture(deployHyperStaking);
 
@@ -202,7 +188,7 @@ describe("Lockbox", function () {
       const expectedLpAmount = stakeAmount * parseEther("1") / reserveAssetPrice;
 
       await expect(staking.stakeDepositTier2(
-        ethPoolId, reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
+        reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
       ))
         .to.emit(interchainFactory, "TokenBridged")
         .withArgs(vaultToken, lpToken, alice.address, expectedLpAmount);

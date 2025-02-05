@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
+import {Currency} from "../libraries/CurrencyHandler.sol";
+
 /**
  * @title IStrategy
  * @notice Interface for staking strategies used within the protocol
@@ -50,7 +52,10 @@ interface IStrategy {
     //                                           View                                             //
     //============================================================================================//
 
-    /// @return The address of the revenue-accumulating asset
+    /// @return Currency used for allocation into strategy (stake)
+    function stakeCurrency() external view returns(Currency calldata);
+
+    /// @return The address of the revenue-accumulating asset (allocation asset)
     function revenueAsset() external view returns(address);
 
     /// @dev Preview the asset allocation for a given stake amount

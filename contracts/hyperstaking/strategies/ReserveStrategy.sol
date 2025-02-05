@@ -142,6 +142,11 @@ contract ReserveStrategy is IStrategy, Ownable {
 
     // ========= View ========= //
 
+    /// @inheritdoc IStrategy
+    function stakeCurrency() external view returns(Currency memory) {
+        return stake;
+    }
+
     /// Return current stake to asset conversion (amount * price)
     function previewAllocation(uint256 stakeAmount_) public view returns (uint256) {
         return stakeAmount_ * PRECISSION_FACTOR / assetPrice;

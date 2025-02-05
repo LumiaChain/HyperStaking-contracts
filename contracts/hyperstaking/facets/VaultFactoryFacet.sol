@@ -17,13 +17,15 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {Currency} from "../libraries/CurrencyHandler.sol";
 import {
-    LibStrategyVault, StrategyVaultStorage, VaultInfo, VaultTier1, VaultTier2
-} from "../libraries/LibStrategyVault.sol";
+    LibHyperStaking, HyperStakingStorage, VaultInfo, VaultTier1, VaultTier2
+} from "../libraries/LibHyperStaking.sol";
 
 import {VaultToken} from "../VaultToken.sol";
 
 /**
  * @title VaultFactoryFacet
+ * @notice Factory contract for creating and managing HyperStaking vaults
+ * Deploys new vaults when adding strategies for asset management
  *
  * @dev This contract is a facet of Diamond Proxy.
  */
@@ -38,8 +40,6 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
 
     /// @inheritdoc IVaultFactory
     function addStrategy(
-        uint256 poolId,
-        Currency calldata currency,
         address strategy,
         string memory vaultTokenName,
         string memory vaultTokenSymbol,
@@ -49,14 +49,14 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
         address asset = IStrategy(strategy).revenueAsset();
 
         IERC4626 vaultToken = _deployVaultToken(asset, strategy, vaultTokenName, vaultTokenSymbol);
-        _storeVault(poolId, currency, strategy, asset, tier1RevenueFee, vaultToken);
+        _storeVault(strategy, asset, tier1RevenueFee, vaultToken);
     }
 
     // ========= View ========= //
 
     /// @inheritdoc IVaultFactory
     function vaultInfo(address strategy) external view returns (VaultInfo memory) {
-        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         return v.vaultInfo[strategy];
     }
 
@@ -115,32 +115,30 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
     }
 
     /**
-     * @dev Initializes the vault storage for a given pool, sets the strategy and asset details,
-     *      and applies the Tier 1 revenue fee
+     * @dev Initializes the vault storage for a given stake currency, strategy, asset details,
+     *      applies the Tier 1 revenue fee
      *
-     * @param currency The currency used as stake for this strategy
-     * @param poolId The ID of the staking pool for which this vault is created
      * @param strategy The strategy address associated with this vault
      * @param asset The asset for the vault
      * @param tier1RevenueFee The revenue fee applied to Tier 1 users in this vault
      * @param vaultToken ERC4626 which represent shares to this strategy vault
-
      */
     function _storeVault(
-        uint256 poolId,
-        Currency calldata currency,
         address strategy,
         address asset,
         uint256 tier1RevenueFee,
         IERC4626 vaultToken
     ) internal {
-        StrategyVaultStorage storage v = LibStrategyVault.diamondStorage();
-        require(v.vaultInfo[strategy].poolId == 0, VaultAlreadyExist());
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        require(v.vaultInfo[strategy].strategy == address(0), VaultAlreadyExist());
+
+        // The currency which will be used as stake for this strategy
+        // Currency struct supports both native coin and erc20 tokens
+        Currency memory stakeCurrency = IStrategy(strategy).stakeCurrency();
 
         // create a new VaultInfo and store it in storage
         v.vaultInfo[strategy] = VaultInfo({
-            poolId: poolId,
-            stakeCurrency: currency,
+            stakeCurrency: stakeCurrency,
             strategy: strategy,
             asset: IERC20Metadata(asset)
         });
@@ -159,7 +157,6 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
 
         emit VaultCreate(
             msg.sender,
-            poolId,
             strategy,
             address(asset),
             address(vaultToken)

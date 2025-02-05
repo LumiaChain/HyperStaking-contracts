@@ -12,6 +12,21 @@ import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/facets/StakingFacet";
 import { IERC20 } from "../typechain-types";
 
+// -------------------- Currency --------------------
+
+export const nativeTokenAddress = ZeroAddress;
+
+export function nativeCurrency(): CurrencyStruct {
+  return { token: nativeTokenAddress };
+}
+
+/// token contract address
+export function erc20Currency(token: string): CurrencyStruct {
+  return { token };
+}
+
+// -------------------- Deployment Helpers --------------------
+
 export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: Contract) {
   const testDestination = 31337; // the same for both sides of the test "oneChain" bridge
 
@@ -88,41 +103,9 @@ export async function deloyTestERC4626Vault(asset: Contract): Promise<Contract> 
   return ethers.deployContract("TestERC4626", [await asset.getAddress()]) as unknown as Promise<Contract>;
 }
 
-export function nativeCurrency(): CurrencyStruct {
-  const nativeTokenAddress = ZeroAddress;
-  return { token: nativeTokenAddress };
-}
+// -------------------- Strategies --------------------
 
-/// token contract address
-export function erc20Currency(token: string): CurrencyStruct {
-  return { token };
-}
-
-export async function createNativeStakingPool(staking: Contract) {
-  const stakingManager = (await ethers.getSigners())[1];
-
-  const nativeTokenAddress = ZeroAddress;
-  const currency = { token: nativeTokenAddress } as CurrencyStruct;
-
-  await staking.connect(stakingManager).createStakingPool(currency);
-
-  const poolCount = await staking.stakeTokenPoolCount(currency);
-  const ethPoolId = await staking.generatePoolId(currency, poolCount - 1n);
-
-  return { nativeTokenAddress, ethPoolId };
-}
-
-export async function createStakingPool(staking: Contract, token: Contract) {
-  const stakingManager = (await ethers.getSigners())[1];
-  const currency = { token } as CurrencyStruct;
-
-  await staking.connect(stakingManager).createStakingPool(currency);
-  const poolCount = await staking.stakeTokenPoolCount(currency);
-  const poolId = await staking.generatePoolId(currency, poolCount - 1n);
-
-  return poolId;
-}
-
+/// ZeroAddress is used for native currency
 export async function createReserveStrategy(
   diamond: Contract,
   stakeTokenAddress: string,
@@ -142,7 +125,7 @@ export async function createReserveStrategy(
 
   const reserveStrategySupply = parseEther("30");
 
-  // because there are two differnet vesions of IERC20 used in the project
+  // full - because there are two differnet vesions of IERC20 used in the project
   const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";
   const asset = (await ethers.getContractAt(fullyQualifiedIERC20, assetAddress)) as unknown as IERC20;
 
@@ -157,6 +140,8 @@ export async function createReserveStrategy(
 
   return reserveStrategy;
 }
+
+// -------------------- Other Helpers --------------------
 
 export async function getDerivedTokens(tier2: Contract, interchainFactory: Contract, strategy: string) {
   const vaultTokenAddress = (await tier2.vaultTier2Info(strategy)).vaultToken;

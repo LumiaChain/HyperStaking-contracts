@@ -18,7 +18,6 @@ import {LibAcl} from "./libraries/LibAcl.sol";
  *      Roles:
  *      - `Staking Manager`: Oversees staking operations
  *      - `Strategy Vault Manager`: Handles strategies and vaults
- *      - `Rewards Manager`: Manages reward distributions
  *
  *      Utilizes OpenZeppelin's AccessControlEnumerableUpgradeable, which now supports
  *      EIP-7201 namespace storage, making it compatible with Diamond Proxy architecture

@@ -2,10 +2,12 @@
 pragma solidity =0.8.27;
 
 import {IStrategy} from "../interfaces/IStrategy.sol";
+import {Currency} from "../libraries/CurrencyHandler.sol";
 
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {PirexIntegration} from "./PirexIntegration.sol";
+
 
 /**
  * @title DineroStrategy
@@ -77,6 +79,13 @@ contract DineroStrategy is IStrategy, PirexIntegration {
     }
 
     // ========= View ========= //
+
+    /// @inheritdoc IStrategy
+    function stakeCurrency() external pure returns(Currency memory) {
+        return Currency({
+            token: address(0)
+        });
+    }
 
     /// @inheritdoc IStrategy
     function revenueAsset() external view returns(address) {

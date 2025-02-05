@@ -32,7 +32,7 @@ describe("Superform", function () {
     const [superformAddress,,] = await superformFactory.getSuperform(superformId);
     const superform = await ethers.getContractAt("BaseForm", superformAddress);
 
-    // -------
+    // --------------------
 
     return {
       superformFactory, superformRouter, superVault, superPositions, superformId, superform, superManager, testUSDC, erc4626Vault, alice,
@@ -91,22 +91,18 @@ describe("Superform", function () {
   async function deployHyperStaking() {
     const [owner, stakingManager, strategyVaultManager, bob, alice] = await ethers.getSigners();
 
-    // --------------------- Deploy Tokens ----------------------
+    // -------------------- Deploy Tokens --------------------
 
     const testUSDC = await shared.deloyTestERC20("Test USDC", "tUSDC", 6); // 6 decimal places
     const erc4626Vault = await shared.deloyTestERC4626Vault(testUSDC);
 
     await testUSDC.mint(alice.address, parseUnits("1000000", 6));
 
-    // --------------------- Hyperstaking Diamond --------------------
+    // -------------------- Hyperstaking Diamond --------------------
 
     const {
       diamond, staking, vaultFactory, tier1, tier2, interchainFactory, superVault, superformIntegration,
     } = await shared.deployTestHyperStaking(0n, erc4626Vault);
-
-    // ------------------ Create Staking Pools ------------------
-
-    const usdcPoolId = await shared.createStakingPool(staking, testUSDC);
 
     // -------------------- Apply Strategies --------------------
 
@@ -134,14 +130,12 @@ describe("Superform", function () {
 
     const aerc20 = await registerAERC20(superformRouter, superformId, superform, superPositions, testUSDC);
 
-    // -------
+    // --------------------
 
     const vaultTokenName = "Lumia USD Superform Position";
     const vaultTokenSymbol = "lspUSD";
 
     await vaultFactory.connect(strategyVaultManager).addStrategy(
-      usdcPoolId,
-      shared.erc20Currency(await testUSDC.getAddress()),
       superformStrategy,
       vaultTokenName,
       vaultTokenSymbol,
@@ -153,7 +147,7 @@ describe("Superform", function () {
       true,
     );
 
-    // -------
+    // --------------------
 
     const vaultAddress = (await tier2.vaultTier2Info(superformStrategy)).vaultToken;
     const vault = await ethers.getContractAt("VaultToken", vaultAddress);
@@ -161,7 +155,7 @@ describe("Superform", function () {
     const lpTokenAddress = await interchainFactory.getLpToken(vaultAddress);
     const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
 
-    // -------------------------------------------
+    // --------------------
 
     /* eslint-disable object-property-newline */
     return {
@@ -169,7 +163,7 @@ describe("Superform", function () {
       staking, vaultFactory, tier1, tier2, superformIntegration, // diamond facets
       vault, testUSDC, superformStrategy, erc4626Vault, aerc20, // test contracts
       interchainFactory, lpToken, // lumia
-      usdcPoolId, superformId, // ids
+      superformId, // ids
       defaultRevenueFee, vaultTokenName, vaultTokenSymbol, // values
       owner, stakingManager, strategyVaultManager, alice, bob, // addresses
     };
@@ -344,7 +338,7 @@ describe("Superform", function () {
 
   describe("Strategy", function () {
     it("Superform strategy with vault should be created along with LP token on lumia side", async function () {
-      const { diamond, vaultFactory, tier2, superformStrategy, interchainFactory, testUSDC, usdcPoolId, superformId } = await deployHyperStaking();
+      const { diamond, vaultFactory, tier2, superformStrategy, interchainFactory, testUSDC, superformId } = await deployHyperStaking();
 
       expect(await superformStrategy.DIAMOND()).to.equal(diamond);
       expect(await superformStrategy.SUPERFORM_ID()).to.equal(superformId);
@@ -354,8 +348,8 @@ describe("Superform", function () {
       expect(revenueAsset).to.not.equal(ZeroAddress);
 
       // VaultInfo
+      expect((await vaultFactory.vaultInfo(superformStrategy)).stakeCurrency).to.deep.equal([testUSDC.target]);
       expect((await vaultFactory.vaultInfo(superformStrategy)).strategy).to.equal(superformStrategy);
-      expect((await vaultFactory.vaultInfo(superformStrategy)).poolId).to.equal(usdcPoolId);
       expect((await vaultFactory.vaultInfo(superformStrategy)).asset).to.equal(revenueAsset);
 
       const [vaultToken] = await tier2.vaultTier2Info(superformStrategy);
@@ -365,12 +359,12 @@ describe("Superform", function () {
     });
 
     it("Staking using superform strategy - tier1", async function () {
-      const { staking, tier1, superformStrategy, testUSDC, usdcPoolId, alice, erc4626Vault } = await deployHyperStaking();
+      const { staking, tier1, superformStrategy, testUSDC, alice, erc4626Vault } = await deployHyperStaking();
 
       const amount = parseUnits("400", 6);
 
       await testUSDC.connect(alice).approve(staking, amount);
-      await expect(staking.connect(alice).stakeDeposit(usdcPoolId, superformStrategy, amount, alice))
+      await expect(staking.connect(alice).stakeDeposit(superformStrategy, amount, alice))
         .to.changeTokenBalances(testUSDC,
           [alice, staking, superformStrategy, erc4626Vault], [-amount, 0, 0, amount]);
 
@@ -378,7 +372,7 @@ describe("Superform", function () {
       expect(stakeLocked).to.equal(amount);
       expect(allocationPoint).to.be.greaterThan(0);
 
-      await expect(staking.connect(alice).stakeWithdraw(usdcPoolId, superformStrategy, amount, alice))
+      await expect(staking.connect(alice).stakeWithdraw(superformStrategy, amount, alice))
         .to.changeTokenBalances(testUSDC,
           [alice, staking, superformStrategy, erc4626Vault], [amount, 0, 0, -amount]);
 
@@ -387,12 +381,12 @@ describe("Superform", function () {
     });
 
     it("Staking using superform strategy - tier2", async function () {
-      const { staking, tier2, superformStrategy, testUSDC, usdcPoolId, alice, interchainFactory, erc4626Vault, vault, lpToken, aerc20 } = await deployHyperStaking();
+      const { staking, tier2, superformStrategy, testUSDC, alice, interchainFactory, erc4626Vault, vault, lpToken, aerc20 } = await deployHyperStaking();
 
       const amount = parseUnits("2000", 6);
 
       await testUSDC.connect(alice).approve(staking, amount);
-      await expect(staking.connect(alice).stakeDepositTier2(usdcPoolId, superformStrategy, amount, alice))
+      await expect(staking.connect(alice).stakeDepositTier2(superformStrategy, amount, alice))
         .to.changeTokenBalances(testUSDC,
           [alice, erc4626Vault], [-amount, amount]);
 
@@ -415,12 +409,12 @@ describe("Superform", function () {
     });
 
     it("Revenue from superform strategy", async function () {
-      const { staking, superformStrategy, testUSDC, usdcPoolId, alice, interchainFactory, erc4626Vault, vault, lpToken, vaultTokenName, vaultTokenSymbol } = await deployHyperStaking();
+      const { staking, superformStrategy, testUSDC, alice, interchainFactory, erc4626Vault, vault, lpToken, vaultTokenName, vaultTokenSymbol } = await deployHyperStaking();
 
       const amount = parseUnits("100", 6);
 
       await testUSDC.connect(alice).approve(staking, amount);
-      await staking.connect(alice).stakeDepositTier2(usdcPoolId, superformStrategy, amount, alice);
+      await staking.connect(alice).stakeDepositTier2(superformStrategy, amount, alice);
 
       // lpToken on the Lumia chain side
       const lpBalance = await lpToken.balanceOf(alice);

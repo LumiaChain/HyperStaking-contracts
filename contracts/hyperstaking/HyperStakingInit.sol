@@ -18,7 +18,7 @@ import {
 import {IMailbox} from "../external/hyperlane/interfaces/IMailbox.sol";
 
 import {LibAcl} from "./libraries/LibAcl.sol";
-import {LibStrategyVault, LockboxData} from "./libraries/LibStrategyVault.sol";
+import {LibHyperStaking, LockboxData} from "./libraries/LibHyperStaking.sol";
 import {LibSuperform} from "./libraries/LibSuperform.sol";
 
 
@@ -62,7 +62,7 @@ contract HyperStakingInit is AccessControlEnumerableUpgradeable, ReentrancyGuard
         // initialize Lockbox
 
         require(lockboxMailbox != address(0), ZeroAddress());
-        LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
 
         box.destination = lockboxDestination;
         box.mailbox = IMailbox(lockboxMailbox);

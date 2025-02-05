@@ -8,6 +8,8 @@ import {ISuperPositions} from "../../external/superform/core/interfaces/ISuperPo
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC165, IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 
+import {Currency} from "../libraries/CurrencyHandler.sol";
+
 /**
  * @title SuperformStrategy
  * @notice This strategy contract uses Superform integration for yield generation.
@@ -113,6 +115,13 @@ contract SuperformStrategy is IStrategy, IERC1155Receiver {
     }
 
     // ========= View ========= //
+
+    /// @inheritdoc IStrategy
+    function stakeCurrency() external view returns(Currency memory) {
+        return Currency({
+            token: address(STAKE_TOKEN)
+        });
+    }
 
     /// @inheritdoc IStrategy
     function revenueAsset() public view returns(address) {

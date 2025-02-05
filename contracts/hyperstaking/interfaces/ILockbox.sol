@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {LockboxData} from "../libraries/LibStrategyVault.sol";
+import {LockboxData} from "../libraries/LibHyperStaking.sol";
 
 /**
  * @title ILockbox

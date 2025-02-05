@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {VaultTier2, UserTier2Info} from "../libraries/LibStrategyVault.sol";
+import {VaultTier2, UserTier2Info} from "../libraries/LibHyperStaking.sol";
 
 /**
  * @title ITierVault

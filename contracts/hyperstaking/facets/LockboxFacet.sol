@@ -11,7 +11,7 @@ import {MessageType, HyperlaneMailboxMessages} from "../libraries/HyperlaneMailb
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
-import {LibStrategyVault, LockboxData} from "../libraries/LibStrategyVault.sol";
+import {LibHyperStaking, LockboxData} from "../libraries/LibHyperStaking.sol";
 
 /**
  * @title LockboxFacet
@@ -30,7 +30,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
 
     /// @notice Only accept messages from an Hyperlane Mailbox contract
     modifier onlyMailbox() {
-        LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
         require(
             msg.sender == address(box.mailbox),
             NotFromMailbox(msg.sender)
@@ -49,7 +49,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         string memory symbol,
         uint8 decimals
     ) external payable diamondInternal {
-        LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
         require(box.lumiaFactory != address(0), RecipientUnset());
 
         bytes memory body = generateTokenDeployBody(tokenAddress, name, symbol, decimals);
@@ -76,7 +76,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         address user,
         uint256 shares
     ) external payable diamondInternal {
-        LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
         require(box.lumiaFactory != address(0), RecipientUnset());
 
         bytes memory body = generateTokenBridgeBody(vaultToken, user, shares);
@@ -96,7 +96,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         bytes32 sender,
         bytes calldata data
     ) external payable onlyMailbox {
-        LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
 
         emit ReceivedMessage(origin, sender, msg.value, string(data));
 
@@ -132,7 +132,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
             mailbox != address(0) && mailbox.code.length > 0,
             InvalidMailbox(mailbox)
         );
-        LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
 
         emit MailboxUpdated(address(box.mailbox), mailbox);
         box.mailbox = IMailbox(mailbox);
@@ -140,7 +140,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
 
     /// @inheritdoc ILockbox
     function setDestination(uint32 destination) external onlyStrategyVaultManager {
-        LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
 
         emit DestinationUpdated(box.destination, destination);
         box.destination = destination;
@@ -149,7 +149,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     /// @inheritdoc ILockbox
     function setLumiaFactory(address lumiaFactory) public onlyStrategyVaultManager {
         require(lumiaFactory != address(0), InvalidLumiaFactory(lumiaFactory));
-        LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
 
         emit LumiaFactoryUpdated(box.lumiaFactory, lumiaFactory);
         box.lumiaFactory = lumiaFactory;
@@ -159,7 +159,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
 
     /// @inheritdoc ILockbox
     function lockboxData() external view returns (LockboxData memory) {
-        return LibStrategyVault.diamondStorage().lockboxData;
+        return LibHyperStaking.diamondStorage().lockboxData;
     }
 
     /// @inheritdoc ILockbox
@@ -169,7 +169,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         string memory symbol,
         uint8 decimals
     ) external view returns (uint256) {
-        LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
         return box.mailbox.quoteDispatch(
             box.destination,
             TypeCasts.addressToBytes32(box.lumiaFactory),
@@ -183,7 +183,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         address sender,
         uint256 shares
     ) external view returns (uint256) {
-        LockboxData storage box = LibStrategyVault.diamondStorage().lockboxData;
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
         return box.mailbox.quoteDispatch(
             box.destination,
             TypeCasts.addressToBytes32(box.lumiaFactory),
@@ -197,7 +197,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         address sender,
         uint256 allocation
     ) external view returns (uint256) {
-        IERC4626 vaultToken = LibStrategyVault.diamondStorage().vaultTier2Info[strategy].vaultToken;
+        IERC4626 vaultToken = LibHyperStaking.diamondStorage().vaultTier2Info[strategy].vaultToken;
 
         // Vault: allocation -> shares
         uint256 shares = vaultToken.previewWithdraw(allocation);
