@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {IVaultFactory} from "../interfaces/IVaultFactory.sol";
+import {IHyperFactory} from "../interfaces/IHyperFactory.sol";
 import {ILockbox} from "../interfaces/ILockbox.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
@@ -23,13 +23,13 @@ import {
 import {VaultToken} from "../VaultToken.sol";
 
 /**
- * @title VaultFactoryFacet
+ * @title HyperFactoryFacet
  * @notice Factory contract for creating and managing HyperStaking vaults
  * Deploys new vaults when adding strategies for asset management
  *
  * @dev This contract is a facet of Diamond Proxy.
  */
-contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpgradeable {
+contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20Metadata;
 
     //============================================================================================//
@@ -38,7 +38,7 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
 
     // ========= Managed ========= //
 
-    /// @inheritdoc IVaultFactory
+    /// @inheritdoc IHyperFactory
     function addStrategy(
         address strategy,
         string memory vaultTokenName,
@@ -54,7 +54,7 @@ contract VaultFactoryFacet is IVaultFactory, HyperStakingAcl, ReentrancyGuardUpg
 
     // ========= View ========= //
 
-    /// @inheritdoc IVaultFactory
+    /// @inheritdoc IHyperFactory
     function vaultInfo(address strategy) external view returns (VaultInfo memory) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         return v.vaultInfo[strategy];

@@ -17,7 +17,7 @@ describe("Lockbox", function () {
     // -------------------- Hyperstaking Diamond --------------------
 
     const {
-      mailbox, interchainFactory, diamond, staking, vaultFactory, tier1, tier2, lockbox,
+      mailbox, interchainFactory, diamond, staking, hyperFactory, tier1, tier2, lockbox,
     } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // -------------------- Apply Strategies --------------------
@@ -31,7 +31,7 @@ describe("Lockbox", function () {
       diamond, shared.nativeTokenAddress, await testReserveAsset.getAddress(), reserveAssetPrice,
     );
 
-    await vaultFactory.connect(strategyVaultManager).addStrategy(
+    await hyperFactory.connect(strategyVaultManager).addStrategy(
       reserveStrategy,
       "reserve eth vault 1",
       "rETH1",
@@ -49,7 +49,7 @@ describe("Lockbox", function () {
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      staking, vaultFactory, tier1, tier2, lockbox, // diamond facets
+      staking, hyperFactory, tier1, tier2, lockbox, // diamond facets
       mailbox, interchainFactory, testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
       defaultRevenueFee, reserveAssetPrice, mailboxFee, // values
       owner, stakingManager, strategyVaultManager, lumiaFactoryManager, alice, bob, // addresses
@@ -60,7 +60,7 @@ describe("Lockbox", function () {
   describe("Lockbox", function () {
     it("lp token properties should be derived from vault token", async function () {
       const {
-        diamond, tier2, vaultFactory, interchainFactory, mailbox, vaultToken, lpToken, strategyVaultManager, owner,
+        diamond, tier2, hyperFactory, interchainFactory, mailbox, vaultToken, lpToken, strategyVaultManager, owner,
       } = await loadFixture(deployHyperStaking);
 
       expect(await lpToken.name()).to.equal(await vaultToken.name());
@@ -77,7 +77,7 @@ describe("Lockbox", function () {
         const vsymbol = "sv";
 
         await mailbox.connect(owner).setFee(0n);
-        await vaultFactory.connect(strategyVaultManager).addStrategy(
+        await hyperFactory.connect(strategyVaultManager).addStrategy(
           reserveStrategy2,
           vname,
           vsymbol,
@@ -147,7 +147,7 @@ describe("Lockbox", function () {
 
     it("mailbox fee is needed when adding strategy too", async function () {
       const {
-        diamond, vaultFactory, lockbox, mailboxFee, strategyVaultManager,
+        diamond, hyperFactory, lockbox, mailboxFee, strategyVaultManager,
       } = await loadFixture(deployHyperStaking);
 
       // new pool and strategy
@@ -158,7 +158,7 @@ describe("Lockbox", function () {
       );
 
       // revert if mailbox fee is not sent
-      await expect(vaultFactory.connect(strategyVaultManager).addStrategy(
+      await expect(hyperFactory.connect(strategyVaultManager).addStrategy(
         strategy2,
         "vault2",
         "v2",
@@ -169,7 +169,7 @@ describe("Lockbox", function () {
         await lockbox.quoteDispatchTokenDeploy(ZeroAddress, "Test Reserve Asset 2", "t2", 18),
       ).to.equal(mailboxFee);
 
-      await vaultFactory.connect(strategyVaultManager).addStrategy(
+      await hyperFactory.connect(strategyVaultManager).addStrategy(
         strategy2,
         "vault3",
         "v3",

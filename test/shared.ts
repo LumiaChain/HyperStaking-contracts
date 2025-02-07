@@ -47,7 +47,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     },
   });
 
-  const { diamond, staking, vaultFactory, tier1, tier2, lockbox, superformIntegration } = await ignition.deploy(HyperStakingModule, {
+  const { diamond, staking, hyperFactory, tier1, tier2, lockbox, superformIntegration } = await ignition.deploy(HyperStakingModule, {
     parameters: {
       HyperStakingModule: {
         lockboxMailbox: mailboxAddress,
@@ -82,7 +82,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   );
 
   return {
-    mailbox, interchainFactory, diamond, staking, vaultFactory, tier1, tier2, lockbox, superVault, superformIntegration,
+    mailbox, interchainFactory, diamond, staking, hyperFactory, tier1, tier2, lockbox, superVault, superformIntegration,
   };
 }
 

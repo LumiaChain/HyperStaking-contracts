@@ -9,21 +9,21 @@ import * as holeskyAddresses from "../ignition/parameters.holesky.json";
 async function main() {
   const diamond = holeskyAddresses.General.diamond;
 
-  const newVaultFactoryFacet = await ethers.deployContract("VaultFactoryFacet");
-  await newVaultFactoryFacet.waitForDeployment();
+  const newHyperFactoryFacet = await ethers.deployContract("HyperFactoryFacet");
+  await newHyperFactoryFacet.waitForDeployment();
 
-  // const newVaultFactoryFacet = await ethers.getContractAt("IVaultFactory", FACET_ADDRESS);
+  // const newHyperFactoryFacet = await ethers.getContractAt("IHyperFactory", FACET_ADDRESS);
 
-  console.log("new VaultFactoryFacet address:", newVaultFactoryFacet.target);
+  console.log("new HyperFactoryFacet address:", newHyperFactoryFacet.target);
 
-  const facetInterface = getContractInterface("IVaultFactory");
+  const facetInterface = getContractInterface("IHyperFactory");
   const selectors = getSelectors(facetInterface);
   // const selectors = getSelectors(facetInterface).getByNames(["deposit"]);
   console.log("Selectors:", selectors);
 
   const cut = [
     {
-      facetAddress: newVaultFactoryFacet.target,
+      facetAddress: newHyperFactoryFacet.target,
       action: FacetCutAction.Replace,
       functionSelectors: selectors,
     },

@@ -101,7 +101,7 @@ describe("Superform", function () {
     // -------------------- Hyperstaking Diamond --------------------
 
     const {
-      diamond, staking, vaultFactory, tier1, tier2, interchainFactory, superVault, superformIntegration,
+      diamond, staking, hyperFactory, tier1, tier2, interchainFactory, superVault, superformIntegration,
     } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // -------------------- Apply Strategies --------------------
@@ -135,7 +135,7 @@ describe("Superform", function () {
     const vaultTokenName = "Lumia USD Superform Position";
     const vaultTokenSymbol = "lspUSD";
 
-    await vaultFactory.connect(strategyVaultManager).addStrategy(
+    await hyperFactory.connect(strategyVaultManager).addStrategy(
       superformStrategy,
       vaultTokenName,
       vaultTokenSymbol,
@@ -160,7 +160,7 @@ describe("Superform", function () {
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      staking, vaultFactory, tier1, tier2, superformIntegration, // diamond facets
+      staking, hyperFactory, tier1, tier2, superformIntegration, // diamond facets
       vault, testUSDC, superformStrategy, erc4626Vault, aerc20, // test contracts
       interchainFactory, lpToken, // lumia
       superformId, // ids
@@ -338,7 +338,7 @@ describe("Superform", function () {
 
   describe("Strategy", function () {
     it("Superform strategy with vault should be created along with LP token on lumia side", async function () {
-      const { diamond, vaultFactory, tier2, superformStrategy, interchainFactory, testUSDC, superformId } = await deployHyperStaking();
+      const { diamond, hyperFactory, tier2, superformStrategy, interchainFactory, testUSDC, superformId } = await deployHyperStaking();
 
       expect(await superformStrategy.DIAMOND()).to.equal(diamond);
       expect(await superformStrategy.SUPERFORM_ID()).to.equal(superformId);
@@ -348,9 +348,9 @@ describe("Superform", function () {
       expect(revenueAsset).to.not.equal(ZeroAddress);
 
       // VaultInfo
-      expect((await vaultFactory.vaultInfo(superformStrategy)).stakeCurrency).to.deep.equal([testUSDC.target]);
-      expect((await vaultFactory.vaultInfo(superformStrategy)).strategy).to.equal(superformStrategy);
-      expect((await vaultFactory.vaultInfo(superformStrategy)).asset).to.equal(revenueAsset);
+      expect((await hyperFactory.vaultInfo(superformStrategy)).stakeCurrency).to.deep.equal([testUSDC.target]);
+      expect((await hyperFactory.vaultInfo(superformStrategy)).strategy).to.equal(superformStrategy);
+      expect((await hyperFactory.vaultInfo(superformStrategy)).asset).to.equal(revenueAsset);
 
       const [vaultToken] = await tier2.vaultTier2Info(superformStrategy);
       expect(vaultToken).to.not.equal(ZeroAddress);

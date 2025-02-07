@@ -4,9 +4,9 @@ pragma solidity =0.8.27;
 import {VaultInfo} from "../libraries/LibHyperStaking.sol";
 
 /**
- * @title IVaultFactory
+ * @title IHyperFactory
  */
-interface IVaultFactory {
+interface IHyperFactory {
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//

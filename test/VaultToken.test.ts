@@ -16,7 +16,7 @@ describe("VaultToken", function () {
 
     // -------------------- Hyperstaking Diamond --------------------
 
-    const { interchainFactory, diamond, staking, vaultFactory, tier1, tier2 } = await shared.deployTestHyperStaking(0n, erc4626Vault);
+    const { interchainFactory, diamond, staking, hyperFactory, tier1, tier2 } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // -------------------- Apply Strategies --------------------
 
@@ -32,7 +32,7 @@ describe("VaultToken", function () {
     const vaultTokenName = "eth vault1";
     const vaultTokenSymbol = "vETH1";
 
-    await vaultFactory.connect(strategyVaultManager).addStrategy(
+    await hyperFactory.connect(strategyVaultManager).addStrategy(
       reserveStrategy,
       vaultTokenName,
       vaultTokenSymbol,
@@ -48,7 +48,7 @@ describe("VaultToken", function () {
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      staking, vaultFactory, tier1, tier2, interchainFactory, // diamond facets
+      staking, hyperFactory, tier1, tier2, interchainFactory, // diamond facets
       testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
       defaultRevenueFee, reserveAssetPrice, vaultTokenName, vaultTokenSymbol, // values
       owner, stakingManager, strategyVaultManager, alice, bob, // addresses
@@ -69,7 +69,7 @@ describe("VaultToken", function () {
 
     it("test tokens enumerable map", async function () {
       const {
-        diamond, vaultFactory, tier2, interchainFactory, vaultToken,
+        diamond, hyperFactory, tier2, interchainFactory, vaultToken,
         lpToken, strategyVaultManager,
       } = await loadFixture(deployHyperStaking);
 
@@ -85,14 +85,14 @@ describe("VaultToken", function () {
 
       // by adding new stategies more lpTokens should be created
 
-      await vaultFactory.connect(strategyVaultManager).addStrategy(
+      await hyperFactory.connect(strategyVaultManager).addStrategy(
         reserveStrategy2,
         "eth vault2",
         "vETH2",
         0,
       );
 
-      await vaultFactory.connect(strategyVaultManager).addStrategy(
+      await hyperFactory.connect(strategyVaultManager).addStrategy(
         reserveStrategy3,
         "eth vault3",
         "vETH3",
