@@ -71,7 +71,7 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         vault.asset.safeTransferFrom(strategy, address(this), allocation);
 
         // mint and bridge vaultToken shares
-        _bridgeVaultTokens(strategy, user, allocation);
+        _bridgeVaultTokens(strategy, user, stake, allocation);
 
         emit Tier2Join(strategy, user, allocation);
     }
@@ -82,8 +82,12 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         address user,
         uint256 allocation
     ) external payable diamondInternal {
+        // recalculate stake amount based on exit allocation instead of the initial stake
+        // use the current price, allocation ration == include generated revenue
+        uint256 stake = IStrategy(strategy).previewExit(allocation);
+
         // mint and bridge vaultToken shares
-        _bridgeVaultTokens(strategy, user, allocation);
+        _bridgeVaultTokens(strategy, user, stake, allocation);
 
         emit Tier2Join(strategy, user, allocation);
     }
@@ -150,7 +154,12 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     //============================================================================================//
 
     /// @notice helper function which mints, locks and initiates bridge token transfer
-    function _bridgeVaultTokens(address strategy, address user, uint256 allocation) internal {
+    function _bridgeVaultTokens(
+        address strategy,
+        address user,
+        uint256 stake,
+        uint256 allocation
+    ) internal {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
         VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
@@ -164,12 +173,14 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         uint256 fee = ILockbox(address(this)).quoteDispatchTokenBridge(
             address(tier2.vaultToken),
             user,
+            stake,
             shares
         );
 
         ILockbox(address(this)).bridgeTokenDispatch{value: fee}(
             address(tier2.vaultToken),
             user,
+            stake,
             shares
         );
     }

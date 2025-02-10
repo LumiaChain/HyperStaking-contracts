@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {ILockbox} from "../interfaces/ILockbox.sol";
+import {IStrategy} from "../interfaces/IStrategy.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {IERC20, IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
@@ -74,12 +75,13 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     function bridgeTokenDispatch(
         address vaultToken,
         address user,
+        uint256 stake,
         uint256 shares
     ) external payable diamondInternal {
         LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
         require(box.lumiaFactory != address(0), RecipientUnset());
 
-        bytes memory body = generateTokenBridgeBody(vaultToken, user, shares);
+        bytes memory body = generateTokenBridgeBody(vaultToken, user, stake, shares);
 
         // address left-padded to bytes32 for compatibility with hyperlane
         bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.lumiaFactory);
@@ -87,7 +89,14 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         // msg.value should already include fee calculated
         box.mailbox.dispatch{value: msg.value}(box.destination, recipientBytes32, body);
 
-        emit BridgeTokenDispatched(address(box.mailbox), box.lumiaFactory, vaultToken, user, shares);
+        emit BridgeTokenDispatched(
+            address(box.mailbox),
+            box.lumiaFactory,
+            vaultToken,
+            user,
+            stake,
+            shares
+        );
     }
 
     /// @inheritdoc ILockbox
@@ -181,13 +190,14 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     function quoteDispatchTokenBridge(
         address vaultToken,
         address sender,
+        uint256 stake,
         uint256 shares
     ) external view returns (uint256) {
         LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
         return box.mailbox.quoteDispatch(
             box.destination,
             TypeCasts.addressToBytes32(box.lumiaFactory),
-            generateTokenBridgeBody(vaultToken, sender, shares)
+            generateTokenBridgeBody(vaultToken, sender, stake, shares)
         );
     }
 
@@ -195,9 +205,12 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     function quoteStakeDispatch(
         address strategy,
         address sender,
-        uint256 allocation
+        uint256 stake
     ) external view returns (uint256) {
         IERC4626 vaultToken = LibHyperStaking.diamondStorage().vaultTier2Info[strategy].vaultToken;
+
+        // Strategy: stake -> allocation
+        uint256 allocation = IStrategy(strategy).previewAllocation(stake);
 
         // Vault: allocation -> shares
         uint256 shares = vaultToken.previewWithdraw(allocation);
@@ -205,6 +218,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         return this.quoteDispatchTokenBridge(
             address(vaultToken),
             sender,
+            stake,
             shares
         );
     }
@@ -229,11 +243,13 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     function generateTokenBridgeBody(
         address vaultToken,
         address sender,
+        uint256 stake,
         uint256 shares
     ) public pure returns (bytes memory body) {
         body = HyperlaneMailboxMessages.serializeTokenBridge(
             vaultToken,
             sender,
+            stake,
             shares,
             bytes("") // no metadata
         );

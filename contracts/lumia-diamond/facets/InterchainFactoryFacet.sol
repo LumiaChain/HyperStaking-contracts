@@ -213,7 +213,7 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
     function _handleTokenBridge(bytes calldata data) internal {
         address vaultToken = data.vaultToken();
         address sender = data.sender();
-        uint256 amount = data.amount();
+        uint256 sharesAmount = data.sharesAmount();
 
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
 
@@ -221,8 +221,8 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
         address lpToken = ifs.tokensMap.get(vaultToken);
 
         // mint LP tokens for the specified user
-        LumiaLPToken(lpToken).mint(sender, amount);
+        LumiaLPToken(lpToken).mint(sender, sharesAmount);
 
-        emit TokenBridged(vaultToken, lpToken, sender, amount);
+        emit TokenBridged(vaultToken, lpToken, sender, sharesAmount);
     }
 }

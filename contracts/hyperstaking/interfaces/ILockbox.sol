@@ -26,6 +26,7 @@ interface ILockbox {
         address lumiaFactory,
         address indexed vaultToken,
         address indexed user,
+        uint256 stake,
         uint256 shares
     );
 
@@ -77,6 +78,7 @@ interface ILockbox {
     function bridgeTokenDispatch(
         address vaultToken,
         address user,
+        uint256 stake,
         uint256 shares
     ) external payable;
 
@@ -126,6 +128,7 @@ interface ILockbox {
     function quoteDispatchTokenBridge(
         address vaultToken,
         address sender,
+        uint256 stake,
         uint256 shares
     ) external view returns (uint256);
 
@@ -150,6 +153,7 @@ interface ILockbox {
     function generateTokenBridgeBody(
         address vaultToken,
         address sender,
+        uint256 stake,
         uint256 shares
     ) external pure returns (bytes memory body);
 }

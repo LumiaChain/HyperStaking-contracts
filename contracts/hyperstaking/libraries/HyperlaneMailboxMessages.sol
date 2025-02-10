@@ -73,7 +73,7 @@ library HyperlaneMailboxMessages {
             nameBytes,                                  // 64-bytes: token name
             symbolSize,                                 //   1-byte: token symbol size
             symbolBytes,                                // 32-bytes: token symbol
-            bytes1(decimals_),                           //  1-byte: token decimals
+            bytes1(decimals_),                          //   1-byte: token decimals
             metadata_                                   // XX-bytes: additional metadata
         );
     }
@@ -81,14 +81,16 @@ library HyperlaneMailboxMessages {
     function serializeTokenBridge(
         address vaultToken_,
         address sender_,
-        uint256 amount_,
+        uint256 stakeAmount_,
+        uint256 sharesAmount_,
         bytes memory metadata_
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
             bytes8(uint64(MessageType.TokenBridge)),    //  8-bytes: msg type
             TypeCasts.addressToBytes32(vaultToken_),    // 32-bytes: vault token address
             TypeCasts.addressToBytes32(sender_),        // 32-bytes: sender address
-            amount_,                                    // 32-bytes: amount
+            stakeAmount_,                               // 32-bytes: stake amount
+            sharesAmount_,                              // 32-bytes: shares amount
             metadata_                                   // XX-bytes: additional metadata
         );
     }
@@ -153,12 +155,24 @@ library HyperlaneMailboxMessages {
         return TypeCasts.bytes32ToAddress(bytes32(message[40:72]));
     }
 
-    function amount(bytes calldata message) internal pure returns (uint256) {
+    // ========= TokenBridge ========= //
+
+    function stakeAmount(bytes calldata message) internal pure returns (uint256) {
         return uint256(bytes32(message[72:104]));
     }
 
+    function sharesAmount(bytes calldata message) internal pure returns (uint256) {
+        return uint256(bytes32(message[104:136]));
+    }
+
     function tokenBridgeMetadata(bytes calldata message) internal pure returns (bytes calldata) {
-        return message[104:];
+        return message[136:];
+    }
+
+    // ========= TokenRedeem  ========= //
+
+    function amount(bytes calldata message) internal pure returns (uint256) {
+        return uint256(bytes32(message[72:104]));
     }
 
     function tokenRedeemMetadata(bytes calldata message) internal pure returns (bytes calldata) {

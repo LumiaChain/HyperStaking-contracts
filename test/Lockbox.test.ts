@@ -263,21 +263,24 @@ describe("Lockbox", function () {
       const message2 = {
         vaultToken: ZeroAddress,
         sender: ZeroAddress,
-        amount: parseEther("1"),
+        stake: parseEther("1"),
+        shares: parseEther("0.9"),
         metadata: "0x1234",
       };
 
       const bytes2 = await testWrapper.serializeTokenBridge(
         message2.vaultToken,
         message2.sender,
-        message2.amount,
+        message2.stake,
+        message2.shares,
         message2.metadata,
       );
 
       expect(await testWrapper.messageType(bytes2)).to.equal(1);
       expect(await testWrapper.vaultToken(bytes2)).to.equal(message2.vaultToken);
       expect(await testWrapper.sender(bytes2)).to.equal(message2.sender);
-      expect(await testWrapper.amount(bytes2)).to.equal(message2.amount);
+      expect(await testWrapper.stakeAmount(bytes2)).to.equal(message2.stake);
+      expect(await testWrapper.sharesAmount(bytes2)).to.equal(message2.shares);
       expect(await testWrapper.tokenBridgeMetadata(bytes2)).to.equal(message2.metadata);
 
       // TokenRedeem
@@ -300,7 +303,7 @@ describe("Lockbox", function () {
       expect(await testWrapper.vaultToken(bytes3)).to.equal(message3.vaultToken);
       expect(await testWrapper.sender(bytes3)).to.equal(message3.sender);
       expect(await testWrapper.amount(bytes3)).to.equal(message3.amount);
-      expect(await testWrapper.tokenBridgeMetadata(bytes3)).to.equal(message3.metadata);
+      expect(await testWrapper.tokenRedeemMetadata(bytes3)).to.equal(message3.metadata);
     });
 
     it("string limitations", async function () {

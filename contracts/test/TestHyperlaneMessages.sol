@@ -40,13 +40,15 @@ contract TestHyperlaneMessages {
     function serializeTokenBridge(
         address vaultToken_,
         address sender_,
-        uint256 amount_,
+        uint256 stakeAmount_,
+        uint256 sharesAmount_,
         bytes memory metadata_
     ) external pure returns (bytes memory) {
         return HyperlaneMailboxMessages.serializeTokenBridge(
             vaultToken_,
             sender_,
-            amount_,
+            stakeAmount_,
+            sharesAmount_,
             metadata_
         );
     }
@@ -85,7 +87,7 @@ contract TestHyperlaneMessages {
         return message.symbol();
     }
 
-    function decimals(bytes calldata message) internal pure returns (uint8) {
+    function decimals(bytes calldata message) external pure returns (uint8) {
         return message.decimals();
     }
 
@@ -103,15 +105,27 @@ contract TestHyperlaneMessages {
         return message.sender();
     }
 
-    function amount(bytes calldata message) external pure returns (uint256) {
-        return message.amount();
+    // ========= TokenBridge ========= //
+
+    function stakeAmount(bytes calldata message) external pure returns (uint256) {
+        return message.stakeAmount();
+    }
+
+    function sharesAmount(bytes calldata message) external pure returns (uint256) {
+        return message.sharesAmount();
     }
 
     function tokenBridgeMetadata(bytes calldata message) external pure returns (bytes calldata) {
         return message.tokenBridgeMetadata();
     }
 
+    // ========= TokenRedeem  ========= //
+
+    function amount(bytes calldata message) external pure returns (uint256) {
+        return message.amount();
+    }
+
     function tokenRedeemMetadata(bytes calldata message) external pure returns (bytes calldata) {
-        return message[104:];
+        return message.tokenRedeemMetadata();
     }
 }

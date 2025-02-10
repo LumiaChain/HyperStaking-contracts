@@ -32,7 +32,7 @@ interface IInterchainFactory {
         address indexed originToken,
         address indexed lpToken,
         address indexed sender,
-        uint256 amount
+        uint256 shares
     );
 
     event RedeemTokenDispatched(
