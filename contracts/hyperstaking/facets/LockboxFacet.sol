@@ -136,7 +136,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     /* ========== ACL  ========== */
 
     /// @inheritdoc ILockbox
-    function setMailbox(address mailbox) external onlyStrategyVaultManager {
+    function setMailbox(address mailbox) external onlyVaultManager {
         require(
             mailbox != address(0) && mailbox.code.length > 0,
             InvalidMailbox(mailbox)
@@ -148,7 +148,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     }
 
     /// @inheritdoc ILockbox
-    function setDestination(uint32 destination) external onlyStrategyVaultManager {
+    function setDestination(uint32 destination) external onlyVaultManager {
         LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
 
         emit DestinationUpdated(box.destination, destination);
@@ -156,7 +156,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     }
 
     /// @inheritdoc ILockbox
-    function setLumiaFactory(address lumiaFactory) public onlyStrategyVaultManager {
+    function setLumiaFactory(address lumiaFactory) public onlyVaultManager {
         require(lumiaFactory != address(0), InvalidLumiaFactory(lumiaFactory));
         LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
 

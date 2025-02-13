@@ -6,8 +6,8 @@ import * as holeskyAddresses from "../ignition/parameters.holesky.json";
 const REVENUE_FEE = parseEther("0.02"); // 2% fee
 
 async function main() {
-  const strategyVaultManager = (await ethers.getSigners())[2];
-  console.log("strategy manager:", strategyVaultManager.address);
+  const vaultManager = (await ethers.getSigners())[2];
+  console.log("vault manager:", vaultManager.address);
 
   const network = await ethers.provider.getNetwork();
   console.log("network:", network.name, ", chainId:", network.chainId);
@@ -28,7 +28,7 @@ async function main() {
   const vaultTokenName = "eth vault";
   const vaultTokenSymbol = "vETH";
 
-  const tx = await factoryFacet.connect(strategyVaultManager).addStrategy(
+  const tx = await factoryFacet.connect(vaultManager).addStrategy(
     strategy,
     vaultTokenName,
     vaultTokenSymbol,

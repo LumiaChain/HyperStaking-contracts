@@ -45,10 +45,18 @@ contract HyperStakingAcl is AccessControlEnumerableUpgradeable, IHyperStakingRol
         _;
     }
 
-    /// @dev Only allows access for the `Strategy Vault Manager` role
-    modifier onlyStrategyVaultManager() {
-        if (!hasRole(STRATEGY_VAULT_MANAGER_ROLE(), msg.sender)) {
-            revert OnlyStrategyVaultManager();
+    /// @dev Only allows access for the `Vault Manager` role
+    modifier onlyVaultManager() {
+        if (!hasRole(VAULT_MANAGER_ROLE(), msg.sender)) {
+            revert OnlyVaultManager();
+        }
+        _;
+    }
+
+    /// @dev Only allows access for the `Strategy Manager` role
+    modifier onlyStrategyManager() {
+        if (!hasRole(STRATEGY_MANAGER_ROLE(), msg.sender)) {
+            revert OnlyStrategyManager();
         }
         _;
     }
@@ -59,11 +67,22 @@ contract HyperStakingAcl is AccessControlEnumerableUpgradeable, IHyperStakingRol
 
     // ========= View ========= //
 
+    /// @inheritdoc IHyperStakingRoles
+    function hasStrategyManagerRole(address account) external view returns (bool) {
+        return hasRole(STRATEGY_MANAGER_ROLE(), account);
+    }
+
+    // ---
+
     function STAKING_MANAGER_ROLE() public pure returns (bytes32) {
         return LibAcl.STAKING_MANAGER_ROLE;
     }
 
-    function STRATEGY_VAULT_MANAGER_ROLE() public pure returns (bytes32) {
-        return LibAcl.STRATEGY_VAULT_MANAGER_ROLE;
+    function VAULT_MANAGER_ROLE() public pure returns (bytes32) {
+        return LibAcl.VAULT_MANAGER_ROLE;
+    }
+
+    function STRATEGY_MANAGER_ROLE() public pure returns (bytes32) {
+        return LibAcl.STRATEGY_MANAGER_ROLE;
     }
 }

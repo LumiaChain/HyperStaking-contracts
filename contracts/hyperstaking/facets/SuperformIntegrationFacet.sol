@@ -180,7 +180,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
     function updateSuperformStrategies(
         address strategy,
         bool status
-    ) external onlyStrategyVaultManager {
+    ) external onlyStrategyManager {
         SuperformStorage storage s = LibSuperform.diamondStorage();
 
         if (status) {
@@ -193,7 +193,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
     }
 
     /// @inheritdoc ISuperformIntegration
-    function setMaxSlippage(uint256 newMaxSlippage) external onlyStrategyVaultManager {
+    function setMaxSlippage(uint256 newMaxSlippage) external onlyStrategyManager {
         require(newMaxSlippage > 0, "Max slippage must be greater than 0");
 
         SuperformStorage storage s = LibSuperform.diamondStorage();

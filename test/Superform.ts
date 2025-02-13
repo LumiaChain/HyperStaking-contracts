@@ -89,7 +89,7 @@ describe("Superform", function () {
   };
 
   async function deployHyperStaking() {
-    const [owner, stakingManager, strategyVaultManager, bob, alice] = await ethers.getSigners();
+    const [owner, stakingManager, vaultManager, strategyManager, bob, alice] = await ethers.getSigners();
 
     // -------------------- Deploy Tokens --------------------
 
@@ -135,14 +135,14 @@ describe("Superform", function () {
     const vaultTokenName = "Lumia USD Superform Position";
     const vaultTokenSymbol = "lspUSD";
 
-    await hyperFactory.connect(strategyVaultManager).addStrategy(
+    await hyperFactory.connect(vaultManager).addStrategy(
       superformStrategy,
       vaultTokenName,
       vaultTokenSymbol,
       defaultRevenueFee,
     );
 
-    await superformIntegration.connect(strategyVaultManager).updateSuperformStrategies(
+    await superformIntegration.connect(strategyManager).updateSuperformStrategies(
       superformStrategy,
       true,
     );
@@ -165,7 +165,7 @@ describe("Superform", function () {
       interchainFactory, lpToken, // lumia
       superformId, // ids
       defaultRevenueFee, vaultTokenName, vaultTokenSymbol, // values
-      owner, stakingManager, strategyVaultManager, alice, bob, // addresses
+      owner, stakingManager, vaultManager, strategyManager, alice, bob, // addresses
     };
     /* eslint-enable object-property-newline */
   }

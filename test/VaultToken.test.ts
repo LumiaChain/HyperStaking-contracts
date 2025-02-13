@@ -7,7 +7,7 @@ import * as shared from "./shared";
 
 describe("VaultToken", function () {
   async function deployHyperStaking() {
-    const [owner, stakingManager, strategyVaultManager, bob, alice] = await ethers.getSigners();
+    const [owner, stakingManager, vaultManager, bob, alice] = await ethers.getSigners();
 
     // -------------------- Deploy Tokens --------------------
 
@@ -32,7 +32,7 @@ describe("VaultToken", function () {
     const vaultTokenName = "eth vault1";
     const vaultTokenSymbol = "vETH1";
 
-    await hyperFactory.connect(strategyVaultManager).addStrategy(
+    await hyperFactory.connect(vaultManager).addStrategy(
       reserveStrategy,
       vaultTokenName,
       vaultTokenSymbol,
@@ -51,7 +51,7 @@ describe("VaultToken", function () {
       staking, hyperFactory, tier1, tier2, interchainFactory, // diamond facets
       testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
       defaultRevenueFee, reserveAssetPrice, vaultTokenName, vaultTokenSymbol, // values
-      owner, stakingManager, strategyVaultManager, alice, bob, // addresses
+      owner, stakingManager, vaultManager, alice, bob, // addresses
     };
     /* eslint-enable object-property-newline */
   }
@@ -70,7 +70,7 @@ describe("VaultToken", function () {
     it("test tokens enumerable map", async function () {
       const {
         diamond, hyperFactory, tier2, interchainFactory, vaultToken,
-        lpToken, strategyVaultManager,
+        lpToken, vaultManager,
       } = await loadFixture(deployHyperStaking);
 
       const testAsset2 = await shared.deloyTestERC20("Test Asset2", "tRaETH2");
@@ -85,14 +85,14 @@ describe("VaultToken", function () {
 
       // by adding new stategies more lpTokens should be created
 
-      await hyperFactory.connect(strategyVaultManager).addStrategy(
+      await hyperFactory.connect(vaultManager).addStrategy(
         reserveStrategy2,
         "eth vault2",
         "vETH2",
         0,
       );
 
-      await hyperFactory.connect(strategyVaultManager).addStrategy(
+      await hyperFactory.connect(vaultManager).addStrategy(
         reserveStrategy3,
         "eth vault3",
         "vETH3",
@@ -256,7 +256,7 @@ describe("VaultToken", function () {
     it("fee from tier1 should increase tier2 shares value", async function () {
       const {
         staking, tier1, tier2, interchainFactory, reserveStrategy, vaultToken, lpToken,
-        strategyVaultManager, alice, bob,
+        vaultManager, alice, bob,
       } = await loadFixture(deployHyperStaking);
 
       const price1 = parseEther("2");
@@ -266,7 +266,7 @@ describe("VaultToken", function () {
       await reserveStrategy.setAssetPrice(price1);
 
       const revenueFee = parseUnits("20", 16); // 20% fee
-      tier1.connect(strategyVaultManager).setRevenueFee(reserveStrategy, revenueFee);
+      tier1.connect(vaultManager).setRevenueFee(reserveStrategy, revenueFee);
 
       expect(await vaultToken.totalAssets()).to.be.eq(0);
 
@@ -323,7 +323,7 @@ describe("VaultToken", function () {
     it("it should be possible to effectively migrate from tier1 to tier2", async function () {
       const {
         staking, tier1, tier2, reserveStrategy, testReserveAsset, vaultToken, lpToken,
-        interchainFactory, strategyVaultManager, alice,
+        interchainFactory, vaultManager, alice,
       } = await loadFixture(deployHyperStaking);
 
       const price1 = parseEther("1");
@@ -332,7 +332,7 @@ describe("VaultToken", function () {
       await reserveStrategy.setAssetPrice(price1);
 
       const revenueFee = parseUnits("10", 16); // 10% fee
-      tier1.connect(strategyVaultManager).setRevenueFee(reserveStrategy, revenueFee);
+      tier1.connect(vaultManager).setRevenueFee(reserveStrategy, revenueFee);
 
       const stakeAmount = parseEther("10");
 

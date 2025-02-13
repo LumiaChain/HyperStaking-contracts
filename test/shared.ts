@@ -70,8 +70,8 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   });
 
   // finish setup for hyperstaking
-  const strategyVaultManager = (await ethers.getSigners())[2];
-  await lockbox.connect(strategyVaultManager).setLumiaFactory(interchainFactory);
+  const vaultManager = (await ethers.getSigners())[2];
+  await lockbox.connect(vaultManager).setLumiaFactory(interchainFactory);
 
   // finish setup for lumia diamond
   const lumiaFactoryManager = (await ethers.getSigners())[3];

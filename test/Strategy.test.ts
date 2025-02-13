@@ -24,7 +24,7 @@ describe("Strategy", function () {
   }
 
   async function deployHyperStaking() {
-    const [owner, stakingManager, strategyVaultManager, bob, alice] = await ethers.getSigners();
+    const [owner, stakingManager, vaultManager, bob, alice] = await ethers.getSigners();
 
     // -------------------- Deploy Tokens --------------------
 
@@ -46,7 +46,7 @@ describe("Strategy", function () {
       diamond, shared.nativeTokenAddress, await testWstETH.getAddress(), reserveAssetPrice,
     );
 
-    await hyperFactory.connect(strategyVaultManager).addStrategy(
+    await hyperFactory.connect(vaultManager).addStrategy(
       reserveStrategy,
       "eth reserve vault1",
       "rETH1",
@@ -65,7 +65,7 @@ describe("Strategy", function () {
       },
     });
 
-    await hyperFactory.connect(strategyVaultManager).addStrategy(
+    await hyperFactory.connect(vaultManager).addStrategy(
       dineroStrategy,
       "eth vault2",
       "dETH2",
@@ -81,7 +81,7 @@ describe("Strategy", function () {
       pxEth, upxEth, pirexEth, autoPxEth, // pirex mock
       testWstETH, reserveStrategy, dineroStrategy, // test contracts
       defaultRevenueFee, reserveAssetPrice, // values
-      owner, stakingManager, strategyVaultManager, alice, bob, // addresses
+      owner, stakingManager, vaultManager, alice, bob, // addresses
     };
     /* eslint-enable object-property-newline */
   }
@@ -275,7 +275,7 @@ describe("Strategy", function () {
 
     it("vault manager should be able to set revenue fee", async function () {
       const {
-        tier1, reserveStrategy, strategyVaultManager,
+        tier1, reserveStrategy, vaultManager,
       } = await loadFixture(deployHyperStaking);
 
       const bigFee = parseEther("0.31"); // 31%
@@ -284,19 +284,19 @@ describe("Strategy", function () {
       await expect(tier1.setRevenueFee(reserveStrategy, newFee))
         .to.be.reverted;
 
-      await expect(tier1.connect(strategyVaultManager).setRevenueFee(reserveStrategy, bigFee))
+      await expect(tier1.connect(vaultManager).setRevenueFee(reserveStrategy, bigFee))
         .to.be.revertedWithCustomError(tier1, "InvalidRevenueFeeValue");
 
       // OK
-      await expect(tier1.connect(strategyVaultManager).setRevenueFee(reserveStrategy, newFee));
+      await expect(tier1.connect(vaultManager).setRevenueFee(reserveStrategy, newFee));
     });
 
     it("revenue fee value should be distracted when withdraw his stake", async function () {
-      const { staking, tier1, reserveStrategy, alice, strategyVaultManager } = await loadFixture(deployHyperStaking);
+      const { staking, tier1, reserveStrategy, alice, vaultManager } = await loadFixture(deployHyperStaking);
       const gasCosts = new TxCostTracker();
 
       const revenueFee = parseEther("0.1"); // 10%
-      await tier1.connect(strategyVaultManager).setRevenueFee(reserveStrategy, revenueFee);
+      await tier1.connect(vaultManager).setRevenueFee(reserveStrategy, revenueFee);
 
       const price1 = parseEther("2");
       const price2 = parseEther("2.5");
@@ -325,7 +325,7 @@ describe("Strategy", function () {
     });
 
     describe("Errors", function () {
-      it("OnlyStrategyVaultManager", async function () {
+      it("OnlyVaultManager", async function () {
         const { hyperFactory, reserveStrategy, alice, defaultRevenueFee } = await loadFixture(deployHyperStaking);
 
         await expect(hyperFactory.addStrategy(
@@ -343,7 +343,7 @@ describe("Strategy", function () {
           defaultRevenueFee,
         ))
           // hardhat unfortunately does not recognize custom errors from child contracts
-          // .to.be.revertedWithCustomError(hyperFactory, "OnlyStrategyVaultManager");
+          // .to.be.revertedWithCustomError(hyperFactory, "OnlyVaultManager");
           .to.be.reverted;
       });
 
@@ -359,10 +359,10 @@ describe("Strategy", function () {
 
       it("VaultAlreadyExist", async function () {
         const {
-          hyperFactory, strategyVaultManager, reserveStrategy, defaultRevenueFee,
+          hyperFactory, vaultManager, reserveStrategy, defaultRevenueFee,
         } = await loadFixture(deployHyperStaking);
 
-        await expect(hyperFactory.connect(strategyVaultManager).addStrategy(
+        await expect(hyperFactory.connect(vaultManager).addStrategy(
           reserveStrategy,
           "vault5",
           "V5",

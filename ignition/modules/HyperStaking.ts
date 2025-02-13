@@ -18,7 +18,8 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
 
   const owner = m.getAccount(0);
   const stakingManager = m.getAccount(1);
-  const strategyVaultManager = m.getAccount(2);
+  const vaultManager = m.getAccount(2);
+  const strategyManager = m.getAccount(3);
 
   // --- facets
 
@@ -87,7 +88,8 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const initCall = m.encodeFunctionCall(
     hyperStakingInit, "init", [
       stakingManager,
-      strategyVaultManager,
+      vaultManager,
+      strategyManager,
       mailbox,
       destination,
       superformFactory,

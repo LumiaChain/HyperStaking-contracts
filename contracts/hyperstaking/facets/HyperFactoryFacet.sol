@@ -44,7 +44,7 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         string memory vaultTokenName,
         string memory vaultTokenSymbol,
         uint256 tier1RevenueFee
-    ) external payable onlyStrategyVaultManager nonReentrant {
+    ) external payable onlyVaultManager nonReentrant {
         // The ERC20-compliant asset associated with the strategy
         address asset = IStrategy(strategy).revenueAsset();
 

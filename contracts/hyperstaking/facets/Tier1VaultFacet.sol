@@ -99,7 +99,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     function setRevenueFee(
         address strategy,
         uint256 revenueFee
-    ) external onlyStrategyVaultManager nonReentrant {
+    ) external onlyVaultManager nonReentrant {
         uint256 onePercent = LibHyperStaking.PERCENT_PRECISION / 100;
         require(revenueFee <= 30 * onePercent, InvalidRevenueFeeValue());
 

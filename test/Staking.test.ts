@@ -20,7 +20,7 @@ describe("Staking", function () {
   }
 
   async function deployHyperStaking() {
-    const [owner, stakingManager, strategyVaultManager, alice, bob] = await ethers.getSigners();
+    const [owner, stakingManager, vaultManager, alice, bob] = await ethers.getSigners();
 
     // -------------------- Deploy Tokens --------------------
 
@@ -45,7 +45,7 @@ describe("Staking", function () {
     );
 
     // strategy with neutral to eth 1:1 asset price
-    await hyperFactory.connect(strategyVaultManager).addStrategy(
+    await hyperFactory.connect(vaultManager).addStrategy(
       reserveStrategy1,
       "eth vault1",
       "vETH1",
@@ -53,7 +53,7 @@ describe("Staking", function () {
     );
 
     // strategy with erc20 staking token and 2:1 asset price
-    await hyperFactory.connect(strategyVaultManager).addStrategy(
+    await hyperFactory.connect(vaultManager).addStrategy(
       reserveStrategy2,
       "erc20 vault2",
       "vERC2",
@@ -65,7 +65,7 @@ describe("Staking", function () {
       diamond, // diamond
       staking, hyperFactory, tier1, // diamond facets
       testERC20, testWstETH, reserveStrategy1, reserveStrategy2, // test contracts
-      owner, stakingManager, strategyVaultManager, alice, bob, // addresses
+      owner, stakingManager, alice, bob, // addresses
     };
     /* eslint-enable object-property-newline */
   }

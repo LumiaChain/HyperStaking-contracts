@@ -13,12 +13,17 @@ interface IHyperStakingRoles {
 
     error OnlyDiamondInternal();
     error OnlyStakingManager();
-    error OnlyStrategyVaultManager();
+    error OnlyVaultManager();
+    error OnlyStrategyManager();
 
     //============================================================================================//
     //                                           View                                             //
     //============================================================================================//
 
+    /// @notice Helper used in external strategies, checks if user has the StrategyManager role
+    function hasStrategyManagerRole(address user) external view returns (bool);
+
     function STAKING_MANAGER_ROLE() external view returns (bytes32);
-    function STRATEGY_VAULT_MANAGER_ROLE() external view returns (bytes32);
+    function VAULT_MANAGER_ROLE() external view returns (bytes32);
+    function STRATEGY_MANAGER_ROLE() external view returns (bytes32);
 }
