@@ -2,8 +2,8 @@
 pragma solidity =0.8.27;
 
 import {IStrategy} from "../interfaces/IStrategy.sol";
+import {AbstractStrategy} from "./AbstractStrategy.sol";
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -15,14 +15,11 @@ import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
  *
  * @dev Contract used mainly in tests
  */
-contract ReserveStrategy is IStrategy, Ownable {
+contract ReserveStrategy is AbstractStrategy {
     using CurrencyHandler for Currency;
     using SafeERC20 for IERC20;
 
     uint256 constant internal PRECISSION_FACTOR = 1e18;
-
-    /// Diamond deployment address
-    address public immutable DIAMOND;
 
     /// Currency used as stake receiving during allocation
     Currency public stake;
@@ -70,20 +67,8 @@ contract ReserveStrategy is IStrategy, Ownable {
     error BadStakeDecimals();
     error BadAssetDecimals();
 
-    error NotLumiaDiamond();
-
     error BadAllocationValue();
-
     error FailedExitCall();
-
-    //============================================================================================//
-    //                                         Modifiers                                          //
-    //============================================================================================//
-
-    modifier onlyLumiaDiamond() {
-        require(msg.sender == DIAMOND, NotLumiaDiamond());
-        _;
-    }
 
     //============================================================================================//
     //                                        Constructor                                         //
@@ -95,8 +80,7 @@ contract ReserveStrategy is IStrategy, Ownable {
         Currency memory stake_,
         IERC20Metadata revenueAsset_,
         uint256 assetPrice_
-    ) Ownable(msg.sender) {
-        DIAMOND = diamond_;
+    ) AbstractStrategy(diamond_) {
         stake = stake_;
         revenueAsset = address(revenueAsset_);
         assetPrice = assetPrice_;
@@ -159,7 +143,7 @@ contract ReserveStrategy is IStrategy, Ownable {
 
     // ========= Admin ========= //
 
-    function supplyRevenueAsset(uint256 amount_) external onlyOwner {
+    function supplyRevenueAsset(uint256 amount_) external onlyStrategyManager {
         assetReserve += amount_;
 
         IERC20(revenueAsset).safeTransferFrom(msg.sender, address(this), amount_);
@@ -167,7 +151,7 @@ contract ReserveStrategy is IStrategy, Ownable {
         emit RevenueAssetSupply(msg.sender, revenueAsset, amount_);
     }
 
-    function withdrawRevenueAsset(uint256 amount_) external onlyOwner {
+    function withdrawRevenueAsset(uint256 amount_) external onlyStrategyManager {
         assetReserve -= amount_;
 
         IERC20(revenueAsset).transfer(msg.sender, amount_);
@@ -175,7 +159,7 @@ contract ReserveStrategy is IStrategy, Ownable {
         emit RevenueAssetWithdraw(msg.sender, revenueAsset, amount_);
     }
 
-    function setAssetPrice(uint256 assetPrice_) external onlyOwner {
+    function setAssetPrice(uint256 assetPrice_) external onlyStrategyManager {
         assetPrice = assetPrice_;
 
         emit AssetPriceSet(msg.sender, revenueAsset, assetPrice_);

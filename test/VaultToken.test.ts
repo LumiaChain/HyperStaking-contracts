@@ -7,7 +7,7 @@ import * as shared from "./shared";
 
 describe("VaultToken", function () {
   async function deployHyperStaking() {
-    const [owner, stakingManager, vaultManager, bob, alice] = await ethers.getSigners();
+    const [owner, stakingManager, vaultManager, strategyManager, bob, alice] = await ethers.getSigners();
 
     // -------------------- Deploy Tokens --------------------
 
@@ -51,7 +51,7 @@ describe("VaultToken", function () {
       staking, hyperFactory, tier1, tier2, interchainFactory, // diamond facets
       testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
       defaultRevenueFee, reserveAssetPrice, vaultTokenName, vaultTokenSymbol, // values
-      owner, stakingManager, vaultManager, alice, bob, // addresses
+      owner, stakingManager, vaultManager, strategyManager, alice, bob, // addresses
     };
     /* eslint-enable object-property-newline */
   }
@@ -256,14 +256,14 @@ describe("VaultToken", function () {
     it("fee from tier1 should increase tier2 shares value", async function () {
       const {
         staking, tier1, tier2, interchainFactory, reserveStrategy, vaultToken, lpToken,
-        vaultManager, alice, bob,
+        vaultManager, strategyManager, alice, bob,
       } = await loadFixture(deployHyperStaking);
 
       const price1 = parseEther("2");
       const price2 = parseEther("4");
       const priceRatio = price2 / price1;
 
-      await reserveStrategy.setAssetPrice(price1);
+      await reserveStrategy.connect(strategyManager).setAssetPrice(price1);
 
       const revenueFee = parseUnits("20", 16); // 20% fee
       tier1.connect(vaultManager).setRevenueFee(reserveStrategy, revenueFee);
@@ -277,7 +277,7 @@ describe("VaultToken", function () {
       await staking.stakeDeposit(reserveStrategy, aliceStakeAmount, alice, { value: aliceStakeAmount });
       await staking.stakeDepositTier2(reserveStrategy, bobStakeAmount, bob, { value: bobStakeAmount });
 
-      await reserveStrategy.setAssetPrice(price2);
+      await reserveStrategy.connect(strategyManager).setAssetPrice(price2);
 
       let expectedBobAllocation = bobStakeAmount * parseEther("1") / price1;
       const expectedBobShares = expectedBobAllocation;
@@ -323,13 +323,13 @@ describe("VaultToken", function () {
     it("it should be possible to effectively migrate from tier1 to tier2", async function () {
       const {
         staking, tier1, tier2, reserveStrategy, testReserveAsset, vaultToken, lpToken,
-        interchainFactory, vaultManager, alice,
+        interchainFactory, vaultManager, strategyManager, alice,
       } = await loadFixture(deployHyperStaking);
 
       const price1 = parseEther("1");
       const price2 = parseEther("1.5");
 
-      await reserveStrategy.setAssetPrice(price1);
+      await reserveStrategy.connect(strategyManager).setAssetPrice(price1);
 
       const revenueFee = parseUnits("10", 16); // 10% fee
       tier1.connect(vaultManager).setRevenueFee(reserveStrategy, revenueFee);
@@ -339,7 +339,7 @@ describe("VaultToken", function () {
       // alice stake to tier1
       await staking.stakeDeposit(reserveStrategy, stakeAmount, alice, { value: stakeAmount });
 
-      await reserveStrategy.setAssetPrice(price2);
+      await reserveStrategy.connect(strategyManager).setAssetPrice(price2);
 
       // is should not be possible to migrate more than staked
       await expect(tier1.connect(alice).migrateToTier2(reserveStrategy, stakeAmount + 1n))

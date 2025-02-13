@@ -24,7 +24,7 @@ describe("Strategy", function () {
   }
 
   async function deployHyperStaking() {
-    const [owner, stakingManager, vaultManager, bob, alice] = await ethers.getSigners();
+    const [owner, stakingManager, vaultManager, strategyManager, bob, alice] = await ethers.getSigners();
 
     // -------------------- Deploy Tokens --------------------
 
@@ -81,7 +81,7 @@ describe("Strategy", function () {
       pxEth, upxEth, pirexEth, autoPxEth, // pirex mock
       testWstETH, reserveStrategy, dineroStrategy, // test contracts
       defaultRevenueFee, reserveAssetPrice, // values
-      owner, stakingManager, vaultManager, alice, bob, // addresses
+      owner, stakingManager, vaultManager, strategyManager, alice, bob, // addresses
     };
     /* eslint-enable object-property-newline */
   }
@@ -182,7 +182,7 @@ describe("Strategy", function () {
 
     it("allocation point should depend on weighted price", async function () {
       const {
-        staking, tier1, reserveStrategy, owner,
+        staking, tier1, reserveStrategy, owner, strategyManager,
       } = await loadFixture(deployHyperStaking);
 
       // reverse asset:eth to eth:asset price
@@ -196,19 +196,19 @@ describe("Strategy", function () {
       const stakeAmount2 = parseEther("2.0");
       const stakeAmount3 = parseEther("9.0");
 
-      await reserveStrategy.setAssetPrice(price1);
+      await reserveStrategy.connect(strategyManager).setAssetPrice(price1);
       await staking.stakeDeposit(reserveStrategy, stakeAmount1, owner, { value: stakeAmount1 });
 
       // just the same as price1
       expect((await tier1.userTier1Info(reserveStrategy, owner)).allocationPoint).to.equal(price1);
 
-      await reserveStrategy.setAssetPrice(price2);
+      await reserveStrategy.connect(strategyManager).setAssetPrice(price2);
       await staking.stakeDeposit(reserveStrategy, stakeAmount2, owner, { value: stakeAmount2 });
 
       expect((await tier1.userTier1Info(reserveStrategy, owner)).allocationPoint)
         .to.equal((reversePrice(price1) * stakeAmount1 + reversePrice(price2) * stakeAmount2) / (stakeAmount1 + stakeAmount2));
 
-      await reserveStrategy.setAssetPrice(price3);
+      await reserveStrategy.connect(strategyManager).setAssetPrice(price3);
       await staking.stakeDeposit(reserveStrategy, stakeAmount3, owner, { value: stakeAmount3 });
 
       const expectedPrice = // weighted average
@@ -220,18 +220,18 @@ describe("Strategy", function () {
     });
 
     it("user generates revenue when asset increases in price", async function () {
-      const { staking, tier1, reserveStrategy, alice } = await loadFixture(deployHyperStaking);
+      const { staking, tier1, reserveStrategy, strategyManager, alice } = await loadFixture(deployHyperStaking);
 
       const price1 = parseEther("2");
       const price2 = parseEther("4");
 
       const stakeAmount = parseEther("3.0");
 
-      await reserveStrategy.setAssetPrice(price1);
+      await reserveStrategy.connect(strategyManager).setAssetPrice(price1);
       await staking.stakeDeposit(reserveStrategy, stakeAmount, alice, { value: stakeAmount });
 
       // increase price
-      await reserveStrategy.setAssetPrice(price2);
+      await reserveStrategy.connect(strategyManager).setAssetPrice(price2);
 
       const expectedRevenue = stakeAmount * price2 / price1 - stakeAmount;
 
@@ -244,7 +244,7 @@ describe("Strategy", function () {
     });
 
     it("users revenue should work with a more complex scenario", async function () {
-      const { staking, tier1, reserveStrategy, bob, alice } = await loadFixture(deployHyperStaking);
+      const { staking, tier1, reserveStrategy, strategyManager, bob, alice } = await loadFixture(deployHyperStaking);
 
       const price1 = parseEther("1");
       const price2 = parseEther("2");
@@ -252,16 +252,16 @@ describe("Strategy", function () {
 
       const stakeAmount = parseEther("2.0");
 
-      await reserveStrategy.setAssetPrice(price1);
+      await reserveStrategy.connect(strategyManager).setAssetPrice(price1);
       await staking.stakeDeposit(reserveStrategy, stakeAmount, bob, { value: stakeAmount });
 
-      await reserveStrategy.setAssetPrice(price2);
+      await reserveStrategy.connect(strategyManager).setAssetPrice(price2);
 
       // alice jonis after first price increase, and bob increase his stake
       await staking.stakeDeposit(reserveStrategy, stakeAmount, alice, { value: stakeAmount });
       await staking.stakeDeposit(reserveStrategy, stakeAmount, bob, { value: stakeAmount });
 
-      await reserveStrategy.setAssetPrice(price3);
+      await reserveStrategy.connect(strategyManager).setAssetPrice(price3);
 
       const expectedAliceRevenue = stakeAmount * price3 / price2 - stakeAmount;
       expect(await tier1.userRevenue(reserveStrategy, alice)).to.equal(expectedAliceRevenue);
@@ -292,7 +292,7 @@ describe("Strategy", function () {
     });
 
     it("revenue fee value should be distracted when withdraw his stake", async function () {
-      const { staking, tier1, reserveStrategy, alice, vaultManager } = await loadFixture(deployHyperStaking);
+      const { staking, tier1, reserveStrategy, alice, vaultManager, strategyManager } = await loadFixture(deployHyperStaking);
       const gasCosts = new TxCostTracker();
 
       const revenueFee = parseEther("0.1"); // 10%
@@ -304,13 +304,13 @@ describe("Strategy", function () {
 
       const aliceBalanceBefore = await ethers.provider.getBalance(alice);
 
-      await reserveStrategy.setAssetPrice(price1);
+      await reserveStrategy.connect(strategyManager).setAssetPrice(price1);
 
       await gasCosts.includeTx(
         await staking.connect(alice).stakeDeposit(reserveStrategy, stakeAmount, alice, { value: stakeAmount }),
       );
 
-      await reserveStrategy.setAssetPrice(price2);
+      await reserveStrategy.connect(strategyManager).setAssetPrice(price2);
       const revenue = stakeAmount * price2 / price1 - stakeAmount;
 
       await gasCosts.includeTx(
@@ -324,7 +324,44 @@ describe("Strategy", function () {
       expect(await ethers.provider.getBalance(alice)).to.equal(expectedAliceBalance);
     });
 
+    it("there should be a possibility of emergency withdraw", async function () {
+      const { owner, alice, strategyManager, reserveStrategy } = await loadFixture(deployHyperStaking);
+
+      // send eth to the strategy
+      const accidentAmount = parseEther("4.0");
+      await owner.sendTransaction({
+        to: reserveStrategy,
+        value: accidentAmount,
+      });
+
+      await expect(reserveStrategy.emergencyWithdrawal(shared.nativeCurrency(), accidentAmount, alice))
+        .to.be.revertedWithCustomError(reserveStrategy, "NotStrategyManager");
+
+      await expect(reserveStrategy.connect(strategyManager).emergencyWithdrawal(shared.nativeCurrency(), accidentAmount, alice))
+        .to.changeEtherBalances(
+          [reserveStrategy, alice],
+          [-accidentAmount, accidentAmount],
+        );
+    });
+
     describe("Errors", function () {
+      it("NotLumiaDimaond", async function () {
+        const { reserveStrategy, alice } = await loadFixture(deployHyperStaking);
+
+        await expect(reserveStrategy.allocate(parseEther("1"), alice))
+          .to.be.revertedWithCustomError(reserveStrategy, "NotLumiaDiamond");
+
+        await expect(reserveStrategy.exit(parseEther("1"), alice))
+          .to.be.revertedWithCustomError(reserveStrategy, "NotLumiaDiamond");
+      });
+
+      it("NotStrategyManager", async function () {
+        const { reserveStrategy, alice } = await loadFixture(deployHyperStaking);
+
+        await expect(reserveStrategy.connect(alice).setAssetPrice(parseEther("10")))
+          .to.be.revertedWithCustomError(reserveStrategy, "NotStrategyManager");
+      });
+
       it("OnlyVaultManager", async function () {
         const { hyperFactory, reserveStrategy, alice, defaultRevenueFee } = await loadFixture(deployHyperStaking);
 

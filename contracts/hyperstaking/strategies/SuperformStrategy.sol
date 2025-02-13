@@ -2,6 +2,8 @@
 pragma solidity =0.8.27;
 
 import {IStrategy} from "../interfaces/IStrategy.sol";
+import {AbstractStrategy} from "./AbstractStrategy.sol";
+
 import {ISuperformIntegration} from "../interfaces/ISuperformIntegration.sol";
 import {ISuperPositions} from "../../external/superform/core/interfaces/ISuperPositions.sol";
 
@@ -14,11 +16,8 @@ import {Currency} from "../libraries/CurrencyHandler.sol";
  * @title SuperformStrategy
  * @notice This strategy contract uses Superform integration for yield generation.
  */
-contract SuperformStrategy is IStrategy, IERC1155Receiver {
+contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     using SafeERC20 for IERC20;
-
-    /// Lumia Diamond Proxy address
-    address public immutable DIAMOND;
 
     /// Specific superform used by this strategy
     uint256 public immutable SUPERFORM_ID;
@@ -33,29 +32,13 @@ contract SuperformStrategy is IStrategy, IERC1155Receiver {
     ISuperPositions public superPositions;
 
     //============================================================================================//
-    //                                          Errors                                            //
-    //============================================================================================//
-
-    error NotLumiaDiamond();
-
-    //============================================================================================//
-    //                                         Modifiers                                          //
-    //============================================================================================//
-
-    modifier onlyLumiaDiamond() {
-        require(msg.sender == DIAMOND, NotLumiaDiamond());
-        _;
-    }
-
-    //============================================================================================//
     //                                        Constructor                                         //
     //============================================================================================//
     constructor(
         address diamond_,
         uint256 superformId_,
         address stakeToken_
-    ) {
-        DIAMOND = diamond_;
+    ) AbstractStrategy(diamond_) {
         SUPERFORM_ID = superformId_;
         STAKE_TOKEN = IERC20(stakeToken_);
 
@@ -96,7 +79,10 @@ contract SuperformStrategy is IStrategy, IERC1155Receiver {
     }
 
     /// @inheritdoc IStrategy
-    function exit(uint256 shares_, address user_) external returns (uint256 exitAmount) {
+    function exit(
+        uint256 shares_,
+        address user_
+    ) external onlyLumiaDiamond returns (uint256 exitAmount) {
         superformIntegration.transmuteToERC1155A(
             msg.sender,
             SUPERFORM_ID,

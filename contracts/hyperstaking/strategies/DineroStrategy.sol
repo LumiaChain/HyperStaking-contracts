@@ -2,6 +2,8 @@
 pragma solidity =0.8.27;
 
 import {IStrategy} from "../interfaces/IStrategy.sol";
+import {AbstractStrategy} from "./AbstractStrategy.sol";
+
 import {Currency} from "../libraries/CurrencyHandler.sol";
 
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -13,39 +15,25 @@ import {PirexIntegration} from "./PirexIntegration.sol";
  * @title DineroStrategy
  * @notice This contract manages liquidity staking the base (ETH) asset in Pirex protocol.
  */
-contract DineroStrategy is IStrategy, PirexIntegration {
+contract DineroStrategy is AbstractStrategy, PirexIntegration {
     using SafeERC20 for IERC20;
-
-    /// Lumia Diamond Proxy address
-    address public immutable DIAMOND;
 
     //============================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
 
-    error NotLumiaDiamond();
     error BadAllocationValue();
-
-    //============================================================================================//
-    //                                         Modifiers                                          //
-    //============================================================================================//
-
-    modifier onlyLumiaDiamond() {
-        require(msg.sender == DIAMOND, NotLumiaDiamond());
-        _;
-    }
 
     //============================================================================================//
     //                                        Constructor                                         //
     //============================================================================================//
+
     constructor(
         address diamond_,
         address pxEth_,
         address pirexEth_,
         address autoPxEth_
-    ) PirexIntegration(pxEth_, pirexEth_, autoPxEth_) {
-        DIAMOND = diamond_;
-    }
+    ) AbstractStrategy(diamond_) PirexIntegration(pxEth_, pirexEth_, autoPxEth_) { }
 
     //============================================================================================//
     //                                      Public Functions                                      //

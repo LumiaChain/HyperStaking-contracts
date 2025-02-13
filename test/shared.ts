@@ -123,16 +123,19 @@ export async function createReserveStrategy(
     },
   });
 
+  const [owner, , , strategyManager] = await ethers.getSigners();
+
   const reserveStrategySupply = parseEther("30");
 
   // full - because there are two differnet vesions of IERC20 used in the project
   const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";
   const asset = (await ethers.getContractAt(fullyQualifiedIERC20, assetAddress)) as unknown as IERC20;
 
-  await asset.approve(reserveStrategy.target, reserveStrategySupply);
-  await reserveStrategy.supplyRevenueAsset(reserveStrategySupply);
+  await asset.transfer(strategyManager, reserveStrategySupply); // owner -> strategyManager
+  await asset.connect(strategyManager).approve(reserveStrategy.target, reserveStrategySupply);
 
-  const [owner] = await ethers.getSigners();
+  await reserveStrategy.connect(strategyManager).supplyRevenueAsset(reserveStrategySupply);
+
   await owner.sendTransaction({
     to: reserveStrategy,
     value: reserveStrategySupply,
