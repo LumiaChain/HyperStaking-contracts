@@ -132,17 +132,6 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         require(v.vaultInfo[strategy].strategy == address(0), VaultAlreadyExist());
 
-        // The currency which will be used as stake for this strategy
-        // Currency struct supports both native coin and erc20 tokens
-        Currency memory stakeCurrency = IStrategy(strategy).stakeCurrency();
-
-        // create a new VaultInfo and store it in storage
-        v.vaultInfo[strategy] = VaultInfo({
-            stakeCurrency: stakeCurrency,
-            strategy: strategy,
-            asset: IERC20Metadata(asset)
-        });
-
         // init tier1
         v.vaultTier1Info[strategy] = VaultTier1({
             assetAllocation: 0,
@@ -153,6 +142,17 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         // init tier2
         v.vaultTier2Info[strategy] = VaultTier2({
             vaultToken: vaultToken
+        });
+
+        // The currency used for staking in this vault is taken from the strategy
+        // Currency struct supports both native coin and erc20 tokens
+        Currency memory stakeCurrency = IStrategy(strategy).stakeCurrency();
+
+        // save VaultInfo in storage
+        v.vaultInfo[strategy] = VaultInfo({
+            stakeCurrency: stakeCurrency,
+            strategy: strategy,
+            asset: IERC20Metadata(asset)
         });
 
         emit VaultCreate(

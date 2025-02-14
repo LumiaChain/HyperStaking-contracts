@@ -41,7 +41,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         VaultInfo storage vault = v.vaultInfo[strategy];
         VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
 
-        { // lock stake
+        { // alloc point, lock
             UserTier1Info storage userVault = v.userInfo[strategy][user];
 
             userVault.allocationPoint = _calculateNewAllocPoint(
@@ -53,8 +53,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
             _lockUserStake(userVault, tier1, stake);
         }
 
-        // allocate stake amount in strategy
-        // and receive allocation
+        // stake into strategy and receive allocation amount
         uint256 allocation;
         if (vault.stakeCurrency.isNativeCoin()) {
             allocation = IStrategy(strategy).allocate{value: stake}(stake, user);
@@ -63,7 +62,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
             allocation = IStrategy(strategy).allocate(stake, user);
         }
 
-        // fetch allocation to this vault
+        // fetch allocation
         tier1.assetAllocation += allocation;
         vault.asset.safeTransferFrom(strategy, address(this), allocation);
 
@@ -240,7 +239,6 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         address user,
         uint256 stake
     ) internal returns (uint256 exitAllocation) {
-
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
         VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
@@ -249,7 +247,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         uint256 allocation = _convertToAllocation(tier1, stake);
         tier1.assetAllocation -= allocation;
 
-        { // unlock stake
+        { // unlock
             UserTier1Info storage userVault = v.userInfo[strategy][user];
 
             // reverts error if unlock amount exceeds available stake

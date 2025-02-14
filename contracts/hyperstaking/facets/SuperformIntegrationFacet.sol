@@ -183,10 +183,11 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
     ) external onlyStrategyManager {
         SuperformStorage storage s = LibSuperform.diamondStorage();
 
+        // EnumerableSet returns a boolean indicating success
         if (status) {
-            s.superformStrategies.add(strategy);
+            require(s.superformStrategies.add(strategy), UpdateFailed());
         } else {
-            s.superformStrategies.remove(strategy);
+            require(s.superformStrategies.remove(strategy), UpdateFailed());
         }
 
         emit SuperformStrategyUpdated(strategy, status);
