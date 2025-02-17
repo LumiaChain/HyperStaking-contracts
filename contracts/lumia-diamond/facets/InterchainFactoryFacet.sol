@@ -8,10 +8,8 @@ import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
-import {EnumerableMap} from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
-
 import {
-    LibInterchainFactory, InterchainFactoryStorage, LastMessage
+    LibInterchainFactory, InterchainFactoryStorage, RouteInfo, LastMessage, EnumerableSet
 } from "../libraries/LibInterchainFactory.sol";
 
 import {
@@ -21,10 +19,10 @@ import {
 /**
  * @title InterchainFactory
  * @notice Factory contract for LP tokens that operates based on messages received via Hyperlane
- * @dev Facilitates the deployment, management, and processing of LP token operations.
+ * @dev Facilitates the deployment, management, and processing of LP token operations
  */
 contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
-    using EnumerableMap for EnumerableMap.AddressToAddressMap;
+    using EnumerableSet for EnumerableSet.AddressSet;
     using HyperlaneMailboxMessages for bytes;
 
     //============================================================================================//
@@ -37,23 +35,28 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
         bytes32 sender,
         bytes calldata data
     ) external payable onlyMailbox {
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        require(ifs.originLockbox != address(0), OriginLockboxNotSet());
-
         emit ReceivedMessage(origin, sender, msg.value, string(data));
 
+        // parse sender, store lastMsg
+        address originLockbox = TypeCasts.bytes32ToAddress(sender);
         LastMessage memory lastMsg = LastMessage({
-            sender: TypeCasts.bytes32ToAddress(sender),
+            sender: originLockbox,
             data: data
         });
 
+        // save in the storage
+        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+        ifs.lastMessage = lastMsg;
+
+        // ---
+
+
         require(
-            lastMsg.sender == address(ifs.originLockbox),
-            NotFromLumiaLockbox(lastMsg.sender)
+            ifs.authorizedOrigins.contains(originLockbox),
+            NotFromHyperStaking(originLockbox)
         );
 
-        // save in the storage
-        ifs.lastMessage = lastMsg;
+        require(origin == ifs.destinations[originLockbox], BadOriginDestination(origin));
 
         // parse message data (HyperlaneMailboxMessages)
         MessageType msgType = data.messageType();
@@ -64,7 +67,7 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
         }
 
         if (msgType == MessageType.TokenDeploy) {
-            _handleTokenDeploy(data);
+            _handleTokenDeploy(originLockbox, origin, data);
             return;
         }
 
@@ -74,26 +77,26 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
     /// @inheritdoc IInterchainFactory
     function redeemLpTokensDispatch(
         address strategy,
-        address spender,
+        address user,
         uint256 shares
     ) external payable {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+        require(_routeExists(ifs, strategy), RouteDoesNotExist(strategy));
 
-        (bool exists, address lpToken) = ifs.tokensMap.tryGet(strategy);
-        require(exists, UnrecognizedStrategy());
+        RouteInfo storage r = ifs.routes[strategy];
 
         // burn lpTokens
-        LumiaLPToken(lpToken).burnFrom(spender, shares);
+        r.lpToken.burnFrom(user, shares);
 
-        bytes memory body = generateTokenRedeemBody(strategy, spender, shares);
+        bytes memory body = generateTokenRedeemBody(strategy, user, shares);
 
         // address left-padded to bytes32 for compatibility with hyperlane
-        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(ifs.originLockbox);
+        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(r.originLockbox);
 
         // msg.value should already include fee calculated
-        ifs.mailbox.dispatch{value: msg.value}(ifs.destination, recipientBytes32, body);
+        ifs.mailbox.dispatch{value: msg.value}(r.originDestination, recipientBytes32, body);
 
-        emit RedeemTokenDispatched(address(ifs.mailbox), ifs.originLockbox, strategy, spender, shares);
+        emit RedeemTokenDispatched(address(ifs.mailbox), r.originLockbox, strategy, user, shares);
     }
 
     // ========= Owner ========= //
@@ -112,19 +115,24 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
     }
 
     /// @inheritdoc IInterchainFactory
-    function setDestination(uint32 newDestination) external onlyLumiaFactoryManager {
+    function updateAuthorizedOrigin(
+        address originLockbox,
+        bool authorized,
+        uint32 originDestination
+    ) external onlyLumiaFactoryManager {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+        require(originLockbox != address(0), OriginUpdateFailed());
 
-        emit DestinationUpdated(ifs.destination, newDestination);
-        ifs.destination = newDestination;
-    }
+        if (authorized) {
+            // EnumerableSet returns a boolean indicating success
+            require(ifs.authorizedOrigins.add(originLockbox), OriginUpdateFailed());
+            ifs.destinations[originLockbox] = originDestination;
+        } else {
+            require(ifs.authorizedOrigins.remove(originLockbox), OriginUpdateFailed());
+            delete ifs.destinations[originLockbox];
+        }
 
-    /// @inheritdoc IInterchainFactory
-    function setOriginLockbox(address newLockbox) public onlyLumiaFactoryManager {
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-
-        emit OriginLockboxUpdated(ifs.originLockbox, newLockbox);
-        ifs.originLockbox = newLockbox;
+        emit AuthorizedOriginUpdated(originLockbox, authorized, originDestination);
     }
 
     // ========= View ========= //
@@ -135,13 +143,8 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
     }
 
     /// @inheritdoc IInterchainFactory
-    function destination() external view returns(uint32) {
-        return LibInterchainFactory.diamondStorage().destination;
-    }
-
-    /// @inheritdoc IInterchainFactory
-    function originLockbox() external view returns(address) {
-        return LibInterchainFactory.diamondStorage().originLockbox;
+    function destination(address originLockbox) external view returns(uint32) {
+        return LibInterchainFactory.diamondStorage().destinations[originLockbox];
     }
 
     /// @inheritdoc IInterchainFactory
@@ -150,13 +153,13 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
     }
 
     /// @inheritdoc IInterchainFactory
-    function getLpToken(address strategy) external view returns (address lpToken) {
-        lpToken = LibInterchainFactory.diamondStorage().tokensMap.get(strategy);
+    function getLpToken(address strategy) external view returns (LumiaLPToken) {
+        return LibInterchainFactory.diamondStorage().routes[strategy].lpToken;
     }
 
     /// @inheritdoc IInterchainFactory
-    function tokensMapAt(uint256 index) external view returns (address key, address value) {
-        (key, value) = LibInterchainFactory.diamondStorage().tokensMap.at(index);
+    function getRouteInfo(address strategy) external view returns (RouteInfo memory) {
+        return LibInterchainFactory.diamondStorage().routes[strategy];
     }
 
     /// @inheritdoc IInterchainFactory
@@ -166,9 +169,13 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
         uint256 shares
     ) external view returns (uint256) {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+        require(_routeExists(ifs, strategy), RouteDoesNotExist(strategy));
+
+        RouteInfo storage r = ifs.routes[strategy];
+
         return ifs.mailbox.quoteDispatch(
-            ifs.destination,
-            TypeCasts.addressToBytes32(ifs.originLockbox),
+            r.originDestination,
+            TypeCasts.addressToBytes32(r.originLockbox),
             generateTokenRedeemBody(strategy, sender, shares)
         );
     }
@@ -192,21 +199,31 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
     //============================================================================================//
 
     /// @notice Handle specific TokenDeploy message
-    function _handleTokenDeploy(bytes calldata data) internal {
+    function _handleTokenDeploy(
+        address originLockbox,
+        uint32 originDestination,
+        bytes calldata data
+    ) internal {
         address strategy = data.strategy(); // origin strategy address
         string memory name = data.name();
         string memory symbol = data.symbol();
         uint8 decimals = data.decimals();
 
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+        require(_routeExists(ifs, strategy) == false, RouteAlreadyExist());
 
-        require(ifs.tokensMap.contains(strategy) == false, TokenAlreadyDeployed());
+        LumiaLPToken lpToken = new LumiaLPToken(address(this), name, symbol, decimals);
+        // TODO create Vault
 
-        address lpToken = address(new LumiaLPToken(address(this), name, symbol, decimals));
+        ifs.routes[strategy] = RouteInfo({
+            exists: true,
+            originLockbox: originLockbox,
+            originDestination: originDestination,
+            lpToken: lpToken
+            // lendingVault TODO
+        });
 
-        ifs.tokensMap.set(strategy, lpToken);
-
-        emit TokenDeployed(strategy, lpToken, name, symbol, decimals);
+        emit TokenDeployed(strategy, address(lpToken), name, symbol, decimals);
     }
 
     /// @notice Handle specific TokenBridge message
@@ -217,12 +234,22 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
 
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
 
-        // revert if key in not present in the map
-        address lpToken = ifs.tokensMap.get(strategy);
+        // revert if route not exists
+        require(_routeExists(ifs, strategy), RouteDoesNotExist(strategy));
+
+        RouteInfo storage r = ifs.routes[strategy];
 
         // mint LP tokens for the specified user
-        LumiaLPToken(lpToken).mint(sender, sharesAmount);
+        r.lpToken.mint(sender, sharesAmount);
 
-        emit TokenBridged(strategy, lpToken, sender, sharesAmount);
+        emit TokenBridged(strategy, address(r.lpToken), sender, sharesAmount);
+    }
+
+    /// @notice Checks whether route exists
+    function _routeExists(
+        InterchainFactoryStorage storage ifs,
+        address strategy
+    ) internal view returns (bool){
+        return ifs.routes[strategy].exists;
     }
 }

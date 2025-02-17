@@ -2,7 +2,8 @@
 pragma solidity =0.8.27;
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
-import {LastMessage} from "../libraries/LibInterchainFactory.sol";
+import {RouteInfo, LastMessage} from "../libraries/LibInterchainFactory.sol";
+import {LumiaLPToken} from "../LumiaLPToken.sol";
 
 /**
  * @title IInterchainFactory
@@ -43,24 +44,25 @@ interface IInterchainFactory {
         uint256 shares
     );
 
-    event MailboxUpdated(address indexed oldMailbox, address indexed newMailbox);
-    event DestinationUpdated(uint32 indexed oldDestination, uint32 indexed newDestination);
-    event OriginLockboxUpdated(address indexed oldLockbox, address indexed newLockbox);
+    event MailboxUpdated(address oldMailbox, address newMailbox);
+
+    event AuthorizedOriginUpdated(
+        address originLockbox,
+        bool authorized,
+        uint32 originDestination
+    );
 
     //===========================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
-
-    error NotFromLumiaLockbox(address sender);
-
-    error OriginLockboxNotSet();
-    error LumiaReceiverNotSet();
-
     error InvalidMailbox(address badMailbox);
-    error InvalidLumiaReceiver(address badReceiver);
+    error OriginUpdateFailed();
 
-    error TokenAlreadyDeployed();
-    error UnrecognizedStrategy();
+    error NotFromHyperStaking(address sender);
+    error BadOriginDestination(uint32 originDestination);
+
+    error RouteAlreadyExist();
+    error RouteDoesNotExist(address strategy);
     error UnsupportedMessage();
 
     //============================================================================================//
@@ -80,12 +82,12 @@ interface IInterchainFactory {
      * @notice Initiates token redemption
      * @dev Handles cross-chain unstaking via hyperlane bridge
      * @param strategy Address of the strategy (on the origin chain) to redeem tokens from
-     * @param spender Address of the user whose process is initiated
+     * @param user Address of the user whose process is initiated
      * @param shares Amount of shares to redeem
      */
     function redeemLpTokensDispatch(
         address strategy,
-        address spender,
+        address user,
         uint256 shares
     ) external payable;
 
@@ -96,16 +98,16 @@ interface IInterchainFactory {
     function setMailbox(address newMailbox) external;
 
     /**
-     * @notice Updates the destination chain ID for the route
-     * @param newDestination The new destination chain ID
+     * @notice Updates the authorization status of an origin Lockbox address
+     * @param originLockbox The address of the origin Lockbox
+     * @param authorized Whether the Lockbox should be authorized (true) or removed (false)
+     * @param originDestination The destination chain Id associated with lockbox
      */
-    function setDestination(uint32 newDestination) external;
-
-    /**
-     * @notice Updates the origin lockbox address
-     * @param newLockbox The new origin lockbox address
-     */
-    function setOriginLockbox(address newLockbox) external;
+    function updateAuthorizedOrigin(
+        address originLockbox,
+        bool authorized,
+        uint32 originDestination
+    ) external;
 
     //============================================================================================//
     //                                           View                                             //
@@ -115,31 +117,16 @@ interface IInterchainFactory {
     function mailbox() external view returns(IMailbox);
 
     /// @notice Returns the destination saved in storage
-    function destination() external view returns(uint32);
-
-    /// @notice Returns the origin lockbox saved in storage
-    function originLockbox() external view returns(address);
+    function destination(address originLockbox) external view returns(uint32);
 
     /// @notice Returns the last message saved in storage
     function lastMessage() external view returns(LastMessage memory);
 
-    /**
-     * @dev Utilizes the `.get` function from OpenZeppelin EnumerableMap to retrieve
-     *      the lpToken associated with a given strategy.
-     *
-     * @param strategy The address of the strategy to look up.
-     * @return lpToken The address of the lpToken corresponding to the provided strategy.
-     */
-    function getLpToken(address strategy) external view returns (address lpToken);
+    /// @notice Retrieves the lpToken associated with a given strategy
+    function getLpToken(address strategy) external view returns (LumiaLPToken);
 
-    /**
-     * @dev Utilizes the `.at` function from OpenZeppelin EnumerableMap
-     *
-     * @param index The position in the map to retrieve the key-value pair from
-     * @return key The key (strategy) at the specified position
-     * @return value The value (lpToken) at the specified position
-     */
-    function tokensMapAt(uint256 index) external view returns (address key, address value);
+    /// @notice Returns more detailed route info for a given strategy
+    function getRouteInfo(address strategy) external view returns (RouteInfo memory);
 
     /// @notice Helper: separated function for getting mailbox dispatch quote
     function quoteDispatchTokenRedeem(

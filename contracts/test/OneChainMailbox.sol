@@ -63,9 +63,9 @@ contract OneChainMailbox is IMailbox, Ownable {
 
     // ============ Constructor ============
 
-    constructor(uint256 fee) Ownable(msg.sender) {
-        localDomain = 123;
-        setFee(fee);
+    constructor(uint256 _fee, uint32 _localDomain) Ownable(msg.sender) {
+        localDomain = _localDomain;
+        setFee(_fee);
         defaultHook = IPostDispatchHook(address(0));
     }
 
@@ -183,10 +183,10 @@ contract OneChainMailbox is IMailbox, Ownable {
         require(_message.version() == VERSION, "Mailbox: bad version");
 
         // TEST - don't check domain
-        // require(
-        //     _message.destination() == localDomain,
-        //     "Mailbox: unexpected destination"
-        // );
+        require(
+            _message.destination() == localDomain,
+            "Mailbox: unexpected destination"
+        );
 
         // Check that the message hasn't already been delivered.
         bytes32 _id = _message.id();

@@ -102,9 +102,9 @@ describe("VaultToken", function () {
       const lpToken2 = await interchainFactory.getLpToken(reserveStrategy2);
       const lpToken3 = await interchainFactory.getLpToken(reserveStrategy3);
 
-      expect(await interchainFactory.tokensMapAt(0)).to.deep.equal([reserveStrategy.target, lpToken.target]);
-      expect(await interchainFactory.tokensMapAt(1)).to.deep.equal([reserveStrategy2.target, lpToken2]);
-      expect(await interchainFactory.tokensMapAt(2)).to.deep.equal([reserveStrategy3.target, lpToken3]);
+      expect((await interchainFactory.getRouteInfo(reserveStrategy)).lpToken).to.equal(lpToken.target);
+      expect((await interchainFactory.getRouteInfo(reserveStrategy2)).lpToken).to.equal(lpToken2);
+      expect((await interchainFactory.getRouteInfo(reserveStrategy3)).lpToken).to.equal(lpToken3);
     });
   });
 
@@ -226,7 +226,7 @@ describe("VaultToken", function () {
 
       // interchain redeem
       await lpToken.connect(alice).approve(interchainFactory, lpBalance);
-      const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, bob, lpBalance);
+      const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(reserveStrategy, bob, lpBalance);
       await interchainFactory.connect(alice).redeemLpTokensDispatch(
         reserveStrategy, alice, lpBalance, { value: dispatchFee },
       );
@@ -307,7 +307,7 @@ describe("VaultToken", function () {
 
       // actual withdraw -> redeem of lpTokens
       await lpToken.connect(bob).approve(interchainFactory, expectedBobShares);
-      const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, bob, expectedBobShares);
+      const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(reserveStrategy, bob, expectedBobShares);
       await expect(interchainFactory.connect(bob).redeemLpTokensDispatch(
         reserveStrategy, bob, expectedBobShares, { value: dispatchFee },
       ))
@@ -379,7 +379,7 @@ describe("VaultToken", function () {
 
       // redeem
       await lpToken.connect(alice).approve(interchainFactory, shares);
-      const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, alice, shares);
+      const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(reserveStrategy, alice, shares);
       await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(
         reserveStrategy, alice, shares, { value: dispatchFee },
       ))

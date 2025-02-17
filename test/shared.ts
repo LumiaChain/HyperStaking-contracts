@@ -34,6 +34,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     parameters: {
       OneChainMailboxModule: {
         fee: mailboxFee,
+        localDomain: testDestination,
       },
     },
   });
@@ -63,8 +64,6 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     parameters: {
       LumiaDiamondModule: {
         lumiaMailbox: mailboxAddress,
-        lumiaDestination: testDestination,
-        originLockbox: await lockbox.getAddress(),
       },
     },
   });
@@ -79,6 +78,13 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   await lumiaAcl.grantRole(
     await lumiaAcl.LUMIA_FACTORY_MANAGER_ROLE(),
     await lumiaFactoryManager.getAddress(),
+  );
+
+  const authorized = true;
+  await interchainFactory.connect(lumiaFactoryManager).updateAuthorizedOrigin(
+    lockbox,
+    authorized,
+    testDestination,
   );
 
   return {

@@ -6,9 +6,7 @@ import DiamondModule from "./Diamond";
 
 // LumiaDiamondModule is a Diamond Proxy setup for Lumia and with applied Facets
 const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
-  const mailbox = m.getParameter("lumiaMailbox", "0x");
-  const destination = m.getParameter("lumiaDestination", 123);
-  const originLockbox = m.getParameter("originLockbox", "0x");
+  const mailbox = m.getParameter("lumiaMailbox");
 
   const { diamond } = m.useModule(DiamondModule);
 
@@ -43,7 +41,7 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
   // _calldata A function call, including function selector and arguments,
   // _calldata is executed with delegatecall on _init
   const initCall = m.encodeFunctionCall(
-    lumiaDiamondInit, "init", [mailbox, destination, originLockbox],
+    lumiaDiamondInit, "init", [mailbox],
   );
 
   const diamondCut = m.contractAt("IDiamondCut", diamond);

@@ -98,21 +98,26 @@ describe("Lockbox", function () {
       }
     });
 
-    it("interchain factory acl", async function () {
+    it("test origin update and acl", async function () {
       const { interchainFactory, lockbox, lumiaFactoryManager } = await loadFixture(deployHyperStaking);
 
+      await expect(interchainFactory.setMailbox(lockbox)).to.be.reverted;
+
       // errors
-      await expect(interchainFactory.setDestination(123)).to.be.reverted;
-      await expect(interchainFactory.setOriginLockbox(ZeroAddress)).to.be.reverted;
+      await expect(interchainFactory.updateAuthorizedOrigin(
+        ZeroAddress, true, 123,
+      )).to.be.reverted;
+
+      await expect(interchainFactory.connect(lumiaFactoryManager).updateAuthorizedOrigin(
+        ZeroAddress, true, 123,
+      )).to.be.revertedWithCustomError(interchainFactory, "OriginUpdateFailed");
 
       // events
-      await expect(interchainFactory.connect(lumiaFactoryManager).setDestination(123))
-        .to.emit(interchainFactory, "DestinationUpdated")
-        .withArgs(31337, 123);
-
-      await expect(interchainFactory.connect(lumiaFactoryManager).setOriginLockbox(ZeroAddress))
-        .to.emit(interchainFactory, "OriginLockboxUpdated")
-        .withArgs(lockbox.target, ZeroAddress);
+      await expect(interchainFactory.connect(lumiaFactoryManager).updateAuthorizedOrigin(
+        lumiaFactoryManager, true, 123,
+      ))
+        .to.emit(interchainFactory, "AuthorizedOriginUpdated")
+        .withArgs(lumiaFactoryManager, true, 123);
     });
 
     it("stake deposit to tier2 with non-zero mailbox fee", async function () {
@@ -203,10 +208,11 @@ describe("Lockbox", function () {
       ))
         .to.be.revertedWithCustomError(mailbox, "DispatchUnderpaid");
 
-      const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, alice, lpAfter);
+      const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(reserveStrategy, alice, lpAfter);
 
       await expect(interchainFactory.redeemLpTokensDispatch(ZeroAddress, alice, lpAfter))
-        .to.be.revertedWithCustomError(interchainFactory, "UnrecognizedStrategy");
+        .to.be.revertedWithCustomError(interchainFactory, "RouteDoesNotExist")
+        .withArgs(ZeroAddress);
 
       // redeem should return stakeAmount
       const redeemTx = interchainFactory.connect(alice).redeemLpTokensDispatch(

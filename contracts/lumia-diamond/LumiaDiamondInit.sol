@@ -18,7 +18,7 @@ import {
  * @dev Initializes Lumia Diamond
  */
 contract LumiaDiamondInit is AccessControlEnumerableUpgradeable {
-    event InterchainFactorySetup(address mailbox, uint32 destination, address originLockbox);
+    event InterchainFactorySetup(address mailbox);
 
     /**
      * @notice Setup lumia diamond
@@ -26,7 +26,7 @@ contract LumiaDiamondInit is AccessControlEnumerableUpgradeable {
      *      the `IAccessControlEnumerable` interface.
      *      Set initial values for mailbox, destination and originLockbox
      */
-    function init(address mailbox, uint32 destination, address originLockbox) external initializer {
+    function init(address mailbox) external initializer {
         __AccessControlEnumerable_init();
 
         // setup DEFAULT_ADMIN_ROLE
@@ -39,9 +39,7 @@ contract LumiaDiamondInit is AccessControlEnumerableUpgradeable {
         // setup interchain factory
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
         ifs.mailbox = IMailbox(mailbox);
-        ifs.destination = destination;
-        ifs.originLockbox = originLockbox;
 
-        emit InterchainFactorySetup(mailbox, destination, originLockbox);
+        emit InterchainFactorySetup(mailbox);
     }
 }
