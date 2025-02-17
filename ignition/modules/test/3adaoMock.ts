@@ -9,8 +9,11 @@ const ThreeADaoMockModule = buildModule("ThreeADaoMockModule", (m) => {
   const nativeWrapped = m.contract("WLumia", []);
   const tokenToPriceFeed = m.contract("TokenToPriceFeed", []);
 
+  const rewardFee = 0;
+  const smartVaultProxy = m.contract("SmartVaultProxy", [rewardFee]);
   const vaultExtraSettings = m.contract("VaultExtraSettings", []);
-  const vaulDeployer = m.contract("VaultDeployer", [vaultExtraSettings]);
+  const vaulDeployer = m.contract("SmartVaultDeployer", [vaultExtraSettings, smartVaultProxy]);
+
   const liquidationRouter = m.contract("LiquidationRouter", []);
   const vaultBorrowRate = m.contract("VaultBorrowRate", []);
   const borrowFeeRecipient = feeRecipient;
@@ -31,6 +34,9 @@ const ThreeADaoMockModule = buildModule("ThreeADaoMockModule", (m) => {
 
   // -------
 
+  m.call(rwaUSD, "transferOwnership", [rwaUSDOwner]);
+  m.call(rwaUSDOwner, "addMinter", [vaultFactory]);
+
   const debtTreshold = 0;
   const maxRedeemablePercentage = 100;
   m.call(vaultExtraSettings, "setMaxRedeemablePercentage", [
@@ -40,7 +46,7 @@ const ThreeADaoMockModule = buildModule("ThreeADaoMockModule", (m) => {
 
   // -------
 
-  return { rwaUSD, ThreeAVaultFactory: vaultFactory };
+  return { rwaUSD, threeAVaultFactory: vaultFactory, tokenToPriceFeed };
 });
 
 export default ThreeADaoMockModule;

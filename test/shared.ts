@@ -9,7 +9,7 @@ import SuperformMockModule from "../ignition/modules/test/SuperformMock";
 import TestERC20Module from "../ignition/modules/test/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
 
-import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/facets/StakingFacet";
+import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IHyperFactory";
 import { IERC20 } from "../typechain-types";
 
 // -------------------- Currency --------------------
@@ -142,6 +142,31 @@ export async function createReserveStrategy(
   });
 
   return reserveStrategy;
+}
+
+// -------------------- 3ADAO Lending --------------------
+
+export async function addTestPriceFeed(
+  tokenToPriceFeed: Contract,
+  token: Contract,
+  price: bigint,
+) {
+  const mcr = 100;
+  const mlr = 100;
+  const borrowRate = 0;
+
+  const priceFeed = await ethers.deployContract("FixedPriceOracle", [token, price]);
+
+  await tokenToPriceFeed.setTokenPriceFeed(
+    token,
+    priceFeed,
+    mcr,
+    mlr,
+    borrowRate,
+    0,
+  );
+
+  return priceFeed;
 }
 
 // -------------------- Other Helpers --------------------
