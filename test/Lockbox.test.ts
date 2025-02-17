@@ -191,7 +191,7 @@ describe("Lockbox", function () {
         reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
       ))
         .to.emit(interchainFactory, "TokenBridged")
-        .withArgs(vaultToken, lpToken, alice.address, expectedLpAmount);
+        .withArgs(reserveStrategy, lpToken, alice.address, expectedLpAmount);
 
       const lpAfter = await lpToken.balanceOf(alice);
       expect(lpAfter).to.eq(expectedLpAmount);
@@ -199,18 +199,18 @@ describe("Lockbox", function () {
       await lpToken.connect(alice).approve(interchainFactory, lpAfter);
 
       await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(
-        vaultToken, alice, lpAfter,
+        reserveStrategy, alice, lpAfter,
       ))
         .to.be.revertedWithCustomError(mailbox, "DispatchUnderpaid");
 
       const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, alice, lpAfter);
 
       await expect(interchainFactory.redeemLpTokensDispatch(ZeroAddress, alice, lpAfter))
-        .to.be.revertedWithCustomError(interchainFactory, "UnrecognizedVaultToken");
+        .to.be.revertedWithCustomError(interchainFactory, "UnrecognizedStrategy");
 
       // redeem should return stakeAmount
       const redeemTx = interchainFactory.connect(alice).redeemLpTokensDispatch(
-        vaultToken, alice, lpAfter, { value: dispatchFee },
+        reserveStrategy, alice, lpAfter, { value: dispatchFee },
       );
 
       // lpToken -> vaultAsset -> strategy allocation -> stake withdraw
@@ -237,7 +237,7 @@ describe("Lockbox", function () {
       // TokenDeploy
 
       const message1 = {
-        tokenAddress: ZeroAddress,
+        strategy: ZeroAddress,
         name: "Test Token",
         symbol: "TT",
         decimals: 2,
@@ -245,7 +245,7 @@ describe("Lockbox", function () {
       };
 
       const bytes1 = await testWrapper.serializeTokenDeploy(
-        message1.tokenAddress,
+        message1.strategy,
         message1.name,
         message1.symbol,
         message1.decimals,
@@ -253,7 +253,7 @@ describe("Lockbox", function () {
       );
 
       expect(await testWrapper.messageType(bytes1)).to.equal(0);
-      expect(await testWrapper.tokenAddress(bytes1)).to.equal(message1.tokenAddress);
+      expect(await testWrapper.strategy(bytes1)).to.equal(message1.strategy);
       expect(decodeString(await testWrapper.name(bytes1))).to.equal(message1.name);
       expect(decodeString(await testWrapper.symbol(bytes1))).to.equal(message1.symbol);
       expect(await testWrapper.tokenDeployMetadata(bytes1)).to.equal(message1.metadata);
@@ -261,7 +261,7 @@ describe("Lockbox", function () {
       // TokenBridge
 
       const message2 = {
-        vaultToken: ZeroAddress,
+        strategy: ZeroAddress,
         sender: ZeroAddress,
         stake: parseEther("1"),
         shares: parseEther("0.9"),
@@ -269,7 +269,7 @@ describe("Lockbox", function () {
       };
 
       const bytes2 = await testWrapper.serializeTokenBridge(
-        message2.vaultToken,
+        message2.strategy,
         message2.sender,
         message2.stake,
         message2.shares,
@@ -277,7 +277,7 @@ describe("Lockbox", function () {
       );
 
       expect(await testWrapper.messageType(bytes2)).to.equal(1);
-      expect(await testWrapper.vaultToken(bytes2)).to.equal(message2.vaultToken);
+      expect(await testWrapper.strategy(bytes2)).to.equal(message2.strategy);
       expect(await testWrapper.sender(bytes2)).to.equal(message2.sender);
       expect(await testWrapper.stakeAmount(bytes2)).to.equal(message2.stake);
       expect(await testWrapper.sharesAmount(bytes2)).to.equal(message2.shares);
@@ -286,23 +286,23 @@ describe("Lockbox", function () {
       // TokenRedeem
 
       const message3 = {
-        vaultToken: ZeroAddress,
+        strtegy: ZeroAddress,
         sender: ZeroAddress,
         amount: parseEther("2"),
         metadata: "0x1256",
       };
 
       const bytes3 = await testWrapper.serializeTokenRedeem(
-        message3.vaultToken,
+        message3.strtegy,
         message3.sender,
         message3.amount,
         message3.metadata,
       );
 
       expect(await testWrapper.messageType(bytes3)).to.equal(2);
-      expect(await testWrapper.vaultToken(bytes3)).to.equal(message3.vaultToken);
+      expect(await testWrapper.strategy(bytes3)).to.equal(message3.strtegy);
       expect(await testWrapper.sender(bytes3)).to.equal(message3.sender);
-      expect(await testWrapper.amount(bytes3)).to.equal(message3.amount);
+      expect(await testWrapper.redeemAmount(bytes3)).to.equal(message3.amount);
       expect(await testWrapper.tokenRedeemMetadata(bytes3)).to.equal(message3.metadata);
     });
 
@@ -310,7 +310,7 @@ describe("Lockbox", function () {
       const testWrapper = await loadFixture(deployTestWrapper);
 
       const message = {
-        tokenAddress: ZeroAddress,
+        strategy: ZeroAddress,
         name: "Test Token with a little longer name than usual, still working?",
         symbol: "TTSYMBOLEXTENDED 123456789",
         decimals: 15,
@@ -318,7 +318,7 @@ describe("Lockbox", function () {
       };
 
       const bytes1 = await testWrapper.serializeTokenDeploy(
-        message.tokenAddress,
+        message.strategy,
         message.name,
         message.symbol,
         message.decimals,

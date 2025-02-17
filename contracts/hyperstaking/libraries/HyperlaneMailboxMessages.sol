@@ -57,7 +57,7 @@ library HyperlaneMailboxMessages {
     // ========= Serialize ========= //
 
     function serializeTokenDeploy(
-        address tokenAddress_,
+        address strategy_,
         string memory name_,
         string memory symbol_,
         uint8 decimals_,
@@ -68,7 +68,7 @@ library HyperlaneMailboxMessages {
 
         return abi.encodePacked(
             bytes8(uint64(MessageType.TokenDeploy)),    //  8-bytes: msg type
-            TypeCasts.addressToBytes32(tokenAddress_),  // 32-bytes: token address
+            TypeCasts.addressToBytes32(strategy_),      // 32-bytes: strategy address
             nameSize,                                   //   1-byte: token name size
             nameBytes,                                  // 64-bytes: token name
             symbolSize,                                 //   1-byte: token symbol size
@@ -79,7 +79,7 @@ library HyperlaneMailboxMessages {
     }
 
     function serializeTokenBridge(
-        address vaultToken_,
+        address strategy_,
         address sender_,
         uint256 stakeAmount_,
         uint256 sharesAmount_,
@@ -87,7 +87,7 @@ library HyperlaneMailboxMessages {
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
             bytes8(uint64(MessageType.TokenBridge)),    //  8-bytes: msg type
-            TypeCasts.addressToBytes32(vaultToken_),    // 32-bytes: vault token address
+            TypeCasts.addressToBytes32(strategy_),      // 32-bytes: strategy address
             TypeCasts.addressToBytes32(sender_),        // 32-bytes: sender address
             stakeAmount_,                               // 32-bytes: stake amount
             sharesAmount_,                              // 32-bytes: shares amount
@@ -96,32 +96,33 @@ library HyperlaneMailboxMessages {
     }
 
     function serializeTokenRedeem(
-        address vaultToken_,
+        address strategy_,
         address sender_,
-        uint256 amount_,
+        uint256 redeemAmount_,
         bytes memory metadata_
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
             bytes8(uint64(MessageType.TokenRedeem)),    //  8-bytes: msg type
-            TypeCasts.addressToBytes32(vaultToken_),    // 32-bytes: vault token address
+            TypeCasts.addressToBytes32(strategy_),      // 32-bytes: strategy address
             TypeCasts.addressToBytes32(sender_),        // 32-bytes: sender address
-            amount_,                                    // 32-bytes: amount
+            redeemAmount_,                              // 32-bytes: amount of shares to reedeem
             metadata_                                   // XX-bytes: additional metadata
         );
     }
 
     // ========= General ========= //
 
+    /// [0:8]
     function messageType(bytes calldata message) internal pure returns (MessageType) {
         return MessageType(uint64(bytes8(message[0:8])));
     }
 
-    // ========= TokenDeploy ========= //
-
     /// [8:40]
-    function tokenAddress(bytes calldata message) internal pure returns (address) {
+    function strategy(bytes calldata message) internal pure returns (address) {
         return TypeCasts.bytes32ToAddress(bytes32(message[8:40]));
     }
+
+    // ========= TokenDeploy ========= //
 
     /// [40:41][41:105]
     function name(bytes calldata message) internal pure returns (string calldata) {
@@ -147,10 +148,6 @@ library HyperlaneMailboxMessages {
 
     // ========= TokenBridge & TokenRedeem  ========= //
 
-    function vaultToken(bytes calldata message) internal pure returns (address) {
-        return TypeCasts.bytes32ToAddress(bytes32(message[8:40]));
-    }
-
     function sender(bytes calldata message) internal pure returns (address) {
         return TypeCasts.bytes32ToAddress(bytes32(message[40:72]));
     }
@@ -171,7 +168,7 @@ library HyperlaneMailboxMessages {
 
     // ========= TokenRedeem  ========= //
 
-    function amount(bytes calldata message) internal pure returns (uint256) {
+    function redeemAmount(bytes calldata message) internal pure returns (uint256) {
         return uint256(bytes32(message[72:104]));
     }
 

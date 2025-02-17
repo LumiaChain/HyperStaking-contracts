@@ -15,16 +15,16 @@ interface ILockbox {
     event TokenDeployDispatched(
         address indexed mailbox,
         address lumiaFactory,
-        address tokenAddress,
+        address strategy,
         string name,
         string symbol,
         uint8 decimals
     );
 
-    event BridgeTokenDispatched(
+    event TokenBridgeDispatched(
         address indexed mailbox,
         address lumiaFactory,
-        address indexed vaultToken,
+        address indexed strategy,
         address indexed user,
         uint256 stake,
         uint256 shares
@@ -65,7 +65,7 @@ interface ILockbox {
      * @dev This function sends a message to trigger the token deploy
      */
     function tokenDeployDispatch(
-        address tokenAddress,
+        address strategy,
         string memory name,
         string memory symbol,
         uint8 decimals
@@ -75,8 +75,8 @@ interface ILockbox {
      * @notice Dispatches a cross-chain message responsible for bridiging vault token
      * @dev This function sends a message to trigger the token mint process
      */
-    function bridgeTokenDispatch(
-        address vaultToken,
+    function tokenBridgeDispatch(
+        address strategy,
         address user,
         uint256 stake,
         uint256 shares
@@ -118,7 +118,7 @@ interface ILockbox {
 
     /// @notice Helper: separated function for getting mailbox dispatch quote
     function quoteDispatchTokenDeploy(
-        address tokenAddress,
+        address strategy,
         string memory name,
         string memory symbol,
         uint8 decimals
@@ -126,7 +126,7 @@ interface ILockbox {
 
     /// @notice Helper: separated function for getting mailbox dispatch quote
     function quoteDispatchTokenBridge(
-        address vaultToken,
+        address strategy,
         address sender,
         uint256 stake,
         uint256 shares
@@ -143,7 +143,7 @@ interface ILockbox {
 
     /// @notice Helper: separated function for generating hyperlane message body
     function generateTokenDeployBody(
-        address tokenAddress,
+        address strategy,
         string memory name,
         string memory symbol,
         uint8 decimals
@@ -151,7 +151,7 @@ interface ILockbox {
 
     /// @notice Helper: separated function for generating hyperlane message body
     function generateTokenBridgeBody(
-        address vaultToken,
+        address strategy,
         address sender,
         uint256 stake,
         uint256 shares

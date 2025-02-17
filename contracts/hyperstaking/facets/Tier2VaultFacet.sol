@@ -171,14 +171,14 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
 
         // quote message fee for forwarding a TokenBridge message across chains
         uint256 fee = ILockbox(address(this)).quoteDispatchTokenBridge(
-            address(tier2.vaultToken),
+            strategy,
             user,
             stake,
             shares
         );
 
-        ILockbox(address(this)).bridgeTokenDispatch{value: fee}(
-            address(tier2.vaultToken),
+        ILockbox(address(this)).tokenBridgeDispatch{value: fee}(
+            strategy,
             user,
             stake,
             shares

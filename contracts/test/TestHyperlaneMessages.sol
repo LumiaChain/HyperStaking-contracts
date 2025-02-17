@@ -22,14 +22,14 @@ contract TestHyperlaneMessages {
     // ========= Serialize ========= //
 
     function serializeTokenDeploy(
-        address tokenAddress_,
+        address strategy_,
         string memory name_,
         string memory symbol_,
         uint8 decimals_,
         bytes memory metadata_
     ) external pure returns (bytes memory) {
         return HyperlaneMailboxMessages.serializeTokenDeploy(
-            tokenAddress_,
+            strategy_,
             name_,
             symbol_,
             decimals_,
@@ -38,14 +38,14 @@ contract TestHyperlaneMessages {
     }
 
     function serializeTokenBridge(
-        address vaultToken_,
+        address strategy_,
         address sender_,
         uint256 stakeAmount_,
         uint256 sharesAmount_,
         bytes memory metadata_
     ) external pure returns (bytes memory) {
         return HyperlaneMailboxMessages.serializeTokenBridge(
-            vaultToken_,
+            strategy_,
             sender_,
             stakeAmount_,
             sharesAmount_,
@@ -54,13 +54,13 @@ contract TestHyperlaneMessages {
     }
 
     function serializeTokenRedeem(
-        address vaultToken_,
+        address strategy_,
         address sender_,
         uint256 amount_,
         bytes memory metadata_
     ) external pure returns (bytes memory) {
         return HyperlaneMailboxMessages.serializeTokenRedeem(
-            vaultToken_,
+            strategy_,
             sender_,
             amount_,
             metadata_
@@ -73,11 +73,12 @@ contract TestHyperlaneMessages {
         return message.messageType();
     }
 
+    function strategy(bytes calldata message) external pure returns (address) {
+        return message.strategy();
+    }
+
     // ========= TokenDeploy ========= //
 
-    function tokenAddress(bytes calldata message) external pure returns (address) {
-        return message.tokenAddress();
-    }
 
     function name(bytes calldata message) external pure returns (string calldata) {
         return message.name();
@@ -96,10 +97,6 @@ contract TestHyperlaneMessages {
     }
 
     // ========= TokenBridge & TokenRedeem  ========= //
-
-    function vaultToken(bytes calldata message) external pure returns (address) {
-        return message.vaultToken();
-    }
 
     function sender(bytes calldata message) external pure returns (address) {
         return message.sender();
@@ -121,8 +118,8 @@ contract TestHyperlaneMessages {
 
     // ========= TokenRedeem  ========= //
 
-    function amount(bytes calldata message) external pure returns (uint256) {
-        return message.amount();
+    function redeemAmount(bytes calldata message) external pure returns (uint256) {
+        return message.redeemAmount();
     }
 
     function tokenRedeemMetadata(bytes calldata message) external pure returns (bytes calldata) {

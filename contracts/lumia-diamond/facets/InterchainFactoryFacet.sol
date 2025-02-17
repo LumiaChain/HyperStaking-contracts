@@ -73,19 +73,19 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
 
     /// @inheritdoc IInterchainFactory
     function redeemLpTokensDispatch(
-        address vaultToken,
+        address strategy,
         address spender,
         uint256 shares
     ) external payable {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
 
-        (bool exists, address lpToken) = ifs.tokensMap.tryGet(vaultToken);
-        require(exists, UnrecognizedVaultToken());
+        (bool exists, address lpToken) = ifs.tokensMap.tryGet(strategy);
+        require(exists, UnrecognizedStrategy());
 
         // burn lpTokens
         LumiaLPToken(lpToken).burnFrom(spender, shares);
 
-        bytes memory body = generateTokenRedeemBody(vaultToken, spender, shares);
+        bytes memory body = generateTokenRedeemBody(strategy, spender, shares);
 
         // address left-padded to bytes32 for compatibility with hyperlane
         bytes32 recipientBytes32 = TypeCasts.addressToBytes32(ifs.originLockbox);
@@ -93,7 +93,7 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
         // msg.value should already include fee calculated
         ifs.mailbox.dispatch{value: msg.value}(ifs.destination, recipientBytes32, body);
 
-        emit RedeemTokenDispatched(address(ifs.mailbox), ifs.originLockbox, vaultToken, spender, shares);
+        emit RedeemTokenDispatched(address(ifs.mailbox), ifs.originLockbox, strategy, spender, shares);
     }
 
     // ========= Owner ========= //
@@ -150,8 +150,8 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
     }
 
     /// @inheritdoc IInterchainFactory
-    function getLpToken(address vaultToken) external view returns (address lpToken) {
-        lpToken = LibInterchainFactory.diamondStorage().tokensMap.get(vaultToken);
+    function getLpToken(address strategy) external view returns (address lpToken) {
+        lpToken = LibInterchainFactory.diamondStorage().tokensMap.get(strategy);
     }
 
     /// @inheritdoc IInterchainFactory
@@ -161,7 +161,7 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
 
     /// @inheritdoc IInterchainFactory
     function quoteDispatchTokenRedeem(
-        address vaultToken,
+        address strategy,
         address sender,
         uint256 shares
     ) external view returns (uint256) {
@@ -169,18 +169,18 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
         return ifs.mailbox.quoteDispatch(
             ifs.destination,
             TypeCasts.addressToBytes32(ifs.originLockbox),
-            generateTokenRedeemBody(vaultToken, sender, shares)
+            generateTokenRedeemBody(strategy, sender, shares)
         );
     }
 
     /// @inheritdoc IInterchainFactory
     function generateTokenRedeemBody(
-        address vaultToken,
+        address strategy,
         address sender,
         uint256 shares
     ) public pure returns (bytes memory body) {
         body = HyperlaneMailboxMessages.serializeTokenRedeem(
-            vaultToken,
+            strategy,
             sender,
             shares,
             bytes("") // no metadata
@@ -193,36 +193,36 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
 
     /// @notice Handle specific TokenDeploy message
     function _handleTokenDeploy(bytes calldata data) internal {
-        address tokenAddress = data.tokenAddress(); // origin vault token address
+        address strategy = data.strategy(); // origin strategy address
         string memory name = data.name();
         string memory symbol = data.symbol();
         uint8 decimals = data.decimals();
 
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
 
-        require(ifs.tokensMap.contains(tokenAddress) == false, TokenAlreadyDeployed());
+        require(ifs.tokensMap.contains(strategy) == false, TokenAlreadyDeployed());
 
         address lpToken = address(new LumiaLPToken(address(this), name, symbol, decimals));
 
-        ifs.tokensMap.set(tokenAddress, lpToken);
+        ifs.tokensMap.set(strategy, lpToken);
 
-        emit TokenDeployed(tokenAddress, lpToken, name, symbol, decimals);
+        emit TokenDeployed(strategy, lpToken, name, symbol, decimals);
     }
 
     /// @notice Handle specific TokenBridge message
     function _handleTokenBridge(bytes calldata data) internal {
-        address vaultToken = data.vaultToken();
+        address strategy = data.strategy();
         address sender = data.sender();
         uint256 sharesAmount = data.sharesAmount();
 
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
 
         // revert if key in not present in the map
-        address lpToken = ifs.tokensMap.get(vaultToken);
+        address lpToken = ifs.tokensMap.get(strategy);
 
         // mint LP tokens for the specified user
         LumiaLPToken(lpToken).mint(sender, sharesAmount);
 
-        emit TokenBridged(vaultToken, lpToken, sender, sharesAmount);
+        emit TokenBridged(strategy, lpToken, sender, sharesAmount);
     }
 }

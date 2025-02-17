@@ -152,7 +152,7 @@ describe("Superform", function () {
     const vaultAddress = (await tier2.vaultTier2Info(superformStrategy)).vaultToken;
     const vault = await ethers.getContractAt("VaultToken", vaultAddress);
 
-    const lpTokenAddress = await interchainFactory.getLpToken(vaultAddress);
+    const lpTokenAddress = await interchainFactory.getLpToken(superformStrategy);
     const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
 
     // --------------------
@@ -355,7 +355,7 @@ describe("Superform", function () {
       const [vaultToken] = await tier2.vaultTier2Info(superformStrategy);
       expect(vaultToken).to.not.equal(ZeroAddress);
 
-      expect(await interchainFactory.getLpToken(vaultToken)).to.not.equal(ZeroAddress);
+      expect(await interchainFactory.getLpToken(superformStrategy)).to.not.equal(ZeroAddress);
     });
 
     it("Staking using superform strategy - tier1", async function () {
@@ -401,7 +401,7 @@ describe("Superform", function () {
       expect(lpBalance).to.be.gt(0);
 
       await lpToken.connect(alice).approve(interchainFactory, lpBalance);
-      await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(vault, alice, lpBalance))
+      await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(superformStrategy, alice, lpBalance))
         .to.changeTokenBalances(testUSDC,
           [alice, erc4626Vault], [amount, -amount]);
 
@@ -409,7 +409,7 @@ describe("Superform", function () {
     });
 
     it("Revenue from superform strategy", async function () {
-      const { staking, superformStrategy, testUSDC, alice, interchainFactory, erc4626Vault, vault, lpToken, vaultTokenName, vaultTokenSymbol } = await deployHyperStaking();
+      const { staking, superformStrategy, testUSDC, alice, interchainFactory, erc4626Vault, lpToken, vaultTokenName, vaultTokenSymbol } = await deployHyperStaking();
 
       const amount = parseUnits("100", 6);
 
@@ -427,7 +427,7 @@ describe("Superform", function () {
       const expectedNewAmount = newRatio * amount / parseUnits("1", 6) - 1n; // minus precision error
 
       await lpToken.connect(alice).approve(interchainFactory, lpBalance);
-      await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(vault, alice, lpBalance))
+      await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(superformStrategy, alice, lpBalance))
         .to.changeTokenBalances(testUSDC,
           [alice, erc4626Vault], [expectedNewAmount, -expectedNewAmount]);
 

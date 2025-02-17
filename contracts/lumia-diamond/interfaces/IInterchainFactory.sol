@@ -21,7 +21,7 @@ interface IInterchainFactory {
     );
 
     event TokenDeployed(
-        address originToken,
+        address strategy,
         address lpToken,
         string name,
         string symbol,
@@ -29,7 +29,7 @@ interface IInterchainFactory {
     );
 
     event TokenBridged(
-        address indexed originToken,
+        address indexed strategy,
         address indexed lpToken,
         address indexed sender,
         uint256 shares
@@ -38,7 +38,7 @@ interface IInterchainFactory {
     event RedeemTokenDispatched(
         address indexed mailbox,
         address recipient,
-        address indexed vaultToken,
+        address indexed strategy,
         address indexed user,
         uint256 shares
     );
@@ -60,7 +60,7 @@ interface IInterchainFactory {
     error InvalidLumiaReceiver(address badReceiver);
 
     error TokenAlreadyDeployed();
-    error UnrecognizedVaultToken();
+    error UnrecognizedStrategy();
     error UnsupportedMessage();
 
     //============================================================================================//
@@ -79,12 +79,12 @@ interface IInterchainFactory {
     /**
      * @notice Initiates token redemption
      * @dev Handles cross-chain unstaking via hyperlane bridge
-     * @param vaultToken Address of the vault token (on the origin chain) to redeem
+     * @param strategy Address of the strategy (on the origin chain) to redeem tokens from
      * @param spender Address of the user whose process is initiated
      * @param shares Amount of shares to redeem
      */
     function redeemLpTokensDispatch(
-        address vaultToken,
+        address strategy,
         address spender,
         uint256 shares
     ) external payable;
@@ -125,32 +125,32 @@ interface IInterchainFactory {
 
     /**
      * @dev Utilizes the `.get` function from OpenZeppelin EnumerableMap to retrieve
-     *      the lpToken associated with a given vaultToken.
+     *      the lpToken associated with a given strategy.
      *
-     * @param vaultToken The address of the vaultToken to look up.
-     * @return lpToken The address of the lpToken corresponding to the provided vaultToken.
+     * @param strategy The address of the strategy to look up.
+     * @return lpToken The address of the lpToken corresponding to the provided strategy.
      */
-    function getLpToken(address vaultToken) external view returns (address lpToken);
+    function getLpToken(address strategy) external view returns (address lpToken);
 
     /**
      * @dev Utilizes the `.at` function from OpenZeppelin EnumerableMap
      *
      * @param index The position in the map to retrieve the key-value pair from
-     * @return key The key (vaultToken) at the specified position
+     * @return key The key (strategy) at the specified position
      * @return value The value (lpToken) at the specified position
      */
     function tokensMapAt(uint256 index) external view returns (address key, address value);
 
     /// @notice Helper: separated function for getting mailbox dispatch quote
     function quoteDispatchTokenRedeem(
-        address vaultToken,
+        address strategy,
         address sender,
         uint256 shares
     ) external view returns (uint256);
 
     /// @notice Helper: separated function for generating hyperlane message body
     function generateTokenRedeemBody(
-        address vaultToken,
+        address strategy,
         address sender,
         uint256 shares
     ) external pure returns (bytes memory body);

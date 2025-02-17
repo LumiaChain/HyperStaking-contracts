@@ -47,9 +47,13 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
     ) external payable onlyVaultManager nonReentrant {
         // The ERC20-compliant asset associated with the strategy
         address asset = IStrategy(strategy).revenueAsset();
+        uint8 assetDecimals = IERC20Metadata(asset).decimals();
 
         IERC4626 vaultToken = _deployVaultToken(asset, strategy, vaultTokenName, vaultTokenSymbol);
         _storeVault(strategy, asset, tier1RevenueFee, vaultToken);
+
+        // deploy lp token on lumia
+        _dispatchTokenDeploy(strategy, vaultTokenName, vaultTokenSymbol, assetDecimals);
     }
 
     // ========= View ========= //
@@ -67,24 +71,24 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
     /**
      * @notice Dispatches an interchain message to instruct the deployment on the destination chain
      * @dev Uses the Lockbox Facet to send a message containing required details
-     * @param vaultToken The address of the Vault token that the new LP token will represent
+     * @param strategy The address of the strategy that the new LP token will represent
      */
     function _dispatchTokenDeploy(
-        address vaultToken,
+        address strategy,
         string memory name,
         string memory symbol,
         uint8 decimals
     ) internal {
         // quote message fee for forwarding a TokenDeploy message across chains
         uint256 fee = ILockbox(address(this)).quoteDispatchTokenDeploy(
-            vaultToken,
+            strategy,
             name,
             symbol,
             decimals
         );
 
         ILockbox(address(this)).tokenDeployDispatch{value: fee}(
-            vaultToken,
+            strategy,
             name,
             symbol,
             decimals
@@ -109,9 +113,6 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
             name,
             symbol
         );
-
-        uint8 assetDecimals = IERC20Metadata(asset).decimals();
-        _dispatchTokenDeploy(address(vaultToken), name, symbol, assetDecimals);
     }
 
     /**

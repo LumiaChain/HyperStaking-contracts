@@ -27,7 +27,7 @@ struct InterchainFactoryStorage {
     /// @notice Address of the sender - Lockbox located on the origin chain
     address originLockbox;
 
-    /// @notice Enumerable map storing the relation between origin vaultTokens and minted lpTokens
+    /// @notice Enumerable map storing the relation between origin strategy and minted lpTokens
     EnumerableMap.AddressToAddressMap tokensMap;
 
     /// @notice Temporary data about last msg

@@ -42,7 +42,7 @@ describe("VaultToken", function () {
     const vaultTokenAddress = (await tier2.vaultTier2Info(reserveStrategy)).vaultToken;
     const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
 
-    const lpTokenAddress = await interchainFactory.getLpToken(vaultTokenAddress);
+    const lpTokenAddress = await interchainFactory.getLpToken(reserveStrategy);
     const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
 
     /* eslint-disable object-property-newline */
@@ -69,7 +69,7 @@ describe("VaultToken", function () {
 
     it("test tokens enumerable map", async function () {
       const {
-        diamond, hyperFactory, tier2, interchainFactory, vaultToken,
+        diamond, hyperFactory, interchainFactory, reserveStrategy,
         lpToken, vaultManager,
       } = await loadFixture(deployHyperStaking);
 
@@ -99,15 +99,12 @@ describe("VaultToken", function () {
         0,
       );
 
-      const vaultToken2 = (await tier2.vaultTier2Info(reserveStrategy2)).vaultToken;
-      const vaultToken3 = (await tier2.vaultTier2Info(reserveStrategy3)).vaultToken;
+      const lpToken2 = await interchainFactory.getLpToken(reserveStrategy2);
+      const lpToken3 = await interchainFactory.getLpToken(reserveStrategy3);
 
-      const lpToken2 = await interchainFactory.getLpToken(vaultToken2);
-      const lpToken3 = await interchainFactory.getLpToken(vaultToken3);
-
-      expect(await interchainFactory.tokensMapAt(0)).to.deep.equal([vaultToken.target, lpToken.target]);
-      expect(await interchainFactory.tokensMapAt(1)).to.deep.equal([vaultToken2, lpToken2]);
-      expect(await interchainFactory.tokensMapAt(2)).to.deep.equal([vaultToken3, lpToken3]);
+      expect(await interchainFactory.tokensMapAt(0)).to.deep.equal([reserveStrategy.target, lpToken.target]);
+      expect(await interchainFactory.tokensMapAt(1)).to.deep.equal([reserveStrategy2.target, lpToken2]);
+      expect(await interchainFactory.tokensMapAt(2)).to.deep.equal([reserveStrategy3.target, lpToken3]);
     });
   });
 
@@ -231,7 +228,7 @@ describe("VaultToken", function () {
       await lpToken.connect(alice).approve(interchainFactory, lpBalance);
       const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, bob, lpBalance);
       await interchainFactory.connect(alice).redeemLpTokensDispatch(
-        vaultToken, alice, lpBalance, { value: dispatchFee },
+        reserveStrategy, alice, lpBalance, { value: dispatchFee },
       );
 
       expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
@@ -244,7 +241,7 @@ describe("VaultToken", function () {
       // alice approve factory and bob excutes redeem for her
       await lpToken.connect(alice).approve(interchainFactory, lpBalance);
       await interchainFactory.connect(bob).redeemLpTokensDispatch(
-        vaultToken, alice, lpBalance, { value: dispatchFee },
+        reserveStrategy, alice, lpBalance, { value: dispatchFee },
       );
 
       expect(await vaultToken.allowance(alice, bob)).to.be.eq(0);
@@ -312,7 +309,7 @@ describe("VaultToken", function () {
       await lpToken.connect(bob).approve(interchainFactory, expectedBobShares);
       const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, bob, expectedBobShares);
       await expect(interchainFactory.connect(bob).redeemLpTokensDispatch(
-        vaultToken, bob, expectedBobShares, { value: dispatchFee },
+        reserveStrategy, bob, expectedBobShares, { value: dispatchFee },
       ))
         .to.changeEtherBalance(bob, expectedNewBobStake);
 
@@ -384,7 +381,7 @@ describe("VaultToken", function () {
       await lpToken.connect(alice).approve(interchainFactory, shares);
       const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(vaultToken, alice, shares);
       await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(
-        vaultToken, alice, shares, { value: dispatchFee },
+        reserveStrategy, alice, shares, { value: dispatchFee },
       ))
         .to.changeEtherBalances([alice], [expectedStake]);
     });

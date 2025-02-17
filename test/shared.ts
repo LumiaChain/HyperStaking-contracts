@@ -175,7 +175,7 @@ export async function getDerivedTokens(tier2: Contract, interchainFactory: Contr
   const vaultTokenAddress = (await tier2.vaultTier2Info(strategy)).vaultToken;
   const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
 
-  const lpTokenAddress = await interchainFactory.getLpToken(vaultTokenAddress);
+  const lpTokenAddress = await interchainFactory.getLpToken(strategy);
   const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
 
   return { vaultToken, lpToken };

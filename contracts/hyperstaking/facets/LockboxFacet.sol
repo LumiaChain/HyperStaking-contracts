@@ -45,7 +45,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
 
     /// @inheritdoc ILockbox
     function tokenDeployDispatch(
-        address tokenAddress,
+        address strategy,
         string memory name,
         string memory symbol,
         uint8 decimals
@@ -53,7 +53,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
         require(box.lumiaFactory != address(0), RecipientUnset());
 
-        bytes memory body = generateTokenDeployBody(tokenAddress, name, symbol, decimals);
+        bytes memory body = generateTokenDeployBody(strategy, name, symbol, decimals);
 
         // address left-padded to bytes32 for compatibility with hyperlane
         bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.lumiaFactory);
@@ -64,7 +64,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         emit TokenDeployDispatched(
             address(box.mailbox),
             box.lumiaFactory,
-            tokenAddress,
+            strategy,
             name,
             symbol,
             decimals
@@ -72,8 +72,8 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     }
 
     /// @inheritdoc ILockbox
-    function bridgeTokenDispatch(
-        address vaultToken,
+    function tokenBridgeDispatch(
+        address strategy,
         address user,
         uint256 stake,
         uint256 shares
@@ -81,7 +81,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
         require(box.lumiaFactory != address(0), RecipientUnset());
 
-        bytes memory body = generateTokenBridgeBody(vaultToken, user, stake, shares);
+        bytes memory body = generateTokenBridgeBody(strategy, user, stake, shares);
 
         // address left-padded to bytes32 for compatibility with hyperlane
         bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.lumiaFactory);
@@ -89,10 +89,10 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         // msg.value should already include fee calculated
         box.mailbox.dispatch{value: msg.value}(box.destination, recipientBytes32, body);
 
-        emit BridgeTokenDispatched(
+        emit TokenBridgeDispatched(
             address(box.mailbox),
             box.lumiaFactory,
-            vaultToken,
+            strategy,
             user,
             stake,
             shares
@@ -124,13 +124,15 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         _handleTokenRedeem(data);
     }
 
-    /// @notice Handle specific TokenBridge message
+    /// @notice Handle specific TokenRedeem message
     function _handleTokenRedeem(bytes calldata data) internal {
-        address vaultToken = data.vaultToken();
+        address strategy = data.strategy();
         address user = data.sender(); // sender -> actual hyperstaking user
-        uint256 shares = data.amount(); // amount -> amount of shares
+        uint256 shares = data.redeemAmount(); // amount -> amount of shares
 
-        IERC4626(vaultToken).redeem(shares, user, address(this));
+        IERC4626 vaultToken = LibHyperStaking.diamondStorage().vaultTier2Info[strategy].vaultToken;
+
+        vaultToken.redeem(shares, user, address(this));
     }
 
     /* ========== ACL  ========== */
@@ -173,7 +175,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
 
     /// @inheritdoc ILockbox
     function quoteDispatchTokenDeploy(
-        address tokenAddress,
+        address strategy,
         string memory name,
         string memory symbol,
         uint8 decimals
@@ -182,13 +184,13 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         return box.mailbox.quoteDispatch(
             box.destination,
             TypeCasts.addressToBytes32(box.lumiaFactory),
-            generateTokenDeployBody(tokenAddress, name, symbol, decimals)
+            generateTokenDeployBody(strategy, name, symbol, decimals)
         );
     }
 
     /// @inheritdoc ILockbox
     function quoteDispatchTokenBridge(
-        address vaultToken,
+        address strategy,
         address sender,
         uint256 stake,
         uint256 shares
@@ -197,7 +199,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         return box.mailbox.quoteDispatch(
             box.destination,
             TypeCasts.addressToBytes32(box.lumiaFactory),
-            generateTokenBridgeBody(vaultToken, sender, stake, shares)
+            generateTokenBridgeBody(strategy, sender, stake, shares)
         );
     }
 
@@ -216,7 +218,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         uint256 shares = vaultToken.previewWithdraw(allocation);
 
         return this.quoteDispatchTokenBridge(
-            address(vaultToken),
+            strategy,
             sender,
             stake,
             shares
@@ -225,13 +227,13 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
 
     /// @inheritdoc ILockbox
     function generateTokenDeployBody(
-        address tokenAddress,
+        address strategy,
         string memory name,
         string memory symbol,
         uint8 decimals
     ) public pure returns (bytes memory body) {
         body = HyperlaneMailboxMessages.serializeTokenDeploy(
-            tokenAddress,
+            strategy,
             name,
             symbol,
             decimals,
@@ -241,13 +243,13 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
 
     /// @inheritdoc ILockbox
     function generateTokenBridgeBody(
-        address vaultToken,
+        address strategy,
         address sender,
         uint256 stake,
         uint256 shares
     ) public pure returns (bytes memory body) {
         body = HyperlaneMailboxMessages.serializeTokenBridge(
-            vaultToken,
+            strategy,
             sender,
             stake,
             shares,
