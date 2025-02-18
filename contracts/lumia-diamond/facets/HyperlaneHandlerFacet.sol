@@ -97,10 +97,10 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         emit RedeemTokenDispatched(address(ifs.mailbox), r.originLockbox, strategy, user, shares);
     }
 
-    // ========= Owner ========= //
+    // ========= Restricted ========= //
 
     /// @inheritdoc IHyperlaneHandler
-    function setMailbox(address newMailbox) public onlyLumiaFactoryManager {
+    function setMailbox(address newMailbox) external onlyLumiaFactoryManager {
         require(
             newMailbox != address(0) && newMailbox.code.length > 0,
             InvalidMailbox(newMailbox)

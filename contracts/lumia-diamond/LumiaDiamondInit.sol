@@ -8,6 +8,7 @@ import {
 } from "@openzeppelin/contracts-upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
 import {IMailbox} from "../external/hyperlane/interfaces/IMailbox.sol";
+import {IVaultFactory} from "../external/3adao-lumia/interfaces/IVaultFactory.sol";
 
 import {
     LibInterchainFactory, InterchainFactoryStorage
@@ -18,7 +19,7 @@ import {
  * @dev Initializes Lumia Diamond
  */
 contract LumiaDiamondInit is AccessControlEnumerableUpgradeable {
-    event InterchainFactorySetup(address mailbox);
+    event InterchainFactorySetup(address mailbox, address vaultFactory);
 
     /**
      * @notice Setup lumia diamond
@@ -26,7 +27,7 @@ contract LumiaDiamondInit is AccessControlEnumerableUpgradeable {
      *      the `IAccessControlEnumerable` interface.
      *      Set initial values for mailbox, destination and originLockbox
      */
-    function init(address mailbox) external initializer {
+    function init(address mailbox, address vaultFactory) external initializer {
         __AccessControlEnumerable_init();
 
         // setup DEFAULT_ADMIN_ROLE
@@ -39,7 +40,8 @@ contract LumiaDiamondInit is AccessControlEnumerableUpgradeable {
         // setup interchain factory
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
         ifs.mailbox = IMailbox(mailbox);
+        ifs.vaultFactory = IVaultFactory(vaultFactory);
 
-        emit InterchainFactorySetup(mailbox);
+        emit InterchainFactorySetup(mailbox, vaultFactory);
     }
 }

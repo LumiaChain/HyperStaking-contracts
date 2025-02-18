@@ -13,6 +13,8 @@ interface IRouteFactory {
     //                                          Events                                            //
     //============================================================================================//
 
+    event VaultFactoryUpdated(address oldVaultFactory, address newVaultFactory);
+
     event TokenDeployed(
         address strategy,
         address lpToken,
@@ -28,17 +30,11 @@ interface IRouteFactory {
         uint256 shares
     );
 
-    event RedeemTokenDispatched(
-        address indexed mailbox,
-        address recipient,
-        address indexed strategy,
-        address indexed user,
-        uint256 shares
-    );
-
     //===========================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
+
+    error InvalidVaultFactory(address badVaultFactory);
 
     error RouteAlreadyExist();
     error RouteDoesNotExist(address strategy);
@@ -56,6 +52,12 @@ interface IRouteFactory {
 
     /// @notice Handle specific TokenBridge message
     function handleTokenBridge(bytes calldata data) external;
+
+    /**
+     * @notice Updates the vaultFactory address used for creating vaults
+     * @param newVaultFactory The new mailbox address
+     */
+    function setVaultFactory(address newVaultFactory) external;
 
     //============================================================================================//
     //                                           View                                             //

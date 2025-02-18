@@ -5,6 +5,9 @@ import {LumiaLPToken} from "../LumiaLPToken.sol";
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
+import {IVaultFactory} from "../../external/3adao-lumia/interfaces/IVaultFactory.sol";
+import {IVault} from "../../external/3adao-lumia/interfaces/IVault.sol";
+
 //================================================================================================//
 //                                            Types                                               //
 //================================================================================================//
@@ -15,14 +18,14 @@ import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet
  * @param originLockbox The address of the origin Lockbox
  * @param originDestination The Chain id of the origin
  * @param lpToken The token address on this chain representing a HyperStaking position
- // * @param lendingVault The 3A DAO Vault address, created for this route
+ * @param lendingVault The 3A DAO Smart Vault address, created for this route
  */
 struct RouteInfo {
     bool exists;
     address originLockbox;
     uint32 originDestination;
     LumiaLPToken lpToken;
-//    address lendingVault;
+    IVault lendingVault;
 }
 
 struct LastMessage {
@@ -37,6 +40,9 @@ struct LastMessage {
 struct InterchainFactoryStorage {
     /// @notice Hyperlane Mailbox
     IMailbox mailbox;
+
+    /// @notice 3adao Vault Factory
+    IVaultFactory vaultFactory;
 
     /// @notice Temporary data about last msg
     LastMessage lastMessage;
@@ -62,4 +68,3 @@ library LibInterchainFactory {
         }
     }
 }
-

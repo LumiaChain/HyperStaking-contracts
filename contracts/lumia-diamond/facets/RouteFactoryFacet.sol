@@ -13,6 +13,10 @@ import {
     HyperlaneMailboxMessages
 } from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
 
+import {SmartVault} from "../../external/3adao-lumia/vaults/SmartVault.sol";
+import {IVaultFactory} from "../../external/3adao-lumia/interfaces/IVaultFactory.sol";
+import {IVault} from "../../external/3adao-lumia/interfaces/IVault.sol";
+
 /**
  * @title RouteFactoryFacet
  * @notice Factory contract for deploying and managing LP tokens and 3adao integration
@@ -23,6 +27,8 @@ contract RouteFactoryFacet is IRouteFactory, LumiaDiamondAcl {
     //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
+
+    // ========= Diamond Internal ========= //
 
     /// @inheritdoc IRouteFactory
     function handleTokenDeploy(
@@ -39,14 +45,13 @@ contract RouteFactoryFacet is IRouteFactory, LumiaDiamondAcl {
         require(_routeExists(ifs, strategy) == false, RouteAlreadyExist());
 
         LumiaLPToken lpToken = new LumiaLPToken(address(this), name, symbol, decimals);
-        // TODO create Vault
 
         ifs.routes[strategy] = RouteInfo({
             exists: true,
             originLockbox: originLockbox,
             originDestination: originDestination,
-            lpToken: lpToken
-            // lendingVault TODO
+            lpToken: lpToken,
+            lendingVault: _createLendingVault(ifs, name)
         });
 
         emit TokenDeployed(strategy, address(lpToken), name, symbol, decimals);
@@ -72,6 +77,21 @@ contract RouteFactoryFacet is IRouteFactory, LumiaDiamondAcl {
         emit TokenBridged(strategy, address(r.lpToken), sender, sharesAmount);
     }
 
+    // ========= Restricted ========= //
+
+    /// @inheritdoc IRouteFactory
+    function setVaultFactory(address newVaultFactory) external onlyLumiaFactoryManager {
+        require(
+            newVaultFactory != address(0) && newVaultFactory.code.length > 0,
+            InvalidVaultFactory(newVaultFactory)
+        );
+
+        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+
+        emit VaultFactoryUpdated(address(ifs.vaultFactory), newVaultFactory);
+        ifs.vaultFactory = IVaultFactory(newVaultFactory);
+    }
+
     // ========= View ========= //
 
     /// @inheritdoc IRouteFactory
@@ -87,6 +107,21 @@ contract RouteFactoryFacet is IRouteFactory, LumiaDiamondAcl {
     //============================================================================================//
     //                                     Internal Functions                                     //
     //============================================================================================//
+
+    /// @notice Creates new 3adao Vault using vaultFactory from the storage
+    function _createLendingVault(
+        InterchainFactoryStorage storage ifs,
+        string memory lpTokenName
+    ) internal returns (IVault) {
+        address lendingVault = ifs.vaultFactory.createVault(
+            string(abi.encodePacked("HyperStaking Vault: ", lpTokenName))
+        );
+
+        /// assign the operator role so that operations can continue after
+        SmartVault(lendingVault).addOperator(address(this));
+
+        return IVault(lendingVault);
+    }
 
     /// @notice Checks whether route exists
     function _routeExists(

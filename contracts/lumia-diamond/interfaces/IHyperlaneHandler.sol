@@ -64,7 +64,6 @@ interface IHyperlaneHandler {
     ) external payable;
 
     /**
-     * TODO only Diamond?
      * @notice Initiates token redemption
      * @dev Handles cross-chain unstaking via hyperlane bridge
      * @param strategy Address of the strategy (on the origin chain) to redeem tokens from

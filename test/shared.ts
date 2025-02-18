@@ -5,6 +5,7 @@ import HyperStakingModule from "../ignition/modules/HyperStaking";
 import LumiaDiamondModule from "../ignition/modules/LumiaDiamond";
 import OneChainMailboxModule from "../ignition/modules/test/OneChainMailbox";
 import SuperformMockModule from "../ignition/modules/test/SuperformMock";
+import ThreeADaoMockModule from "../ignition/modules/test/3adaoMock";
 
 import TestERC20Module from "../ignition/modules/test/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
@@ -60,10 +61,13 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     },
   });
 
+  const { rwaUSD, threeAVaultFactory, tokenToPriceFeed } = await ignition.deploy(ThreeADaoMockModule);
+
   const { lumiaDiamond, hyperlaneHandler, routeFactory } = await ignition.deploy(LumiaDiamondModule, {
     parameters: {
       LumiaDiamondModule: {
         lumiaMailbox: mailboxAddress,
+        lumiaVaultFactory: await threeAVaultFactory.getAddress(),
       },
     },
   });
@@ -88,7 +92,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   );
 
   return {
-    mailbox, hyperlaneHandler, routeFactory, diamond, staking, hyperFactory, tier1, tier2, lockbox, superVault, superformIntegration,
+    mailbox, hyperlaneHandler, routeFactory, diamond, staking, hyperFactory, tier1, tier2, lockbox, superVault, superformIntegration, rwaUSD, threeAVaultFactory, tokenToPriceFeed,
   };
 }
 
