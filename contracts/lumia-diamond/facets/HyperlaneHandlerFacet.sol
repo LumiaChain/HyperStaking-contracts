@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {LumiaLPToken} from "../LumiaLPToken.sol";
-import {IInterchainFactory} from "../interfaces/IInterchainFactory.sol";
+import {IHyperlaneHandler} from "../interfaces/IHyperlaneHandler.sol";
+import {IRouteFactory} from "../interfaces/IRouteFactory.sol";
 import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
@@ -17,11 +17,10 @@ import {
 } from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
 
 /**
- * @title InterchainFactory
- * @notice Factory contract for LP tokens that operates based on messages received via Hyperlane
- * @dev Facilitates the deployment, management, and processing of LP token operations
+ * @title HyperlaneHandlerFacet
+ * @notice Handles interchain messaging via Hyperlane for LP token operations
  */
-contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
+contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
     using EnumerableSet for EnumerableSet.AddressSet;
     using HyperlaneMailboxMessages for bytes;
 
@@ -29,7 +28,7 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
     //                                      Public Functions                                      //
     //============================================================================================//
 
-    /// @inheritdoc IInterchainFactory
+    /// @inheritdoc IHyperlaneHandler
     function handle(
         uint32 origin,
         bytes32 sender,
@@ -50,7 +49,6 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
 
         // ---
 
-
         require(
             ifs.authorizedOrigins.contains(originLockbox),
             NotFromHyperStaking(originLockbox)
@@ -62,28 +60,28 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
         MessageType msgType = data.messageType();
 
         if (msgType == MessageType.TokenBridge) {
-            _handleTokenBridge(data);
+            IRouteFactory(address(this)).handleTokenBridge(data);
             return;
         }
 
         if (msgType == MessageType.TokenDeploy) {
-            _handleTokenDeploy(originLockbox, origin, data);
+            IRouteFactory(address(this)).handleTokenDeploy(originLockbox, origin, data);
             return;
         }
 
         revert UnsupportedMessage();
     }
 
-    /// @inheritdoc IInterchainFactory
+    /// @inheritdoc IHyperlaneHandler
     function redeemLpTokensDispatch(
         address strategy,
         address user,
         uint256 shares
-    ) external payable {
+    ) external payable { // TODO diamondInternal
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        require(_routeExists(ifs, strategy), RouteDoesNotExist(strategy));
 
         RouteInfo storage r = ifs.routes[strategy];
+        require(r.exists == true, RouteDoesNotExist(strategy));
 
         // burn lpTokens
         r.lpToken.burnFrom(user, shares);
@@ -101,7 +99,7 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
 
     // ========= Owner ========= //
 
-    /// @inheritdoc IInterchainFactory
+    /// @inheritdoc IHyperlaneHandler
     function setMailbox(address newMailbox) public onlyLumiaFactoryManager {
         require(
             newMailbox != address(0) && newMailbox.code.length > 0,
@@ -114,7 +112,7 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
         ifs.mailbox = IMailbox(newMailbox);
     }
 
-    /// @inheritdoc IInterchainFactory
+    /// @inheritdoc IHyperlaneHandler
     function updateAuthorizedOrigin(
         address originLockbox,
         bool authorized,
@@ -137,39 +135,28 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
 
     // ========= View ========= //
 
-    /// @inheritdoc IInterchainFactory
+    /// @inheritdoc IHyperlaneHandler
     function mailbox() external view returns(IMailbox) {
         return LibInterchainFactory.diamondStorage().mailbox;
     }
 
-    /// @inheritdoc IInterchainFactory
+    /// @inheritdoc IHyperlaneHandler
     function destination(address originLockbox) external view returns(uint32) {
         return LibInterchainFactory.diamondStorage().destinations[originLockbox];
     }
 
-    /// @inheritdoc IInterchainFactory
+    /// @inheritdoc IHyperlaneHandler
     function lastMessage() external view returns(LastMessage memory) {
         return LibInterchainFactory.diamondStorage().lastMessage;
     }
 
-    /// @inheritdoc IInterchainFactory
-    function getLpToken(address strategy) external view returns (LumiaLPToken) {
-        return LibInterchainFactory.diamondStorage().routes[strategy].lpToken;
-    }
-
-    /// @inheritdoc IInterchainFactory
-    function getRouteInfo(address strategy) external view returns (RouteInfo memory) {
-        return LibInterchainFactory.diamondStorage().routes[strategy];
-    }
-
-    /// @inheritdoc IInterchainFactory
+    /// @inheritdoc IHyperlaneHandler
     function quoteDispatchTokenRedeem(
         address strategy,
         address sender,
         uint256 shares
     ) external view returns (uint256) {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        require(_routeExists(ifs, strategy), RouteDoesNotExist(strategy));
 
         RouteInfo storage r = ifs.routes[strategy];
 
@@ -180,7 +167,7 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
         );
     }
 
-    /// @inheritdoc IInterchainFactory
+    /// @inheritdoc IHyperlaneHandler
     function generateTokenRedeemBody(
         address strategy,
         address sender,
@@ -192,64 +179,5 @@ contract InterchainFactoryFacet is IInterchainFactory, LumiaDiamondAcl {
             shares,
             bytes("") // no metadata
         );
-    }
-
-    //============================================================================================//
-    //                                     Internal Functions                                     //
-    //============================================================================================//
-
-    /// @notice Handle specific TokenDeploy message
-    function _handleTokenDeploy(
-        address originLockbox,
-        uint32 originDestination,
-        bytes calldata data
-    ) internal {
-        address strategy = data.strategy(); // origin strategy address
-        string memory name = data.name();
-        string memory symbol = data.symbol();
-        uint8 decimals = data.decimals();
-
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        require(_routeExists(ifs, strategy) == false, RouteAlreadyExist());
-
-        LumiaLPToken lpToken = new LumiaLPToken(address(this), name, symbol, decimals);
-        // TODO create Vault
-
-        ifs.routes[strategy] = RouteInfo({
-            exists: true,
-            originLockbox: originLockbox,
-            originDestination: originDestination,
-            lpToken: lpToken
-            // lendingVault TODO
-        });
-
-        emit TokenDeployed(strategy, address(lpToken), name, symbol, decimals);
-    }
-
-    /// @notice Handle specific TokenBridge message
-    function _handleTokenBridge(bytes calldata data) internal {
-        address strategy = data.strategy();
-        address sender = data.sender();
-        uint256 sharesAmount = data.sharesAmount();
-
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-
-        // revert if route not exists
-        require(_routeExists(ifs, strategy), RouteDoesNotExist(strategy));
-
-        RouteInfo storage r = ifs.routes[strategy];
-
-        // mint LP tokens for the specified user
-        r.lpToken.mint(sender, sharesAmount);
-
-        emit TokenBridged(strategy, address(r.lpToken), sender, sharesAmount);
-    }
-
-    /// @notice Checks whether route exists
-    function _routeExists(
-        InterchainFactoryStorage storage ifs,
-        address strategy
-    ) internal view returns (bool){
-        return ifs.routes[strategy].exists;
     }
 }

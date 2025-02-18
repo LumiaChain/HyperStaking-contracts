@@ -17,7 +17,7 @@ describe("Lockbox", function () {
     // -------------------- Hyperstaking Diamond --------------------
 
     const {
-      mailbox, interchainFactory, diamond, staking, hyperFactory, tier1, tier2, lockbox,
+      mailbox, hyperlaneHandler, routeFactory, diamond, staking, hyperFactory, tier1, tier2, lockbox,
     } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // -------------------- Apply Strategies --------------------
@@ -43,14 +43,14 @@ describe("Lockbox", function () {
     await mailbox.connect(owner).setFee(mailboxFee);
 
     const { vaultToken, lpToken } = await shared.getDerivedTokens(
-      tier2, interchainFactory, await reserveStrategy.getAddress(),
+      tier2, routeFactory, await reserveStrategy.getAddress(),
     );
 
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
       staking, hyperFactory, tier1, tier2, lockbox, // diamond facets
-      mailbox, interchainFactory, testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
+      mailbox, hyperlaneHandler, routeFactory, testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
       defaultRevenueFee, reserveAssetPrice, mailboxFee, // values
       owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, alice, bob, // addresses
     };
@@ -60,7 +60,7 @@ describe("Lockbox", function () {
   describe("Lockbox", function () {
     it("lp token properties should be derived from vault token", async function () {
       const {
-        diamond, tier2, hyperFactory, interchainFactory, mailbox, vaultToken, lpToken, vaultManager, owner,
+        diamond, tier2, hyperFactory, routeFactory, mailbox, vaultToken, lpToken, vaultManager, owner,
       } = await loadFixture(deployHyperStaking);
 
       expect(await lpToken.name()).to.equal(await vaultToken.name());
@@ -85,7 +85,7 @@ describe("Lockbox", function () {
         );
 
         const tokens2 = await shared.getDerivedTokens(
-          tier2, interchainFactory, await reserveStrategy2.getAddress(),
+          tier2, routeFactory, await reserveStrategy2.getAddress(),
         );
 
         expect(await tokens2.vaultToken.name()).to.equal(vname);
@@ -99,24 +99,24 @@ describe("Lockbox", function () {
     });
 
     it("test origin update and acl", async function () {
-      const { interchainFactory, lockbox, lumiaFactoryManager } = await loadFixture(deployHyperStaking);
+      const { hyperlaneHandler, lockbox, lumiaFactoryManager } = await loadFixture(deployHyperStaking);
 
-      await expect(interchainFactory.setMailbox(lockbox)).to.be.reverted;
+      await expect(hyperlaneHandler.setMailbox(lockbox)).to.be.reverted;
 
       // errors
-      await expect(interchainFactory.updateAuthorizedOrigin(
+      await expect(hyperlaneHandler.updateAuthorizedOrigin(
         ZeroAddress, true, 123,
       )).to.be.reverted;
 
-      await expect(interchainFactory.connect(lumiaFactoryManager).updateAuthorizedOrigin(
+      await expect(hyperlaneHandler.connect(lumiaFactoryManager).updateAuthorizedOrigin(
         ZeroAddress, true, 123,
-      )).to.be.revertedWithCustomError(interchainFactory, "OriginUpdateFailed");
+      )).to.be.revertedWithCustomError(hyperlaneHandler, "OriginUpdateFailed");
 
       // events
-      await expect(interchainFactory.connect(lumiaFactoryManager).updateAuthorizedOrigin(
+      await expect(hyperlaneHandler.connect(lumiaFactoryManager).updateAuthorizedOrigin(
         lumiaFactoryManager, true, 123,
       ))
-        .to.emit(interchainFactory, "AuthorizedOriginUpdated")
+        .to.emit(hyperlaneHandler, "AuthorizedOriginUpdated")
         .withArgs(lumiaFactoryManager, true, 123);
     });
 
@@ -183,9 +183,9 @@ describe("Lockbox", function () {
       );
     });
 
-    it("redeem on the should triger tier2 leave on the origin chain - non-zero mailbox fee", async function () {
+    it("redeem the should triger tier2 leave on the origin chain - non-zero mailbox fee", async function () {
       const {
-        staking, reserveStrategy, mailbox, vaultToken, interchainFactory,
+        staking, reserveStrategy, mailbox, vaultToken, hyperlaneHandler, routeFactory,
         testReserveAsset, lpToken, mailboxFee, reserveAssetPrice, alice,
       } = await loadFixture(deployHyperStaking);
 
@@ -195,27 +195,27 @@ describe("Lockbox", function () {
       await expect(staking.stakeDepositTier2(
         reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
       ))
-        .to.emit(interchainFactory, "TokenBridged")
+        .to.emit(routeFactory, "TokenBridged")
         .withArgs(reserveStrategy, lpToken, alice.address, expectedLpAmount);
 
       const lpAfter = await lpToken.balanceOf(alice);
       expect(lpAfter).to.eq(expectedLpAmount);
 
-      await lpToken.connect(alice).approve(interchainFactory, lpAfter);
+      await lpToken.connect(alice).approve(hyperlaneHandler, lpAfter);
 
-      await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(
+      await expect(hyperlaneHandler.connect(alice).redeemLpTokensDispatch(
         reserveStrategy, alice, lpAfter,
       ))
         .to.be.revertedWithCustomError(mailbox, "DispatchUnderpaid");
 
-      const dispatchFee = await interchainFactory.quoteDispatchTokenRedeem(reserveStrategy, alice, lpAfter);
+      const dispatchFee = await hyperlaneHandler.quoteDispatchTokenRedeem(reserveStrategy, alice, lpAfter);
 
-      await expect(interchainFactory.redeemLpTokensDispatch(ZeroAddress, alice, lpAfter))
-        .to.be.revertedWithCustomError(interchainFactory, "RouteDoesNotExist")
+      await expect(hyperlaneHandler.redeemLpTokensDispatch(ZeroAddress, alice, lpAfter))
+        .to.be.revertedWithCustomError(routeFactory, "RouteDoesNotExist")
         .withArgs(ZeroAddress);
 
       // redeem should return stakeAmount
-      const redeemTx = interchainFactory.connect(alice).redeemLpTokensDispatch(
+      const redeemTx = hyperlaneHandler.connect(alice).redeemLpTokensDispatch(
         reserveStrategy, alice, lpAfter, { value: dispatchFee },
       );
 

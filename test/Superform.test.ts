@@ -101,7 +101,7 @@ describe("Superform", function () {
     // -------------------- Hyperstaking Diamond --------------------
 
     const {
-      diamond, staking, hyperFactory, tier1, tier2, interchainFactory, superVault, superformIntegration,
+      diamond, staking, hyperFactory, tier1, tier2, hyperlaneHandler, routeFactory, superVault, superformIntegration,
     } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // -------------------- Apply Strategies --------------------
@@ -152,7 +152,7 @@ describe("Superform", function () {
     const vaultAddress = (await tier2.vaultTier2Info(superformStrategy)).vaultToken;
     const vault = await ethers.getContractAt("VaultToken", vaultAddress);
 
-    const lpTokenAddress = await interchainFactory.getLpToken(superformStrategy);
+    const lpTokenAddress = await routeFactory.getLpToken(superformStrategy);
     const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
 
     // --------------------
@@ -162,7 +162,7 @@ describe("Superform", function () {
       diamond, // diamond
       staking, hyperFactory, tier1, tier2, superformIntegration, // diamond facets
       vault, testUSDC, superformStrategy, erc4626Vault, aerc20, // test contracts
-      interchainFactory, lpToken, // lumia
+      hyperlaneHandler, routeFactory, lpToken, // lumia
       superformId, // ids
       defaultRevenueFee, vaultTokenName, vaultTokenSymbol, // values
       owner, stakingManager, vaultManager, strategyManager, alice, bob, // addresses
@@ -338,7 +338,7 @@ describe("Superform", function () {
 
   describe("Strategy", function () {
     it("Superform strategy with vault should be created along with LP token on lumia side", async function () {
-      const { diamond, hyperFactory, tier2, superformStrategy, interchainFactory, testUSDC, superformId } = await deployHyperStaking();
+      const { diamond, hyperFactory, tier2, superformStrategy, routeFactory, testUSDC, superformId } = await deployHyperStaking();
 
       expect(await superformStrategy.DIAMOND()).to.equal(diamond);
       expect(await superformStrategy.SUPERFORM_ID()).to.equal(superformId);
@@ -355,7 +355,7 @@ describe("Superform", function () {
       const [vaultToken] = await tier2.vaultTier2Info(superformStrategy);
       expect(vaultToken).to.not.equal(ZeroAddress);
 
-      expect(await interchainFactory.getLpToken(superformStrategy)).to.not.equal(ZeroAddress);
+      expect(await routeFactory.getLpToken(superformStrategy)).to.not.equal(ZeroAddress);
     });
 
     it("Staking using superform strategy - tier1", async function () {
@@ -381,7 +381,7 @@ describe("Superform", function () {
     });
 
     it("Staking using superform strategy - tier2", async function () {
-      const { staking, tier2, superformStrategy, testUSDC, alice, interchainFactory, erc4626Vault, vault, lpToken, aerc20 } = await deployHyperStaking();
+      const { staking, tier2, superformStrategy, testUSDC, alice, hyperlaneHandler, erc4626Vault, vault, lpToken, aerc20 } = await deployHyperStaking();
 
       const amount = parseUnits("2000", 6);
 
@@ -400,8 +400,8 @@ describe("Superform", function () {
       const lpBalance = await lpToken.balanceOf(alice);
       expect(lpBalance).to.be.gt(0);
 
-      await lpToken.connect(alice).approve(interchainFactory, lpBalance);
-      await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(superformStrategy, alice, lpBalance))
+      await lpToken.connect(alice).approve(hyperlaneHandler, lpBalance);
+      await expect(hyperlaneHandler.connect(alice).redeemLpTokensDispatch(superformStrategy, alice, lpBalance))
         .to.changeTokenBalances(testUSDC,
           [alice, erc4626Vault], [amount, -amount]);
 
@@ -409,7 +409,7 @@ describe("Superform", function () {
     });
 
     it("Revenue from superform strategy", async function () {
-      const { staking, superformStrategy, testUSDC, alice, interchainFactory, erc4626Vault, lpToken, vaultTokenName, vaultTokenSymbol } = await deployHyperStaking();
+      const { staking, superformStrategy, testUSDC, alice, hyperlaneHandler, erc4626Vault, lpToken, vaultTokenName, vaultTokenSymbol } = await deployHyperStaking();
 
       const amount = parseUnits("100", 6);
 
@@ -426,8 +426,8 @@ describe("Superform", function () {
       const newRatio = parseUnits("2", 6);
       const expectedNewAmount = newRatio * amount / parseUnits("1", 6) - 1n; // minus precision error
 
-      await lpToken.connect(alice).approve(interchainFactory, lpBalance);
-      await expect(interchainFactory.connect(alice).redeemLpTokensDispatch(superformStrategy, alice, lpBalance))
+      await lpToken.connect(alice).approve(hyperlaneHandler, lpBalance);
+      await expect(hyperlaneHandler.connect(alice).redeemLpTokensDispatch(superformStrategy, alice, lpBalance))
         .to.changeTokenBalances(testUSDC,
           [alice, erc4626Vault], [expectedNewAmount, -expectedNewAmount]);
 

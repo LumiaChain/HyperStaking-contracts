@@ -17,8 +17,11 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
 
   // --- facets
 
-  const interchainFactoryFacet = m.contract("InterchainFactoryFacet");
-  const interchainFactoryInterface = getContractInterface("IInterchainFactory");
+  const hyperlaneHandlerFacet = m.contract("HyperlaneHandlerFacet");
+  const hyperlaneHandlerInterface = getContractInterface("IHyperlaneHandler");
+
+  const routeFactoryFacet = m.contract("RouteFactoryFacet");
+  const routeFactoryInterface = getContractInterface("IRouteFactory");
 
   const aclInterface = getContractInterface("LumiaDiamondAcl");
   const aclInterfaceSelectors = getSelectors(aclInterface).remove(["supportsInterface(bytes4)"]);
@@ -27,10 +30,15 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
 
   const cut = [
     {
-      facetAddress: interchainFactoryFacet,
+      facetAddress: hyperlaneHandlerFacet,
       action: FacetCutAction.Add,
-      // acl roles are in fact applied to all potential facets
-      functionSelectors: getSelectors(interchainFactoryInterface).add(aclInterfaceSelectors),
+      // acl roles are applied to all potential facets
+      functionSelectors: getSelectors(hyperlaneHandlerInterface).add(aclInterfaceSelectors),
+    },
+    {
+      facetAddress: routeFactoryFacet,
+      action: FacetCutAction.Add,
+      functionSelectors: getSelectors(routeFactoryInterface),
     },
   ];
 
@@ -63,11 +71,12 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
 
   // --- init facets
 
-  const interchainFactory = m.contractAt("IInterchainFactory", diamond);
+  const hyperlaneHandler = m.contractAt("IHyperlaneHandler", diamond);
+  const routeFactory = m.contractAt("IRouteFactory", diamond);
 
   // --- return
 
-  return { lumiaDiamond: diamond, interchainFactory };
+  return { lumiaDiamond: diamond, hyperlaneHandler, routeFactory };
 });
 
 export default LumiaDiamondModule;

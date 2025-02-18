@@ -60,7 +60,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     },
   });
 
-  const { lumiaDiamond, interchainFactory } = await ignition.deploy(LumiaDiamondModule, {
+  const { lumiaDiamond, hyperlaneHandler, routeFactory } = await ignition.deploy(LumiaDiamondModule, {
     parameters: {
       LumiaDiamondModule: {
         lumiaMailbox: mailboxAddress,
@@ -70,7 +70,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
 
   // finish setup for hyperstaking
   const vaultManager = (await ethers.getSigners())[2];
-  await lockbox.connect(vaultManager).setLumiaFactory(interchainFactory);
+  await lockbox.connect(vaultManager).setLumiaFactory(hyperlaneHandler);
 
   // finish setup for lumia diamond
   const lumiaFactoryManager = (await ethers.getSigners())[3];
@@ -81,14 +81,14 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   );
 
   const authorized = true;
-  await interchainFactory.connect(lumiaFactoryManager).updateAuthorizedOrigin(
+  await hyperlaneHandler.connect(lumiaFactoryManager).updateAuthorizedOrigin(
     lockbox,
     authorized,
     testDestination,
   );
 
   return {
-    mailbox, interchainFactory, diamond, staking, hyperFactory, tier1, tier2, lockbox, superVault, superformIntegration,
+    mailbox, hyperlaneHandler, routeFactory, diamond, staking, hyperFactory, tier1, tier2, lockbox, superVault, superformIntegration,
   };
 }
 
@@ -177,11 +177,11 @@ export async function addTestPriceFeed(
 
 // -------------------- Other Helpers --------------------
 
-export async function getDerivedTokens(tier2: Contract, interchainFactory: Contract, strategy: string) {
+export async function getDerivedTokens(tier2: Contract, routeFactory: Contract, strategy: string) {
   const vaultTokenAddress = (await tier2.vaultTier2Info(strategy)).vaultToken;
   const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
 
-  const lpTokenAddress = await interchainFactory.getLpToken(strategy);
+  const lpTokenAddress = await routeFactory.getLpToken(strategy);
   const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
 
   return { vaultToken, lpToken };
