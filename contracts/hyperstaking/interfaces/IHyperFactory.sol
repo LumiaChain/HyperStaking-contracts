@@ -18,12 +18,17 @@ interface IHyperFactory {
         address vaultToken
     );
 
+    event Tier2EnabledSet(address indexed strategy, bool enabled);
+
     //============================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
 
     /// @notice Thrown when attempting to create a vault using the same strategy
     error VaultAlreadyExist();
+
+    /// @notice Thrown when attempting to use non existing tier2
+    error Tier2DoesNotExist(address strategy);
 
     //============================================================================================//
     //                                          Mutable                                           //
@@ -46,6 +51,13 @@ interface IHyperFactory {
         string memory vaultTokenSymbol,
         uint256 tier1RevenueFee
     ) external payable;
+
+    /**
+     * @notice Enables or disables Tier 2 for a strategy.
+     * @param strategy The strategy address.
+     * @param enabled True to enable, false to disable.
+     */
+    function setTier2Enabled(address strategy, bool enabled) external;
 
     //============================================================================================//
     //                                           View                                             //

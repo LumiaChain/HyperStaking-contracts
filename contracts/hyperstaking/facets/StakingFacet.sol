@@ -14,7 +14,7 @@ import {
 } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
-import {LibHyperStaking, VaultInfo} from "../libraries/LibHyperStaking.sol";
+import {HyperStakingStorage, LibHyperStaking, VaultInfo, VaultTier2} from "../libraries/LibHyperStaking.sol";
 
 /**
  * @title StakingFacet
@@ -82,8 +82,12 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         nonReentrant
         whenNotPaused
     {
-        VaultInfo storage vault = LibHyperStaking.diamondStorage().vaultInfo[strategy];
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
         require(vault.strategy != address(0), VaultDoesNotExist(strategy));
+
+        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
+        require(tier2.enabled, Tier2Disabled(strategy));
 
         vault.stakeCurrency.transferFrom(
             msg.sender,

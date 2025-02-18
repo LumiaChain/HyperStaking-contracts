@@ -34,6 +34,9 @@ interface IStaking {
     /// @notice Thrown when attempting to deposit to a non-existent vault
     error VaultDoesNotExist(address vault);
 
+    /// @notice Thrown when attempting to stake to disabled tier2
+    error Tier2Disabled(address strategy);
+
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//

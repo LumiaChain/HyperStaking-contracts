@@ -1,4 +1,5 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
+import { parseEther } from "ethers";
 
 // Crates a test 3adao lending protocol, a mock used for tests
 const ThreeADaoMockModule = buildModule("ThreeADaoMockModule", (m) => {
@@ -38,7 +39,7 @@ const ThreeADaoMockModule = buildModule("ThreeADaoMockModule", (m) => {
   m.call(rwaUSDOwner, "addMinter", [vaultFactory]);
 
   const debtTreshold = 0;
-  const maxRedeemablePercentage = 100;
+  const maxRedeemablePercentage = parseEther("1");
   m.call(vaultExtraSettings, "setMaxRedeemablePercentage", [
     debtTreshold,
     maxRedeemablePercentage,

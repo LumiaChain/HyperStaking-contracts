@@ -9,6 +9,7 @@ import ThreeADaoMockModule from "../ignition/modules/test/3adaoMock";
 
 import TestERC20Module from "../ignition/modules/test/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
+import ZeroYieldStrategyModule from "../ignition/modules/ZeroYieldStrategy";
 
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IHyperFactory";
 import { IERC20 } from "../typechain-types";
@@ -152,6 +153,23 @@ export async function createReserveStrategy(
   });
 
   return reserveStrategy;
+}
+
+/// @param currencyToken ZeroAddress is used for native currency
+export async function createZeroYieldStrategy(
+  diamond: Contract,
+  currencyToken: string,
+) {
+  const { zeroYieldStrategy } = await ignition.deploy(ZeroYieldStrategyModule, {
+    parameters: {
+      ZeroYieldStrategyModule: {
+        diamond: await diamond.getAddress(),
+        currencyToken,
+      },
+    },
+  });
+
+  return zeroYieldStrategy;
 }
 
 // -------------------- 3ADAO Lending --------------------

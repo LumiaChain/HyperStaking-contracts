@@ -77,14 +77,14 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         address strategy,
         address user,
         uint256 shares
-    ) external payable { // TODO diamondInternal
+    ) external payable {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
 
         RouteInfo storage r = ifs.routes[strategy];
         require(r.exists == true, RouteDoesNotExist(strategy));
 
         // burn lpTokens
-        r.lpToken.burnFrom(user, shares);
+        r.lpToken.burnFrom(msg.sender, shares);
 
         bytes memory body = generateTokenRedeemBody(strategy, user, shares);
 

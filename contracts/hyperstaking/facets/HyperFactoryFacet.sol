@@ -56,6 +56,19 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         _dispatchTokenDeploy(strategy, vaultTokenName, vaultTokenSymbol, assetDecimals);
     }
 
+    /// @inheritdoc IHyperFactory
+    function setTier2Enabled(address strategy, bool enabled) external onlyVaultManager {
+        VaultTier2 storage tier2 = LibHyperStaking.diamondStorage().vaultTier2Info[strategy];
+
+        require(address(tier2.vaultToken) != address(0), Tier2DoesNotExist(strategy));
+
+        // set value only if differs
+        if (tier2.enabled != enabled) {
+            tier2.enabled = enabled;
+            emit Tier2EnabledSet(strategy, enabled);
+        }
+    }
+
     // ========= View ========= //
 
     /// @inheritdoc IHyperFactory
@@ -142,6 +155,7 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
 
         // init tier2
         v.vaultTier2Info[strategy] = VaultTier2({
+            enabled: true,
             vaultToken: vaultToken
         });
 

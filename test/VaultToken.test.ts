@@ -7,7 +7,7 @@ import * as shared from "./shared";
 
 describe("VaultToken", function () {
   async function deployHyperStaking() {
-    const [owner, stakingManager, vaultManager, strategyManager, bob, alice] = await ethers.getSigners();
+    const [owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, bob, alice] = await ethers.getSigners();
 
     // -------------------- Deploy Tokens --------------------
 
@@ -44,6 +44,9 @@ describe("VaultToken", function () {
 
     const lpTokenAddress = await routeFactory.getLpToken(reserveStrategy);
     const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
+
+    // disable lending functionality for reserveStrategy
+    await routeFactory.connect(lumiaFactoryManager).updateLendingProperties(reserveStrategy, false, 0);
 
     /* eslint-disable object-property-newline */
     return {
@@ -238,11 +241,11 @@ describe("VaultToken", function () {
       // -- scenario with approval redeem
       await staking.stakeDepositTier2(reserveStrategy, stakeAmount, alice, { value: stakeAmount });
 
-      // alice approve factory and bob excutes redeem for her
+      // alice withdraw for bob
       await lpToken.connect(alice).approve(hyperlaneHandler, lpBalance);
-      await hyperlaneHandler.connect(bob).redeemLpTokensDispatch(
-        reserveStrategy, alice, lpBalance, { value: dispatchFee },
-      );
+      await expect(hyperlaneHandler.connect(alice).redeemLpTokensDispatch(
+        reserveStrategy, bob, lpBalance, { value: dispatchFee },
+      )).to.changeEtherBalance(bob, stakeAmount);
 
       expect(await vaultToken.allowance(alice, bob)).to.be.eq(0);
       expect(await vaultToken.balanceOf(alice)).to.be.eq(0);

@@ -15,17 +15,22 @@ import {IVault} from "../../external/3adao-lumia/interfaces/IVault.sol";
 /**
  * @notice Stores routing information about specific token route
  * @param exists Helper boolean for easy determination if the route exists
- * @param originLockbox The address of the origin Lockbox
+ * @param isLendingEnabled Indicates whether the asset can be used for lending
  * @param originDestination The Chain id of the origin
+ * @param originLockbox The address of the origin Lockbox
  * @param lpToken The token address on this chain representing a HyperStaking position
  * @param lendingVault The 3A DAO Smart Vault address, created for this route
+ * @param borrowSafetyBuffer The percentage of collateral to be reserved for safety,
+ *        expressed with 18 decimals. For example, 5e16 represents 5% (default value)
  */
 struct RouteInfo {
     bool exists;
-    address originLockbox;
+    bool isLendingEnabled;
     uint32 originDestination;
+    address originLockbox;
     LumiaLPToken lpToken;
     IVault lendingVault;
+    uint256 borrowSafetyBuffer;
 }
 
 struct LastMessage {
@@ -60,6 +65,9 @@ struct InterchainFactoryStorage {
 library LibInterchainFactory {
     bytes32 constant internal INTERCHAIN_FACTORY_STORAGE_POSITION
         = keccak256("lumia-interchain-factory.storage");
+
+    // 1e18 as a scaling factor, e.g. 0.1 ETH (1e17) == 10%
+    uint256 constant internal PERCENT_PRECISION = 1e18; // represent 100%
 
     function diamondStorage() internal pure returns (InterchainFactoryStorage storage s) {
         bytes32 position = INTERCHAIN_FACTORY_STORAGE_POSITION;

@@ -89,7 +89,7 @@ describe("Superform", function () {
   };
 
   async function deployHyperStaking() {
-    const [owner, stakingManager, vaultManager, strategyManager, bob, alice] = await ethers.getSigners();
+    const [owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, bob, alice] = await ethers.getSigners();
 
     // -------------------- Deploy Tokens --------------------
 
@@ -154,6 +154,9 @@ describe("Superform", function () {
 
     const lpTokenAddress = await routeFactory.getLpToken(superformStrategy);
     const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
+
+    // disable lending functionality for superformStrategy
+    await routeFactory.connect(lumiaFactoryManager).updateLendingProperties(superformStrategy, false, 0);
 
     // --------------------
 
@@ -393,7 +396,8 @@ describe("Superform", function () {
       expect(await aerc20.totalSupply()).to.equal(amount);
       expect(await aerc20.balanceOf(vault)).to.equal(amount);
 
-      const [vaultToken] = await tier2.vaultTier2Info(superformStrategy, alice);
+      const [enabled, vaultToken] = await tier2.vaultTier2Info(superformStrategy, alice);
+      expect(enabled).to.be.eq(true);
       expect(vaultToken).to.be.eq(vault.target);
 
       // lpToken on the Lumia chain side

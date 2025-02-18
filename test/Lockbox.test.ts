@@ -46,6 +46,9 @@ describe("Lockbox", function () {
       tier2, routeFactory, await reserveStrategy.getAddress(),
     );
 
+    // disable lending functionality for reserveStrategy
+    await routeFactory.connect(lumiaFactoryManager).updateLendingProperties(reserveStrategy, false, 0);
+
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond

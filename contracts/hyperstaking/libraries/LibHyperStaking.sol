@@ -37,6 +37,7 @@ struct VaultTier1 {
 // Users at Tier2 don't have stake stored in the pool (storage) anymore,
 // as it is represented by ERC4626 vault token - liquid shares
 struct VaultTier2 {
+    bool enabled;
     IERC4626 vaultToken;
 }
 
