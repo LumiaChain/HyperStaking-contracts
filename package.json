@@ -33,7 +33,7 @@
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-prettier": "^5.2.1",
     "ethers": "^6.13.2",
-    "hardhat": "^2.22.18",
+    "hardhat": "^2.22.19",
     "hardhat-contract-sizer": "^2.10.0",
     "hardhat-switch-network": "^1.1.1",
     "husky": "^9.1.5",
