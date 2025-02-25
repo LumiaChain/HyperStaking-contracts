@@ -26,8 +26,8 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const aclInterface = getContractInterface("HyperStakingAcl");
   const aclInterfaceSelectors = getSelectors(aclInterface).remove(["supportsInterface(bytes4)"]);
 
-  const stakingFacet = m.contract("StakingFacet");
-  const stakingFacetInterface = getContractInterface("IStaking");
+  const depositFacet = m.contract("DepositFacet");
+  const depositFacetInterface = getContractInterface("IDeposit");
 
   const hyperFactoryFacet = m.contract("HyperFactoryFacet");
   const hyperFactoryFacetInterface = getContractInterface("IHyperFactory");
@@ -50,10 +50,10 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
 
   const cut = [
     {
-      facetAddress: stakingFacet,
+      facetAddress: depositFacet,
       action: FacetCutAction.Add,
-      // acl roles are applied to all facets, staking facet is used here with no reason
-      functionSelectors: getSelectors(stakingFacetInterface).add(aclInterfaceSelectors),
+      // acl roles are applied to all facets, deposit facet is used here with no reason
+      functionSelectors: getSelectors(depositFacetInterface).add(aclInterfaceSelectors),
     },
     {
       facetAddress: hyperFactoryFacet,
@@ -106,7 +106,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   // --- init facets
 
   const acl = m.contractAt("HyperStakingAcl", diamond);
-  const staking = m.contractAt("IStaking", diamond);
+  const deposit = m.contractAt("IDeposit", diamond);
   const hyperFactory = m.contractAt("IHyperFactory", diamond);
   const tier1 = m.contractAt("ITier1Vault", diamond);
   const tier2 = m.contractAt("ITier2Vault", diamond);
@@ -115,7 +115,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
 
   // --- return
 
-  return { diamond, acl, staking, hyperFactory, tier1, tier2, lockbox, superformIntegration };
+  return { diamond, acl, deposit, hyperFactory, tier1, tier2, lockbox, superformIntegration };
 });
 
 export default HyperStakingModule;

@@ -101,7 +101,7 @@ describe("Superform", function () {
     // -------------------- Hyperstaking Diamond --------------------
 
     const {
-      diamond, staking, hyperFactory, tier1, tier2, hyperlaneHandler, routeFactory, superVault, superformIntegration,
+      diamond, deposit, hyperFactory, tier1, tier2, hyperlaneHandler, routeFactory, superVault, superformIntegration,
     } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // -------------------- Apply Strategies --------------------
@@ -163,7 +163,7 @@ describe("Superform", function () {
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      staking, hyperFactory, tier1, tier2, superformIntegration, // diamond facets
+      deposit, hyperFactory, tier1, tier2, superformIntegration, // diamond facets
       vault, testUSDC, superformStrategy, erc4626Vault, aerc20, // test contracts
       hyperlaneHandler, routeFactory, lpToken, // lumia
       superformId, // ids
@@ -362,34 +362,34 @@ describe("Superform", function () {
     });
 
     it("Staking using superform strategy - tier1", async function () {
-      const { staking, tier1, superformStrategy, testUSDC, alice, erc4626Vault } = await deployHyperStaking();
+      const { deposit, tier1, superformStrategy, testUSDC, alice, erc4626Vault } = await deployHyperStaking();
 
       const amount = parseUnits("400", 6);
 
-      await testUSDC.connect(alice).approve(staking, amount);
-      await expect(staking.connect(alice).stakeDeposit(superformStrategy, amount, alice))
+      await testUSDC.connect(alice).approve(deposit, amount);
+      await expect(deposit.connect(alice).stakeDeposit(superformStrategy, amount, alice))
         .to.changeTokenBalances(testUSDC,
-          [alice, staking, superformStrategy, erc4626Vault], [-amount, 0, 0, amount]);
+          [alice, deposit, superformStrategy, erc4626Vault], [-amount, 0, 0, amount]);
 
       let [stakeLocked, allocationPoint] = await tier1.userTier1Info(superformStrategy, alice);
       expect(stakeLocked).to.equal(amount);
       expect(allocationPoint).to.be.greaterThan(0);
 
-      await expect(staking.connect(alice).stakeWithdraw(superformStrategy, amount, alice))
+      await expect(deposit.connect(alice).stakeWithdraw(superformStrategy, amount, alice))
         .to.changeTokenBalances(testUSDC,
-          [alice, staking, superformStrategy, erc4626Vault], [amount, 0, 0, -amount]);
+          [alice, deposit, superformStrategy, erc4626Vault], [amount, 0, 0, -amount]);
 
       [stakeLocked] = await tier1.userTier1Info(superformStrategy, alice);
       expect(stakeLocked).to.equal(0);
     });
 
     it("Staking using superform strategy - tier2", async function () {
-      const { staking, tier2, superformStrategy, testUSDC, alice, hyperlaneHandler, erc4626Vault, vault, lpToken, aerc20 } = await deployHyperStaking();
+      const { deposit, tier2, superformStrategy, testUSDC, alice, hyperlaneHandler, erc4626Vault, vault, lpToken, aerc20 } = await deployHyperStaking();
 
       const amount = parseUnits("2000", 6);
 
-      await testUSDC.connect(alice).approve(staking, amount);
-      await expect(staking.connect(alice).stakeDepositTier2(superformStrategy, amount, alice))
+      await testUSDC.connect(alice).approve(deposit, amount);
+      await expect(deposit.connect(alice).stakeDepositTier2(superformStrategy, amount, alice))
         .to.changeTokenBalances(testUSDC,
           [alice, erc4626Vault], [-amount, amount]);
 
@@ -413,12 +413,12 @@ describe("Superform", function () {
     });
 
     it("Revenue from superform strategy", async function () {
-      const { staking, superformStrategy, testUSDC, alice, hyperlaneHandler, erc4626Vault, lpToken, vaultTokenName, vaultTokenSymbol } = await deployHyperStaking();
+      const { deposit, superformStrategy, testUSDC, alice, hyperlaneHandler, erc4626Vault, lpToken, vaultTokenName, vaultTokenSymbol } = await deployHyperStaking();
 
       const amount = parseUnits("100", 6);
 
-      await testUSDC.connect(alice).approve(staking, amount);
-      await staking.connect(alice).stakeDepositTier2(superformStrategy, amount, alice);
+      await testUSDC.connect(alice).approve(deposit, amount);
+      await deposit.connect(alice).stakeDepositTier2(superformStrategy, amount, alice);
 
       // lpToken on the Lumia chain side
       const lpBalance = await lpToken.balanceOf(alice);

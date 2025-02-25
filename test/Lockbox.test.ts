@@ -17,7 +17,7 @@ describe("Lockbox", function () {
     // -------------------- Hyperstaking Diamond --------------------
 
     const {
-      mailbox, hyperlaneHandler, routeFactory, diamond, staking, hyperFactory, tier1, tier2, lockbox,
+      mailbox, hyperlaneHandler, routeFactory, diamond, deposit, hyperFactory, tier1, tier2, lockbox,
     } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // -------------------- Apply Strategies --------------------
@@ -52,7 +52,7 @@ describe("Lockbox", function () {
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      staking, hyperFactory, tier1, tier2, lockbox, // diamond facets
+      deposit, hyperFactory, tier1, tier2, lockbox, // diamond facets
       mailbox, hyperlaneHandler, routeFactory, testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
       defaultRevenueFee, reserveAssetPrice, mailboxFee, // values
       owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, alice, bob, // addresses
@@ -125,7 +125,7 @@ describe("Lockbox", function () {
 
     it("stake deposit to tier2 with non-zero mailbox fee", async function () {
       const {
-        staking, tier1, reserveStrategy, vaultToken, lpToken, mailboxFee, owner, alice,
+        deposit, tier1, reserveStrategy, vaultToken, lpToken, mailboxFee, owner, alice,
       } = await loadFixture(deployHyperStaking);
 
       const lpBefore = await lpToken.balanceOf(alice);
@@ -133,10 +133,10 @@ describe("Lockbox", function () {
       const stakeAmount = parseEther("2");
 
       const tier2 = 2;
-      await expect(staking.stakeDepositTier2(
+      await expect(deposit.stakeDepositTier2(
         reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
       ))
-        .to.emit(staking, "StakeDeposit")
+        .to.emit(deposit, "StakeDeposit")
         .withArgs(owner, alice, reserveStrategy, stakeAmount, tier2);
 
       const lpAfter = await lpToken.balanceOf(alice);
@@ -188,14 +188,14 @@ describe("Lockbox", function () {
 
     it("redeem the should triger tier2 leave on the origin chain - non-zero mailbox fee", async function () {
       const {
-        staking, reserveStrategy, mailbox, vaultToken, hyperlaneHandler, routeFactory,
+        deposit, reserveStrategy, mailbox, vaultToken, hyperlaneHandler, routeFactory,
         testReserveAsset, lpToken, mailboxFee, reserveAssetPrice, alice,
       } = await loadFixture(deployHyperStaking);
 
       const stakeAmount = parseEther("3");
       const expectedLpAmount = stakeAmount * parseEther("1") / reserveAssetPrice;
 
-      await expect(staking.stakeDepositTier2(
+      await expect(deposit.stakeDepositTier2(
         reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
       ))
         .to.emit(routeFactory, "TokenBridged")

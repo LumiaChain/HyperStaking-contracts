@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {IStaking} from "../interfaces/IStaking.sol";
+import {IDeposit} from "../interfaces/IDeposit.sol";
 import {ITier1Vault} from "../interfaces/ITier1Vault.sol";
 import {ITier2Vault} from "../interfaces/ITier2Vault.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
@@ -17,13 +17,13 @@ import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {HyperStakingStorage, LibHyperStaking, VaultInfo, VaultTier2} from "../libraries/LibHyperStaking.sol";
 
 /**
- * @title StakingFacet
+ * @title DepositFacet
  * @notice Entry point for staking operations
  * Handles user deposits and withdrawals (tier1)
  *
  * @dev This contract is a facet of Diamond Proxy.
  */
-contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, PausableUpgradeable {
+contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, PausableUpgradeable {
     using CurrencyHandler for Currency;
 
     //============================================================================================//
@@ -31,7 +31,7 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     //============================================================================================//
 
     /// @notice Main Tier1 deposit function
-    /// @inheritdoc IStaking
+    /// @inheritdoc IDeposit
     function stakeDeposit(address strategy, uint256 stake, address to)
         external
         payable
@@ -52,7 +52,7 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     }
 
     /// @notice Tier1 withdraw function
-    /// @inheritdoc IStaking
+    /// @inheritdoc IDeposit
     function stakeWithdraw(address strategy, uint256 stake, address to)
         external
         nonReentrant
@@ -75,7 +75,7 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     /* ========== Tier 2  ========== */
 
     /// @notice Tier2 deposit function
-    /// @inheritdoc IStaking
+    /// @inheritdoc IDeposit
     function stakeDepositTier2(address strategy, uint256 stake, address to)
         external
         payable
@@ -101,13 +101,13 @@ contract StakingFacet is IStaking, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
     /* ========== ACL  ========== */
 
-    /// @inheritdoc IStaking
-    function pauseStaking() external onlyStakingManager whenNotPaused {
+    /// @inheritdoc IDeposit
+    function pauseDeposit() external onlyStakingManager whenNotPaused {
         _pause();
     }
 
-    /// @inheritdoc IStaking
-    function unpauseStaking() external onlyStakingManager whenPaused {
+    /// @inheritdoc IDeposit
+    function unpauseDeposit() external onlyStakingManager whenPaused {
         _unpause();
     }
 }

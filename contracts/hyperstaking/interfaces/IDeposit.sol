@@ -2,10 +2,10 @@
 pragma solidity =0.8.27;
 
 /**
- * @title IStaking
- * @dev Interface for StakingFacet
+ * @title IDeposit
+ * @dev Interface for DepositFacet
  */
-interface IStaking {
+interface IDeposit {
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
@@ -83,10 +83,10 @@ interface IStaking {
     /**
      * @notice Pauses stake functionalities
      */
-    function pauseStaking() external;
+    function pauseDeposit() external;
 
     /**
      * @notice Resumes stake functionalities
      */
-    function unpauseStaking() external;
+    function unpauseDeposit() external;
 }

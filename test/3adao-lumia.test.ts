@@ -32,7 +32,7 @@ describe("3adao-lumia", function () {
     // -------------------- Hyperstaking Diamond --------------------
 
     const {
-      mailbox, hyperlaneHandler, routeFactory, diamond, staking, hyperFactory, tier1, tier2, lockbox, rwaUSD, threeAVaultFactory, tokenToPriceFeed,
+      mailbox, hyperlaneHandler, routeFactory, diamond, deposit, hyperFactory, tier1, tier2, lockbox, rwaUSD, threeAVaultFactory, tokenToPriceFeed,
     } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // -------------------- Apply Strategies --------------------
@@ -73,7 +73,7 @@ describe("3adao-lumia", function () {
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      staking, hyperFactory, tier1, tier2, lockbox, // diamond facets
+      deposit, hyperFactory, tier1, tier2, lockbox, // diamond facets
       mailbox, hyperlaneHandler, routeFactory, testUSDC, zeroYieldStrategy, vaultToken, lpToken,
       lendingVault, rwaUSD, // test contracts
       defaultRevenueFee, usdcCollateralCapacity, // values
@@ -84,12 +84,12 @@ describe("3adao-lumia", function () {
 
   describe("RouteFactory", function () {
     it("route factory use lending integration and sent rwaUSD to the user", async function () {
-      const { staking, zeroYieldStrategy, testUSDC, alice, vaultToken, lockbox, lpToken, routeFactory, rwaUSD, lendingVault } = await deployHyperStaking();
+      const { deposit, zeroYieldStrategy, testUSDC, alice, vaultToken, lockbox, lpToken, routeFactory, rwaUSD, lendingVault } = await deployHyperStaking();
 
       const stakeAmount = parseUnits("400", 6);
 
-      await testUSDC.connect(alice).approve(staking, stakeAmount);
-      const stakeTx = staking.connect(alice).stakeDepositTier2(
+      await testUSDC.connect(alice).approve(deposit, stakeAmount);
+      const stakeTx = deposit.connect(alice).stakeDepositTier2(
         zeroYieldStrategy, stakeAmount, alice,
       );
 
@@ -123,7 +123,7 @@ describe("3adao-lumia", function () {
 
     it("it should be possible to redeem rwaUSD back to lpToken and origin chain", async function () {
       const {
-        staking, zeroYieldStrategy, testUSDC, alice, vaultToken, lockbox, lpToken, routeFactory, rwaUSD, lendingVault, lumiaFactoryManager,
+        deposit, zeroYieldStrategy, testUSDC, alice, vaultToken, lockbox, lpToken, routeFactory, rwaUSD, lendingVault, lumiaFactoryManager,
       } = await deployHyperStaking();
 
       const stakeAmount = parseUnits("1000", 6);
@@ -133,8 +133,8 @@ describe("3adao-lumia", function () {
         .to.emit(routeFactory, "LendingPropertiesUpdated")
         .withArgs(zeroYieldStrategy, true, parseEther("0.01"));
 
-      await testUSDC.connect(alice).approve(staking, stakeAmount);
-      await staking.connect(alice).stakeDepositTier2(
+      await testUSDC.connect(alice).approve(deposit, stakeAmount);
+      await deposit.connect(alice).stakeDepositTier2(
         zeroYieldStrategy, stakeAmount, alice,
       );
 
