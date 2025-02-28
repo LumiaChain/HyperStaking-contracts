@@ -22,7 +22,7 @@ contract ReserveStrategy is AbstractStrategy {
     uint256 constant internal PRECISSION_FACTOR = 1e18;
 
     /// Currency used as stake receiving during allocation
-    Currency public stake;
+    Currency private stake;
 
     /// Token used as revenue asset sent in exchange for the stake
     address public revenueAsset;

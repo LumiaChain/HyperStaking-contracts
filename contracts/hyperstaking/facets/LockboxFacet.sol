@@ -100,6 +100,32 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     }
 
     /// @inheritdoc ILockbox
+    function stakeInfoDispatch(
+        address strategy,
+        address user,
+        uint256 stake
+    ) external payable diamondInternal {
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
+        require(box.lumiaFactory != address(0), RecipientUnset());
+
+        bytes memory body = generateStakeInfoBody(strategy, user, stake);
+
+        // address left-padded to bytes32 for compatibility with hyperlane
+        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.lumiaFactory);
+
+        // msg.value should already include fee calculated
+        box.mailbox.dispatch{value: msg.value}(box.destination, recipientBytes32, body);
+
+        emit StakeInfoDispatched(
+            address(box.mailbox),
+            box.lumiaFactory,
+            strategy,
+            user,
+            stake
+        );
+    }
+
+    /// @inheritdoc ILockbox
     function handle(
         uint32 origin,
         bytes32 sender,
@@ -122,17 +148,6 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         require(msgType == MessageType.TokenRedeem, UnsupportedMessage());
 
         _handleTokenRedeem(data);
-    }
-
-    /// @notice Handle specific TokenRedeem message
-    function _handleTokenRedeem(bytes calldata data) internal {
-        address strategy = data.strategy();
-        address user = data.sender(); // sender -> actual hyperstaking user
-        uint256 shares = data.redeemAmount(); // amount -> amount of shares
-
-        IERC4626 vaultToken = LibHyperStaking.diamondStorage().vaultTier2Info[strategy].vaultToken;
-
-        vaultToken.redeem(shares, user, address(this));
     }
 
     /* ========== ACL  ========== */
@@ -204,24 +219,16 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     }
 
     /// @inheritdoc ILockbox
-    function quoteStakeDispatch(
+    function quoteDispatchStakeInfo(
         address strategy,
         address sender,
         uint256 stake
     ) external view returns (uint256) {
-        IERC4626 vaultToken = LibHyperStaking.diamondStorage().vaultTier2Info[strategy].vaultToken;
-
-        // Strategy: stake -> allocation
-        uint256 allocation = IStrategy(strategy).previewAllocation(stake);
-
-        // Vault: allocation -> shares
-        uint256 shares = vaultToken.previewWithdraw(allocation);
-
-        return this.quoteDispatchTokenBridge(
-            strategy,
-            sender,
-            stake,
-            shares
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
+        return box.mailbox.quoteDispatch(
+            box.destination,
+            TypeCasts.addressToBytes32(box.lumiaFactory),
+            generateStakeInfoBody(strategy, sender, stake)
         );
     }
 
@@ -256,4 +263,34 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
             bytes("") // no metadata
         );
     }
+
+    /// @inheritdoc ILockbox
+    function generateStakeInfoBody(
+        address strategy,
+        address sender,
+        uint256 stake
+    ) public pure returns (bytes memory body) {
+        body = HyperlaneMailboxMessages.serializeStakeInfo(
+            strategy,
+            sender,
+            stake,
+            bytes("") // no metadata
+        );
+    }
+
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
+    /// @notice Handle specific TokenRedeem message
+    function _handleTokenRedeem(bytes calldata data) internal {
+        address strategy = data.strategy();
+        address user = data.sender(); // sender -> actual hyperstaking user
+        uint256 shares = data.redeemAmount(); // amount -> amount of shares
+
+        IERC4626 vaultToken = LibHyperStaking.diamondStorage().vaultTier2Info[strategy].vaultToken;
+
+        vaultToken.redeem(shares, user, address(this));
+    }
+
 }

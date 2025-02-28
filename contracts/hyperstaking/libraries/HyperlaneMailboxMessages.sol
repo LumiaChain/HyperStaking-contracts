@@ -7,6 +7,7 @@ import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 enum MessageType {
     TokenDeploy,
     TokenBridge,
+    StakeInfo,
     TokenRedeem
 }
 
@@ -95,6 +96,21 @@ library HyperlaneMailboxMessages {
         );
     }
 
+    function serializeStakeInfo(
+        address strategy_,
+        address sender_,
+        uint256 stakeAmount_,
+        bytes memory metadata_
+    ) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            bytes8(uint64(MessageType.StakeInfo)),      //  8-bytes: msg type
+            TypeCasts.addressToBytes32(strategy_),      // 32-bytes: strategy address
+            TypeCasts.addressToBytes32(sender_),        // 32-bytes: sender address
+            stakeAmount_,                               // 32-bytes: stake amount
+            metadata_                                   // XX-bytes: additional metadata
+        );
+    }
+
     function serializeTokenRedeem(
         address strategy_,
         address sender_,
@@ -146,17 +162,19 @@ library HyperlaneMailboxMessages {
         return message[139:];
     }
 
-    // ========= TokenBridge & TokenRedeem  ========= //
+    // ========= TokenBridge & StakeInfo & TokenRedeem  ========= //
 
     function sender(bytes calldata message) internal pure returns (address) {
         return TypeCasts.bytes32ToAddress(bytes32(message[40:72]));
     }
 
-    // ========= TokenBridge ========= //
+    // ========= TokenBridge & StakeInfo ========= //
 
     function stakeAmount(bytes calldata message) internal pure returns (uint256) {
         return uint256(bytes32(message[72:104]));
     }
+
+    // ========= TokenBridge ========= //
 
     function sharesAmount(bytes calldata message) internal pure returns (uint256) {
         return uint256(bytes32(message[104:136]));
@@ -164,6 +182,12 @@ library HyperlaneMailboxMessages {
 
     function tokenBridgeMetadata(bytes calldata message) internal pure returns (bytes calldata) {
         return message[136:];
+    }
+
+    // ========= StakeInfo ========= //
+
+    function stakeInfoMetadata(bytes calldata message) internal pure returns (bytes calldata) {
+        return message[104:];
     }
 
     // ========= TokenRedeem  ========= //

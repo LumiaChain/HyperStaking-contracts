@@ -37,15 +37,16 @@ struct VaultTier1 {
 // Users at Tier2 don't have stake stored in the pool (storage) anymore,
 // as it is represented by ERC4626 vault token - liquid shares
 struct VaultTier2 {
-    bool enabled;
     IERC4626 vaultToken;
 }
 
-/// Main vault details.
+/// Main vault details
+/// @param enabled Determines whether deposits to the strategy are enabled or disabled
 /// @param stakeCurrency Currency used for staking
 /// @param strategy Address of the strategy contract
 /// @param asset ERC-20 token used in the vault
 struct VaultInfo {
+    bool enabled;
     Currency stakeCurrency;
     address strategy;
     IERC20Metadata asset;

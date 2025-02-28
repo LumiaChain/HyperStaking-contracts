@@ -6,6 +6,12 @@ pragma solidity =0.8.27;
  * @dev Interface for DepositFacet
  */
 interface IDeposit {
+    enum DepositType {
+        Direct,
+        Tier1,
+        Tier2
+    }
+
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
@@ -15,8 +21,9 @@ interface IDeposit {
         address indexed to,
         address indexed strategy,
         uint256 stake,
-        uint8 indexed tier  // 1 - Tier1
-                            // 2 - Tier2
+        DepositType indexed tier    // 0 - Direct
+                                    // 1 - Tier1
+                                    // 2 - Tier2
     );
 
     event StakeWithdraw(
@@ -31,35 +38,26 @@ interface IDeposit {
     //                                          Errors                                            //
     //============================================================================================//
 
-    /// @notice Thrown when attempting to deposit to a non-existent vault
-    error VaultDoesNotExist(address vault);
+    /// @notice Thrown when attempting to stake to disabled strategy
+    error StrategyDisabled(address strategy);
 
-    /// @notice Thrown when attempting to stake to disabled tier2
-    error Tier2Disabled(address strategy);
+    /// @notice Thrown when attempting to deposit to a non-existent vault
+    error VaultDoesNotExist(address strategy);
+
+    /// @notice Thrown when depositing to a not direct deposit vault
+    error NotDirectDeposit(address strategy);
 
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
 
     /**
-     * @notice Deposits a specified stake amount into the chosen strategy
+     * @notice Deposits a specified stake amount into Tier1 the chosen strategy
      * @param strategy The address of the strategy selected by the user
      * @param stake The amount of the token to stake
      * @param to The address receiving the staked token allocation (typically the user's address)
      */
     function stakeDeposit(
-        address strategy,
-        uint256 stake,
-        address to
-    ) external payable;
-
-    /**
-     * @notice Deposits a specified stake amount into the chosen strategy
-     * @param strategy The address of the strategy selected by the user
-     * @param stake The amount of the token to stake
-     * @param to The address receiving the staked token allocation (typically the user's address)
-     */
-    function stakeDepositTier2(
         address strategy,
         uint256 stake,
         address to
@@ -79,6 +77,31 @@ interface IDeposit {
         uint256 stake,
         address to
     ) external returns (uint256 withdrawAmount);
+
+    /**
+     * @notice Deposits a specified stake amount into Tier2 of the chosen strategy
+     * @param strategy The address of the strategy selected by the user
+     * @param stake The amount of the token to stake
+     * @param to The address receiving the staked token allocation (typically the user's address)
+     */
+    function stakeDepositTier2(
+        address strategy,
+        uint256 stake,
+        address to
+    ) external payable;
+
+    /**
+     * @notice Deposits a specified stake amount directly into the lockbox and bridges it to Lumia
+     *         Uses a designated Strategy contract, which does not perform any yield generation
+     * @param strategy The address of the strategy associated with the vault
+     * @param stake The amount of the token to stake
+     * @param to The address receiving the staked token allocation (typically the user's address)
+     */
+    function directStakeDeposit(
+        address strategy,
+        uint256 stake,
+        address to
+    ) external payable;
 
     /**
      * @notice Pauses stake functionalities

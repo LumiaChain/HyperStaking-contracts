@@ -59,6 +59,15 @@ abstract contract AbstractStrategy is IStrategy {
         DIAMOND = diamond_;
     }
 
+    //============================================================================================//
+    //                                      Public Functions                                      //
+    //============================================================================================//
+
+    /// @inheritdoc IStrategy
+    function isDirectStakeStrategy() external pure virtual returns (bool) {
+        return false;
+    }
+
     // ========= StrategyManager ========= //
 
     /**

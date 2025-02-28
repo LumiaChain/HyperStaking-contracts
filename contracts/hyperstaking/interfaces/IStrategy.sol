@@ -52,6 +52,12 @@ interface IStrategy {
     //                                           View                                             //
     //============================================================================================//
 
+    /**
+     * @notice Indicates whether the strategy is a DirectStakeStrategy.
+     * @return Always returns `false` in non-direct stake strategies.
+     */
+    function isDirectStakeStrategy() external view returns (bool);
+
     /// @return Currency used for allocation into strategy (stake)
     function stakeCurrency() external view returns(Currency calldata);
 

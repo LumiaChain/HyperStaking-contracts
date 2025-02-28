@@ -69,6 +69,11 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
             return;
         }
 
+        if (msgType == MessageType.StakeInfo) {
+            // TODO
+            return;
+        }
+
         revert UnsupportedMessage();
     }
 

@@ -7,14 +7,22 @@ import {AbstractStrategy} from "./AbstractStrategy.sol";
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 
 /**
- * @title ZeroYieldStrategy
- * @notice A simple strategy that allows to stake and allocate with the same currency
+ * @title DirectStakeStrategy
+ * @notice A placeholder strategy used for direct deposits without yield generation
+ *         It stores currency informationm but, exists primarily to maintain compatibility
+ *         with the vault structure and will revert on the majority of function calls
  */
-contract ZeroYieldStrategy is AbstractStrategy {
+contract DirectStakeStrategy is AbstractStrategy {
     using CurrencyHandler for Currency;
 
-    /// Main currency used both as stake and allocation
+    /// Main currency used for staking
     Currency private currency;
+
+    //============================================================================================//
+    //                                          Errors                                            //
+    //============================================================================================//
+
+    error DirectStakeMisused();
 
     //============================================================================================//
     //                                        Constructor                                         //
@@ -32,38 +40,21 @@ contract ZeroYieldStrategy is AbstractStrategy {
     //============================================================================================//
 
     /// @inheritdoc IStrategy
-    function allocate(
-        uint256 stakeAmount_,
-        address user_
-    ) external payable onlyLumiaDiamond returns (uint256 allocation) {
-        allocation = stakeAmount_; // the same amount
-
-        currency.transferFrom(DIAMOND, address(this), stakeAmount_);
-
-        if (currency.isNativeCoin()) {
-            currency.transfer(DIAMOND, allocation);
-        } else {
-            currency.approve(DIAMOND, allocation);
-        }
-
-        emit Allocate(user_, stakeAmount_, allocation);
+    function allocate(uint256, address) external payable returns (uint256) {
+        revert DirectStakeMisused();
     }
 
-
     /// @inheritdoc IStrategy
-    function exit(
-        uint256 assetAllocation_,
-        address user_
-    ) external onlyLumiaDiamond returns (uint256 exitAmount) {
-        exitAmount = assetAllocation_; // the same amount
-
-        currency.transferFrom(DIAMOND, address(this), assetAllocation_);
-        currency.transfer(DIAMOND, exitAmount);
-
-        emit Exit(user_, assetAllocation_, exitAmount);
+    function exit(uint256, address) external pure returns (uint256) {
+        revert DirectStakeMisused();
     }
 
     // ========= View ========= //
+
+    /// @inheritdoc IStrategy
+    function isDirectStakeStrategy() external pure virtual override returns (bool) {
+        return true;
+    }
 
     /// @inheritdoc IStrategy
     function stakeCurrency() external view returns(Currency memory) {
@@ -71,17 +62,17 @@ contract ZeroYieldStrategy is AbstractStrategy {
     }
 
     /// @inheritdoc IStrategy
-    function revenueAsset() external view returns(address) {
-        return currency.token;
+    function revenueAsset() external pure returns(address) {
+        revert DirectStakeMisused();
     }
 
     /// Price = 1:1
-    function previewAllocation(uint256 stakeAmount_) public pure returns (uint256) {
-        return stakeAmount_;
+    function previewAllocation(uint256) public pure returns (uint256) {
+        revert DirectStakeMisused();
     }
 
     /// Price = 1:1
-    function previewExit(uint256 assetAllocation_) public pure returns (uint256) {
-        return assetAllocation_;
+    function previewExit(uint256) public pure returns (uint256) {
+        revert DirectStakeMisused();
     }
 }

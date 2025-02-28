@@ -292,27 +292,49 @@ describe("Lockbox", function () {
       expect(await testWrapper.sharesAmount(bytes2)).to.equal(message2.shares);
       expect(await testWrapper.tokenBridgeMetadata(bytes2)).to.equal(message2.metadata);
 
-      // TokenRedeem
+      // StakeInfo
 
       const message3 = {
+        strategy: ZeroAddress,
+        sender: ZeroAddress,
+        stake: parseEther("3.04"),
+        metadata: "0x1434",
+      };
+
+      const bytes3 = await testWrapper.serializeStakeInfo(
+        message3.strategy,
+        message3.sender,
+        message3.stake,
+        message3.metadata,
+      );
+
+      expect(await testWrapper.messageType(bytes3)).to.equal(2);
+      expect(await testWrapper.strategy(bytes3)).to.equal(message3.strategy);
+      expect(await testWrapper.sender(bytes3)).to.equal(message3.sender);
+      expect(await testWrapper.stakeAmount(bytes3)).to.equal(message3.stake);
+      expect(await testWrapper.stakeInfoMetadata(bytes3)).to.equal(message3.metadata);
+
+      // TokenRedeem
+
+      const message4 = {
         strtegy: ZeroAddress,
         sender: ZeroAddress,
         amount: parseEther("2"),
         metadata: "0x1256",
       };
 
-      const bytes3 = await testWrapper.serializeTokenRedeem(
-        message3.strtegy,
-        message3.sender,
-        message3.amount,
-        message3.metadata,
+      const bytes4 = await testWrapper.serializeTokenRedeem(
+        message4.strtegy,
+        message4.sender,
+        message4.amount,
+        message4.metadata,
       );
 
-      expect(await testWrapper.messageType(bytes3)).to.equal(2);
-      expect(await testWrapper.strategy(bytes3)).to.equal(message3.strtegy);
-      expect(await testWrapper.sender(bytes3)).to.equal(message3.sender);
-      expect(await testWrapper.redeemAmount(bytes3)).to.equal(message3.amount);
-      expect(await testWrapper.tokenRedeemMetadata(bytes3)).to.equal(message3.metadata);
+      expect(await testWrapper.messageType(bytes4)).to.equal(3);
+      expect(await testWrapper.strategy(bytes4)).to.equal(message4.strtegy);
+      expect(await testWrapper.sender(bytes4)).to.equal(message4.sender);
+      expect(await testWrapper.redeemAmount(bytes4)).to.equal(message4.amount);
+      expect(await testWrapper.tokenRedeemMetadata(bytes4)).to.equal(message4.metadata);
     });
 
     it("string limitations", async function () {

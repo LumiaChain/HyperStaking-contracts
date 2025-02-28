@@ -30,6 +30,14 @@ interface ILockbox {
         uint256 shares
     );
 
+    event StakeInfoDispatched(
+        address indexed mailbox,
+        address lumiaFactory,
+        address indexed strategy,
+        address indexed user,
+        uint256 stake
+    );
+
     event ReceivedMessage(
         uint32 indexed origin,
         bytes32 indexed sender,
@@ -83,6 +91,16 @@ interface ILockbox {
     ) external payable;
 
     /**
+     * @notice Dispatches a cross-chain message informing about stake
+     * @dev This function sends a message to trigger lumia rwa asset mint
+     */
+    function stakeInfoDispatch(
+        address strategy,
+        address user,
+        uint256 stake
+    ) external payable;
+
+    /**
      * @notice Function called by the Mailbox contract when a message is received
      */
     function handle(
@@ -124,7 +142,7 @@ interface ILockbox {
         uint8 decimals
     ) external view returns (uint256);
 
-    /// @notice Helper: separated function for getting mailbox dispatch quote
+    /// @notice Helper
     function quoteDispatchTokenBridge(
         address strategy,
         address sender,
@@ -132,13 +150,11 @@ interface ILockbox {
         uint256 shares
     ) external view returns (uint256);
 
-    /// @notice Helper: mailbox dispatch quote, but using stake data
-    /// @dev Externally only for estimation purposes, as the amount of shares
-    ///      based on allocation changes depending on the allocation of the Vault.
-    function quoteStakeDispatch(
+    /// @notice Helper
+    function quoteDispatchStakeInfo(
         address strategy,
         address sender,
-        uint256 allocation
+        uint256 stake
     ) external view returns (uint256);
 
     /// @notice Helper: separated function for generating hyperlane message body
@@ -149,11 +165,18 @@ interface ILockbox {
         uint8 decimals
     ) external pure returns (bytes memory body);
 
-    /// @notice Helper: separated function for generating hyperlane message body
+    /// @notice Helper
     function generateTokenBridgeBody(
         address strategy,
         address sender,
         uint256 stake,
         uint256 shares
+    ) external pure returns (bytes memory body);
+
+    /// @notice Helper
+    function generateStakeInfoBody(
+        address strategy,
+        address sender,
+        uint256 stake
     ) external pure returns (bytes memory body);
 }

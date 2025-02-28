@@ -2,6 +2,8 @@
 pragma solidity =0.8.27;
 
 import {IDeposit} from "../interfaces/IDeposit.sol";
+import {IStrategy} from "../interfaces/IStrategy.sol";
+import {ILockbox} from "../interfaces/ILockbox.sol";
 import {ITier1Vault} from "../interfaces/ITier1Vault.sol";
 import {ITier2Vault} from "../interfaces/ITier2Vault.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
@@ -27,6 +29,15 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     using CurrencyHandler for Currency;
 
     //============================================================================================//
+    //                                         Modifiers                                          //
+    //============================================================================================//
+
+    modifier onlyDirect(address strategy) {
+        require(IStrategy(strategy).isDirectStakeStrategy(), NotDirectDeposit(strategy));
+        _;
+    }
+
+    //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
 
@@ -39,7 +50,9 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         whenNotPaused
     {
         VaultInfo storage vault = LibHyperStaking.diamondStorage().vaultInfo[strategy];
+
         require(vault.strategy != address(0), VaultDoesNotExist(strategy));
+        require(vault.enabled, StrategyDisabled(strategy));
 
         vault.stakeCurrency.transferFrom(
             msg.sender,
@@ -48,7 +61,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         );
         ITier1Vault(address(this)).joinTier1(strategy, to, stake);
 
-        emit StakeDeposit(msg.sender, to, strategy, stake, 1);
+        emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Tier1);
     }
 
     /// @notice Tier1 withdraw function
@@ -84,10 +97,9 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
-        require(vault.strategy != address(0), VaultDoesNotExist(strategy));
 
-        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
-        require(tier2.enabled, Tier2Disabled(strategy));
+        require(vault.strategy != address(0), VaultDoesNotExist(strategy));
+        require(vault.enabled, StrategyDisabled(strategy));
 
         vault.stakeCurrency.transferFrom(
             msg.sender,
@@ -96,7 +108,47 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         );
         ITier2Vault(address(this)).joinTier2(strategy, to, stake);
 
-        emit StakeDeposit(msg.sender, to, strategy, stake, 2);
+        emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Tier2);
+    }
+
+    /* ========== Simple Deposit ========== */
+
+    /// @notice Direct stake deposit
+    /// @inheritdoc IDeposit
+    function directStakeDeposit(address strategy, uint256 stake, address to)
+        external
+        payable
+        nonReentrant
+        whenNotPaused
+        onlyDirect(strategy)
+    {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+
+        require(vault.strategy != address(0), VaultDoesNotExist(strategy));
+        require(vault.enabled, StrategyDisabled(strategy));
+
+        vault.stakeCurrency.transferFrom(
+            msg.sender,
+            address(this),
+            stake
+        );
+
+        // quote bridge message fee
+        uint256 fee = ILockbox(address(this)).quoteDispatchStakeInfo(
+            strategy,
+            to,
+            stake
+        );
+
+        // direct forwarding a StakeInfo message across chains
+        ILockbox(address(this)).stakeInfoDispatch{value: fee}(
+            strategy,
+            to,
+            stake
+        );
+
+        emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Direct);
     }
 
     /* ========== ACL  ========== */

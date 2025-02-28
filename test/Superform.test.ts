@@ -384,7 +384,7 @@ describe("Superform", function () {
     });
 
     it("Staking using superform strategy - tier2", async function () {
-      const { deposit, tier2, superformStrategy, testUSDC, alice, hyperlaneHandler, erc4626Vault, vault, lpToken, aerc20 } = await deployHyperStaking();
+      const { deposit, tier2, hyperFactory, superformStrategy, testUSDC, alice, hyperlaneHandler, erc4626Vault, vault, lpToken, aerc20 } = await deployHyperStaking();
 
       const amount = parseUnits("2000", 6);
 
@@ -396,8 +396,10 @@ describe("Superform", function () {
       expect(await aerc20.totalSupply()).to.equal(amount);
       expect(await aerc20.balanceOf(vault)).to.equal(amount);
 
-      const [enabled, vaultToken] = await tier2.vaultTier2Info(superformStrategy, alice);
+      const [enabled] = await hyperFactory.vaultInfo(superformStrategy, alice);
       expect(enabled).to.be.eq(true);
+
+      const [vaultToken] = await tier2.vaultTier2Info(superformStrategy, alice);
       expect(vaultToken).to.be.eq(vault.target);
 
       // lpToken on the Lumia chain side

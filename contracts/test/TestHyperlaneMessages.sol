@@ -53,6 +53,20 @@ contract TestHyperlaneMessages {
         );
     }
 
+    function serializeStakeInfo(
+        address strategy_,
+        address sender_,
+        uint256 stakeAmount_,
+        bytes memory metadata_
+    ) external pure returns (bytes memory) {
+        return HyperlaneMailboxMessages.serializeStakeInfo(
+            strategy_,
+            sender_,
+            stakeAmount_,
+            metadata_
+        );
+    }
+
     function serializeTokenRedeem(
         address strategy_,
         address sender_,
@@ -96,17 +110,19 @@ contract TestHyperlaneMessages {
         return message.tokenDeployMetadata();
     }
 
-    // ========= TokenBridge & TokenRedeem  ========= //
+    // ========= TokenBridge & StakeInfo & TokenRedeem  ========= //
 
     function sender(bytes calldata message) external pure returns (address) {
         return message.sender();
     }
 
-    // ========= TokenBridge ========= //
+    // ========= TokenBridge & StakeInfo ========= //
 
     function stakeAmount(bytes calldata message) external pure returns (uint256) {
         return message.stakeAmount();
     }
+
+    // ========= TokenBridge ========= //
 
     function sharesAmount(bytes calldata message) external pure returns (uint256) {
         return message.sharesAmount();
@@ -114,6 +130,12 @@ contract TestHyperlaneMessages {
 
     function tokenBridgeMetadata(bytes calldata message) external pure returns (bytes calldata) {
         return message.tokenBridgeMetadata();
+    }
+
+    // ========= StakeInfo ========= //
+
+    function stakeInfoMetadata(bytes calldata message) external pure returns (bytes calldata) {
+        return message.stakeInfoMetadata();
     }
 
     // ========= TokenRedeem  ========= //

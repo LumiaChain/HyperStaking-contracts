@@ -50,22 +50,44 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         uint8 assetDecimals = IERC20Metadata(asset).decimals();
 
         IERC4626 vaultToken = _deployVaultToken(asset, strategy, vaultTokenName, vaultTokenSymbol);
-        _storeVault(strategy, asset, tier1RevenueFee, vaultToken);
+        _storeVaultTiers(strategy, tier1RevenueFee, vaultToken);
+        _storeVaultInfo(strategy, asset);
 
         // deploy lp token on lumia
         _dispatchTokenDeploy(strategy, vaultTokenName, vaultTokenSymbol, assetDecimals);
+
+        emit VaultCreate(
+            msg.sender,
+            strategy,
+            address(asset),
+            address(vaultToken)
+        );
     }
 
     /// @inheritdoc IHyperFactory
-    function setTier2Enabled(address strategy, bool enabled) external onlyVaultManager {
-        VaultTier2 storage tier2 = LibHyperStaking.diamondStorage().vaultTier2Info[strategy];
+    function addDirectStrategy(
+        address strategy
+    ) external payable onlyVaultManager nonReentrant {
+        require(IStrategy(strategy).isDirectStakeStrategy(), NotDirectStrategy(strategy));
 
-        require(address(tier2.vaultToken) != address(0), Tier2DoesNotExist(strategy));
+        _storeVaultInfo(strategy, address(0));
+
+        emit DirectVaultCreate(
+            msg.sender,
+            strategy
+        );
+    }
+
+    /// @inheritdoc IHyperFactory
+    function setStrategyEnabled(address strategy, bool enabled) external onlyVaultManager {
+        VaultInfo storage vault = LibHyperStaking.diamondStorage().vaultInfo[strategy];
+
+        require(address(vault.strategy) != address(0), VaultDoesNotExist(strategy));
 
         // set value only if differs
-        if (tier2.enabled != enabled) {
-            tier2.enabled = enabled;
-            emit Tier2EnabledSet(strategy, enabled);
+        if (vault.enabled != enabled) {
+            vault.enabled = enabled;
+            emit VaultEnabledSet(strategy, enabled);
         }
     }
 
@@ -129,17 +151,14 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
     }
 
     /**
-     * @dev Initializes the vault storage for a given stake currency, strategy, asset details,
-     *      applies the Tier 1 revenue fee
+     * @dev Store information about tiers for a given strategy, vault token and tier 1 revenue fee
      *
      * @param strategy The strategy address associated with this vault
-     * @param asset The asset for the vault
      * @param tier1RevenueFee The revenue fee applied to Tier 1 users in this vault
      * @param vaultToken ERC4626 which represent shares to this strategy vault
      */
-    function _storeVault(
+    function _storeVaultTiers(
         address strategy,
-        address asset,
         uint256 tier1RevenueFee,
         IERC4626 vaultToken
     ) internal {
@@ -155,9 +174,22 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
 
         // init tier2
         v.vaultTier2Info[strategy] = VaultTier2({
-            enabled: true,
             vaultToken: vaultToken
         });
+    }
+
+    /**
+     * @notice Initializes the vault info for a given strategy and asset
+     * @dev for direct: asset == address(0) should be used
+     * @param strategy The strategy address associated with this vault
+     * @param asset The asset for the vault
+     */
+    function _storeVaultInfo(
+        address strategy,
+        address asset
+    ) internal {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        require(v.vaultInfo[strategy].strategy == address(0), VaultAlreadyExist());
 
         // The currency used for staking in this vault is taken from the strategy
         // Currency struct supports both native coin and erc20 tokens
@@ -165,16 +197,10 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
 
         // save VaultInfo in storage
         v.vaultInfo[strategy] = VaultInfo({
+            enabled: true,
             stakeCurrency: stakeCurrency,
             strategy: strategy,
             asset: IERC20Metadata(asset)
         });
-
-        emit VaultCreate(
-            msg.sender,
-            strategy,
-            address(asset),
-            address(vaultToken)
-        );
     }
 }

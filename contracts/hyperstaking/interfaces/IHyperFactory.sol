@@ -18,7 +18,12 @@ interface IHyperFactory {
         address vaultToken
     );
 
-    event Tier2EnabledSet(address indexed strategy, bool enabled);
+    event DirectVaultCreate(
+        address indexed from,
+        address strategy
+    );
+
+    event VaultEnabledSet(address indexed strategy, bool enabled);
 
     //============================================================================================//
     //                                          Errors                                            //
@@ -27,8 +32,11 @@ interface IHyperFactory {
     /// @notice Thrown when attempting to create a vault using the same strategy
     error VaultAlreadyExist();
 
-    /// @notice Thrown when attempting to use non existing tier2
-    error Tier2DoesNotExist(address strategy);
+    /// @notice Thrown when attempting to add a non-direct strategy as direct
+    error NotDirectStrategy(address strategy);
+
+    /// @notice Thrown when attempting to enable non existing vault
+    error VaultDoesNotExist(address strategy);
 
     //============================================================================================//
     //                                          Mutable                                           //
@@ -53,11 +61,20 @@ interface IHyperFactory {
     ) external payable;
 
     /**
-     * @notice Enables or disables Tier 2 for a strategy.
-     * @param strategy The strategy address.
-     * @param enabled True to enable, false to disable.
+     * @notice Adds a new direct strategy and links it to a specific staking currency and vault
+     * @dev Sets up the direct strategy which requires only strategy address
+     * @param strategy The address of the strategy being added
      */
-    function setTier2Enabled(address strategy, bool enabled) external;
+    function addDirectStrategy(
+        address strategy
+    ) external payable;
+
+    /**
+     * @notice Enables or disables strategy
+     * @param strategy The strategy address
+     * @param enabled True to enable, false to disable
+     */
+    function setStrategyEnabled(address strategy, bool enabled) external;
 
     //============================================================================================//
     //                                           View                                             //

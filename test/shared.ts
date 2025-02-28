@@ -10,6 +10,7 @@ import ThreeADaoMockModule from "../ignition/modules/test/3adaoMock";
 import TestERC20Module from "../ignition/modules/test/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
 import ZeroYieldStrategyModule from "../ignition/modules/ZeroYieldStrategy";
+import DirectStakeStrategyModule from "../ignition/modules/DirectStakeStrategy";
 
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IHyperFactory";
 import { IERC20 } from "../typechain-types";
@@ -170,6 +171,22 @@ export async function createZeroYieldStrategy(
   });
 
   return zeroYieldStrategy;
+}
+
+export async function createDirectStakeStrategy(
+  diamond: Contract,
+  currencyToken: string,
+) {
+  const { directStakeStrategy } = await ignition.deploy(DirectStakeStrategyModule, {
+    parameters: {
+      DirectStakeStrategyModule: {
+        diamond: await diamond.getAddress(),
+        currencyToken,
+      },
+    },
+  });
+
+  return directStakeStrategy;
 }
 
 // -------------------- 3ADAO Lending --------------------
