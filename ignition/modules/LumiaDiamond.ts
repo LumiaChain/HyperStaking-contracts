@@ -24,6 +24,9 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
   const routeFactoryFacet = m.contract("RouteFactoryFacet");
   const routeFactoryInterface = getContractInterface("IRouteFactory");
 
+  const realAssetFacet = m.contract("RealAssetFacet");
+  const realAssetInterface = getContractInterface("IRealAsset");
+
   const aclInterface = getContractInterface("LumiaDiamondAcl");
   const aclInterfaceSelectors = getSelectors(aclInterface).remove(["supportsInterface(bytes4)"]);
 
@@ -40,6 +43,11 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
       facetAddress: routeFactoryFacet,
       action: FacetCutAction.Add,
       functionSelectors: getSelectors(routeFactoryInterface),
+    },
+    {
+      facetAddress: realAssetFacet,
+      action: FacetCutAction.Add,
+      functionSelectors: getSelectors(realAssetInterface),
     },
   ];
 

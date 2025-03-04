@@ -6,6 +6,8 @@ import {IHyperlaneHandler} from "../interfaces/IHyperlaneHandler.sol";
 import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
 import {LumiaLPToken} from "../LumiaLPToken.sol";
 
+import {MintableToken} from "../../external/3adao-lumia/tokens/MintableToken.sol";
+import {MintableTokenOwner} from "../../external/3adao-lumia/gobernance/MintableTokenOwner.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -59,7 +61,9 @@ contract RouteFactoryFacet is IRouteFactory, LumiaDiamondAcl {
             originLockbox: originLockbox,
             lpToken: lpToken,
             lendingVault: _createLendingVault(ifs, name),
-            borrowSafetyBuffer: 5e16 // 5%
+            borrowSafetyBuffer: 5e16, // 5%
+            rwaAssetOwner: MintableTokenOwner(address(0)),
+            rwaAsset: MintableToken(address(0))
         });
 
         emit TokenDeployed(strategy, address(lpToken), name, symbol, decimals);
@@ -247,11 +251,6 @@ contract RouteFactoryFacet is IRouteFactory, LumiaDiamondAcl {
     /// @inheritdoc IRouteFactory
     function getLendingVault(address strategy) external view returns (IVault) {
         return LibInterchainFactory.diamondStorage().routes[strategy].lendingVault;
-    }
-
-    /// @inheritdoc IRouteFactory
-    function getRouteInfo(address strategy) external view returns (RouteInfo memory) {
-        return LibInterchainFactory.diamondStorage().routes[strategy];
     }
 
     //============================================================================================//

@@ -3,6 +3,9 @@ pragma solidity =0.8.27;
 
 import {LumiaLPToken} from "../LumiaLPToken.sol";
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
+import {MintableToken} from "../../external/3adao-lumia/tokens/MintableToken.sol";
+import {MintableTokenOwner} from "../../external/3adao-lumia/gobernance/MintableTokenOwner.sol";
+
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import {IVaultFactory} from "../../external/3adao-lumia/interfaces/IVaultFactory.sol";
@@ -22,6 +25,8 @@ import {IVault} from "../../external/3adao-lumia/interfaces/IVault.sol";
  * @param lendingVault The 3A DAO Smart Vault address, created for this route
  * @param borrowSafetyBuffer The percentage of collateral to be reserved for safety,
  *        expressed with 18 decimals. For example, 5e16 represents 5% (default value)
+ * @param rwaAssetOwner The MintableTokenOwner contract, owner contract of rwaAsset
+ * @param rwaAsset The MintableToken contract representing the Real-World Asset
  */
 struct RouteInfo {
     bool exists;
@@ -31,6 +36,8 @@ struct RouteInfo {
     LumiaLPToken lpToken;
     IVault lendingVault;
     uint256 borrowSafetyBuffer;
+    MintableTokenOwner rwaAssetOwner;
+    MintableToken rwaAsset;
 }
 
 struct LastMessage {
@@ -60,14 +67,29 @@ struct InterchainFactoryStorage {
 
     /// @notice Mapping of strategy to its detailed route information
     mapping (address strategy => RouteInfo) routes;
+
+    /// @notice Tracks the amount of assets a user has bridged for a given strategy,
+    ///         reflecting both deposits and redemptions
+    mapping (address strategy => mapping(address user => uint256)) userBridgedState;
 }
 
 library LibInterchainFactory {
+    error RouteDoesNotExist(address strategy);
+
     bytes32 constant internal INTERCHAIN_FACTORY_STORAGE_POSITION
         = keccak256("lumia-interchain-factory.storage");
 
     // 1e18 as a scaling factor, e.g. 0.1 ETH (1e17) == 10%
     uint256 constant internal PERCENT_PRECISION = 1e18; // represent 100%
+
+    /// @notice Checks whether route exists
+    /// @dev reverts if route does not exist
+    function checkRoute(
+        InterchainFactoryStorage storage ifs,
+        address strategy
+    ) internal view {
+        require(ifs.routes[strategy].exists, RouteDoesNotExist(strategy));
+    }
 
     function diamondStorage() internal pure returns (InterchainFactoryStorage storage s) {
         bytes32 position = INTERCHAIN_FACTORY_STORAGE_POSITION;

@@ -63,7 +63,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     },
   });
 
-  const { rwaUSD, threeAVaultFactory, tokenToPriceFeed } = await ignition.deploy(ThreeADaoMockModule);
+  const { rwaUSD, rwaUSDOwner, threeAVaultFactory, tokenToPriceFeed } = await ignition.deploy(ThreeADaoMockModule);
 
   const { lumiaDiamond, hyperlaneHandler, routeFactory } = await ignition.deploy(LumiaDiamondModule, {
     parameters: {
@@ -93,8 +93,11 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     testDestination,
   );
 
+  // authorize lumia diamond to mint rwaUSD
+  await rwaUSDOwner.addMinter(lumiaDiamond);
+
   return {
-    mailbox, hyperlaneHandler, routeFactory, diamond, deposit, hyperFactory, tier1, tier2, lockbox, superVault, superformIntegration, rwaUSD, threeAVaultFactory, tokenToPriceFeed,
+    mailbox, hyperlaneHandler, routeFactory, diamond, deposit, hyperFactory, tier1, tier2, lockbox, superVault, superformIntegration, rwaUSD, rwaUSDOwner, threeAVaultFactory, tokenToPriceFeed,
   };
 }
 

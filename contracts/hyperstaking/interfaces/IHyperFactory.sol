@@ -64,9 +64,11 @@ interface IHyperFactory {
      * @notice Adds a new direct strategy and links it to a specific staking currency and vault
      * @dev Sets up the direct strategy which requires only strategy address
      * @param strategy The address of the strategy being added
+     * @param rwaAsset The RWA token address representing the bridged asset on the destination chain
      */
     function addDirectStrategy(
-        address strategy
+        address strategy,
+        address rwaAsset
     ) external payable;
 
     /**

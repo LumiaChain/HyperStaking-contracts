@@ -15,7 +15,7 @@ async function deployHyperStaking() {
 
   // --------------------- Hyperstaking Diamond --------------------
 
-  const { diamond, deposit, hyperFactory } = await shared.deployTestHyperStaking(0n, erc4626Vault);
+  const { diamond, deposit, hyperFactory, rwaUSD } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
   // -------------------- Apply Strategies --------------------
 
@@ -25,6 +25,7 @@ async function deployHyperStaking() {
 
   await hyperFactory.connect(vaultManager).addDirectStrategy(
     directStakeStrategy,
+    rwaUSD,
   );
 
   // ----------------------------------------
@@ -32,7 +33,7 @@ async function deployHyperStaking() {
   /* eslint-disable object-property-newline */
   return {
     diamond, // diamond
-    deposit, hyperFactory, // diamond facets
+    deposit, hyperFactory, rwaUSD, // diamond facets
     testUSDC, directStakeStrategy, // test contracts
     owner, stakingManager, vaultManager, strategyManager, alice, bob, // addresses
   };
@@ -40,11 +41,10 @@ async function deployHyperStaking() {
 }
 
 describe("Direct Stake", function () {
-  it("only direct stake strategy should be allowed", async function () {
+  it("only direct stake strategy should be allowed for direct staking", async function () {
     const { diamond, deposit, hyperFactory, testUSDC, directStakeStrategy, alice, vaultManager } = await loadFixture(deployHyperStaking);
 
-    // add new non-direct stake strategy
-
+    // adding new non-direct stake strategy
     const reserveAssetPrice = parseEther("2");
     const reserveStrategy = await shared.createReserveStrategy(
       diamond, shared.nativeTokenAddress, await testUSDC.getAddress(), reserveAssetPrice,
@@ -65,5 +65,28 @@ describe("Direct Stake", function () {
     await testUSDC.approve(deposit, stakeAmount);
     await expect(deposit.directStakeDeposit(directStakeStrategy, stakeAmount, alice))
       .to.not.reverted;
+
+    // TODO DirectRwaMint
+    // TODO DirectRwaRedeem
   });
+
+  it("direct stake strategy should mint rwaUSD in 1:1 ratio", async function () {
+    const { deposit, testUSDC, rwaUSD, directStakeStrategy, alice } = await loadFixture(deployHyperStaking);
+
+    const stakeAmount = parseEther("500");
+
+    await testUSDC.approve(deposit, stakeAmount);
+    await deposit.directStakeDeposit(directStakeStrategy, stakeAmount, alice);
+
+    expect(await rwaUSD.balanceOf(alice)).to.equal(stakeAmount);
+  });
+
+  // TODO check bridged state after stake
+  // TODO check bridged state after redeem getUserBridged
+
+  // TODO creating strategy route
+  // TODO get route info, hmh other?
+
+  // TODO set rwa asset
+  // TODO get rwa asset
 });

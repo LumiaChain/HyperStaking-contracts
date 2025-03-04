@@ -72,7 +72,7 @@ describe("VaultToken", function () {
 
     it("test tokens enumerable map", async function () {
       const {
-        diamond, hyperFactory, routeFactory, reserveStrategy,
+        diamond, hyperFactory, hyperlaneHandler, routeFactory, reserveStrategy,
         lpToken, vaultManager,
       } = await loadFixture(deployHyperStaking);
 
@@ -105,9 +105,9 @@ describe("VaultToken", function () {
       const lpToken2 = await routeFactory.getLpToken(reserveStrategy2);
       const lpToken3 = await routeFactory.getLpToken(reserveStrategy3);
 
-      expect((await routeFactory.getRouteInfo(reserveStrategy)).lpToken).to.equal(lpToken.target);
-      expect((await routeFactory.getRouteInfo(reserveStrategy2)).lpToken).to.equal(lpToken2);
-      expect((await routeFactory.getRouteInfo(reserveStrategy3)).lpToken).to.equal(lpToken3);
+      expect((await hyperlaneHandler.getRouteInfo(reserveStrategy)).lpToken).to.equal(lpToken.target);
+      expect((await hyperlaneHandler.getRouteInfo(reserveStrategy2)).lpToken).to.equal(lpToken2);
+      expect((await hyperlaneHandler.getRouteInfo(reserveStrategy3)).lpToken).to.equal(lpToken3);
     });
   });
 

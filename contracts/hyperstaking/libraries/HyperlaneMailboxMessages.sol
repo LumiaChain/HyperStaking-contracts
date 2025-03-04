@@ -7,6 +7,7 @@ import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 enum MessageType {
     TokenDeploy,
     TokenBridge,
+    RouteRegistry,
     StakeInfo,
     TokenRedeem
 }
@@ -96,6 +97,19 @@ library HyperlaneMailboxMessages {
         );
     }
 
+    function serializeRouteRegistry(
+        address strategy_,
+        address rwaAsset_,
+        bytes memory metadata_
+    ) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            bytes8(uint64(MessageType.RouteRegistry)),  //  8-bytes: msg type
+            TypeCasts.addressToBytes32(strategy_),      // 32-bytes: strategy address
+            TypeCasts.addressToBytes32(rwaAsset_),      // 32-bytes: RWA asset address
+            metadata_                                   // XX-bytes: additional metadata
+        );
+    }
+
     function serializeStakeInfo(
         address strategy_,
         address sender_,
@@ -160,6 +174,16 @@ library HyperlaneMailboxMessages {
     /// [139:]
     function tokenDeployMetadata(bytes calldata message) internal pure returns (bytes calldata) {
         return message[139:];
+    }
+
+    // ========= RouteRegistry ========= //
+
+    function rwaAsset(bytes calldata message) internal pure returns (address) {
+        return TypeCasts.bytes32ToAddress(bytes32(message[40:72]));
+    }
+
+    function routeRegistryMetadata(bytes calldata message) internal pure returns (bytes calldata) {
+        return message[72:];
     }
 
     // ========= TokenBridge & StakeInfo & TokenRedeem  ========= //

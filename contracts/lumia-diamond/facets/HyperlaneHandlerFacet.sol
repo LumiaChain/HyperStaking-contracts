@@ -3,10 +3,13 @@ pragma solidity =0.8.27;
 
 import {IHyperlaneHandler} from "../interfaces/IHyperlaneHandler.sol";
 import {IRouteFactory} from "../interfaces/IRouteFactory.sol";
+import {IRealAsset} from "../interfaces/IRealAsset.sol";
 import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
+import {MintableToken} from "../../external/3adao-lumia/tokens/MintableToken.sol";
+import {MintableTokenOwner} from "../../external/3adao-lumia/gobernance/MintableTokenOwner.sol";
 
 import {
     LibInterchainFactory, InterchainFactoryStorage, RouteInfo, LastMessage, EnumerableSet
@@ -15,6 +18,10 @@ import {
 import {
     MessageType, HyperlaneMailboxMessages
 } from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
+
+// TODO remove
+import {LumiaLPToken} from "../LumiaLPToken.sol";
+import {IVault} from "../../external/3adao-lumia/interfaces/IVault.sol";
 
 /**
  * @title HyperlaneHandlerFacet
@@ -69,8 +76,13 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
             return;
         }
 
+        if (msgType == MessageType.RouteRegistry) {
+            _handleRouteRegistry(originLockbox, origin, data);
+            return;
+        }
+
         if (msgType == MessageType.StakeInfo) {
-            // TODO
+            IRealAsset(address(this)).handleDirectMint(data);
             return;
         }
 
@@ -84,9 +96,9 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         uint256 shares
     ) external payable {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-
         RouteInfo storage r = ifs.routes[strategy];
-        require(r.exists == true, RouteDoesNotExist(strategy));
+
+        LibInterchainFactory.checkRoute(ifs, strategy);
 
         // burn lpTokens
         r.lpToken.burnFrom(msg.sender, shares);
@@ -183,6 +195,54 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
             sender,
             shares,
             bytes("") // no metadata
+        );
+    }
+
+    /// @inheritdoc IHyperlaneHandler
+    function getRouteInfo(address strategy) external view returns (RouteInfo memory) {
+        return LibInterchainFactory.diamondStorage().routes[strategy];
+    }
+
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
+    /// @notice Registers a route for rwa asset bridge
+    /// @param originLockbox The address of the originating lockbox
+    /// @param originDestination The origin destination chain ID
+    /// @param data Encoded route-specific data
+    function _handleRouteRegistry(
+        address originLockbox,
+        uint32 originDestination,
+        bytes calldata data
+    ) internal {
+        address strategy = data.strategy(); // origin strategy address
+        MintableToken rwaAsset = MintableToken(data.rwaAsset()); // rwaAsset
+
+        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+        RouteInfo storage r = ifs.routes[strategy];
+        require(r.exists == false, RouteAlreadyExist());
+
+        MintableTokenOwner rwaAssetOwner = MintableTokenOwner(rwaAsset.owner());
+
+        ifs.routes[strategy] = RouteInfo({
+            exists: true,
+            isLendingEnabled: false, // TODO remove
+            originDestination: originDestination,
+            originLockbox: originLockbox,
+            lpToken: LumiaLPToken(address(0)), // TODO remove
+            lendingVault: IVault(address(0)), // TODO remove
+            borrowSafetyBuffer: 0, // TODO remove
+            rwaAssetOwner: rwaAssetOwner,
+            rwaAsset: rwaAsset
+        });
+
+        emit RouteRegistered(
+            originLockbox,
+            originDestination,
+            strategy,
+            address(rwaAssetOwner),
+            address(rwaAsset)
         );
     }
 }

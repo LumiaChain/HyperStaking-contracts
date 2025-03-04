@@ -2,7 +2,6 @@
 pragma solidity =0.8.27;
 
 import {ILockbox} from "../interfaces/ILockbox.sol";
-import {IStrategy} from "../interfaces/IStrategy.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {IERC20, IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
@@ -17,9 +16,8 @@ import {LibHyperStaking, LockboxData} from "../libraries/LibHyperStaking.sol";
 /**
  * @title LockboxFacet
  * @notice A customized version of XERC20Lockbox and Factory for handling interchain communication
- *         via Hyperlane Mailbox. Locks VaultTokens minted in Tier2 and mints tokens on the defined
- *         Lumia chain. Handles incoming messages to initiate the unstaking process
- * @dev Managed by HyperStaking Tier2 Vault and Vault Factory
+ *         via Hyperlane Mailbox. Locks DirectStake or VaultTokens minted in Tier2 and mints tokens
+ *         on the Lumia chain. Handles incoming messages to initiate the redeem/unstaking process
  */
 contract LockboxFacet is ILockbox, HyperStakingAcl {
     using HyperlaneMailboxMessages for bytes;
@@ -96,6 +94,30 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
             user,
             stake,
             shares
+        );
+    }
+
+    /// @inheritdoc ILockbox
+    function routeRegistryDispatch(
+        address strategy,
+        address rwaAsset
+    ) external payable diamondInternal {
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
+        require(box.lumiaFactory != address(0), RecipientUnset());
+
+        bytes memory body = generateRouteRegistryBody(strategy, rwaAsset);
+
+        // address left-padded to bytes32 for compatibility with hyperlane
+        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.lumiaFactory);
+
+        // msg.value should already include fee calculated
+        box.mailbox.dispatch{value: msg.value}(box.destination, recipientBytes32, body);
+
+        emit RouteRegistryDispatched(
+            address(box.mailbox),
+            box.lumiaFactory,
+            strategy,
+            rwaAsset
         );
     }
 
@@ -219,6 +241,19 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     }
 
     /// @inheritdoc ILockbox
+    function quoteDispatchRouteRegistry(
+        address strategy,
+        address rwaAsset
+    ) external view returns (uint256) {
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
+        return box.mailbox.quoteDispatch(
+            box.destination,
+            TypeCasts.addressToBytes32(box.lumiaFactory),
+            generateRouteRegistryBody(strategy, rwaAsset)
+        );
+    }
+
+    /// @inheritdoc ILockbox
     function quoteDispatchStakeInfo(
         address strategy,
         address sender,
@@ -260,6 +295,18 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
             sender,
             stake,
             shares,
+            bytes("") // no metadata
+        );
+    }
+
+    /// @inheritdoc ILockbox
+    function generateRouteRegistryBody(
+        address strategy,
+        address rwaAsset
+    ) public pure returns (bytes memory body) {
+        body = HyperlaneMailboxMessages.serializeRouteRegistry(
+            strategy,
+            rwaAsset,
             bytes("") // no metadata
         );
     }

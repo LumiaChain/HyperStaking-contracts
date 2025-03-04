@@ -84,7 +84,7 @@ describe("3adao-lumia", function () {
 
   describe("RouteFactory", function () {
     it("route factory use lending integration and sent rwaUSD to the user", async function () {
-      const { deposit, zeroYieldStrategy, testUSDC, alice, vaultToken, lockbox, lpToken, routeFactory, rwaUSD, lendingVault } = await deployHyperStaking();
+      const { deposit, zeroYieldStrategy, testUSDC, alice, vaultToken, lockbox, lpToken, hyperlaneHandler, rwaUSD, lendingVault } = await deployHyperStaking();
 
       const stakeAmount = parseUnits("400", 6);
 
@@ -108,7 +108,7 @@ describe("3adao-lumia", function () {
       await expect(stakeTx).to.changeTokenBalance(lpToken, lendingVault, stakeAmount);
 
       // rwaUSD is borrowed and sent to the user (minus borrow safety buffer)
-      const borrowSafetyBuffer = (await routeFactory.getRouteInfo(zeroYieldStrategy)).borrowSafetyBuffer;
+      const borrowSafetyBuffer = (await hyperlaneHandler.getRouteInfo(zeroYieldStrategy)).borrowSafetyBuffer;
       expect(borrowSafetyBuffer).to.be.equal(parseEther("0.05")); // 5%
       const expecteRwaUSDAmount = stakeAmount * (parseEther("1") - borrowSafetyBuffer) / parseEther("1");
 

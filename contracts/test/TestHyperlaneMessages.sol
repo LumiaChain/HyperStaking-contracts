@@ -53,6 +53,18 @@ contract TestHyperlaneMessages {
         );
     }
 
+    function serializeRouteRegistry(
+        address strategy_,
+        address rwaAsset_,
+        bytes memory metadata_
+    ) external pure returns (bytes memory) {
+        return HyperlaneMailboxMessages.serializeRouteRegistry(
+            strategy_,
+            rwaAsset_,
+            metadata_
+        );
+    }
+
     function serializeStakeInfo(
         address strategy_,
         address sender_,
@@ -108,6 +120,16 @@ contract TestHyperlaneMessages {
 
     function tokenDeployMetadata(bytes calldata message) external pure returns (bytes calldata) {
         return message.tokenDeployMetadata();
+    }
+
+    // ========= RouteRegistry ========= //
+
+    function rwaAsset(bytes calldata message) external pure returns (address) {
+        return message.rwaAsset();
+    }
+
+    function routeRegistryMetadata(bytes calldata message) external pure returns (bytes calldata) {
+        return message.routeRegistryMetadata();
     }
 
     // ========= TokenBridge & StakeInfo & TokenRedeem  ========= //

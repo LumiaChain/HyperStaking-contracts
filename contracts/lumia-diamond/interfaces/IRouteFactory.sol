@@ -156,7 +156,4 @@ interface IRouteFactory {
 
     /// @notice Retrieves the lendingVault associated with a given strategy
     function getLendingVault(address strategy) external view returns (IVault);
-
-    /// @notice Returns more detailed route info for a given strategy
-    function getRouteInfo(address strategy) external view returns (RouteInfo memory);
 }

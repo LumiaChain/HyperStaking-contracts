@@ -30,6 +30,13 @@ interface ILockbox {
         uint256 shares
     );
 
+    event RouteRegistryDispatched(
+        address indexed mailbox,
+        address lumiaFactory,
+        address indexed strategy,
+        address rwaAsset
+    );
+
     event StakeInfoDispatched(
         address indexed mailbox,
         address lumiaFactory,
@@ -88,6 +95,15 @@ interface ILockbox {
         address user,
         uint256 stake,
         uint256 shares
+    ) external payable;
+
+    /**
+     * @notice Dispatches a cross-chain message informing about new strategy to register
+     * @dev This function sends a message to trigger new route registration
+     */
+    function routeRegistryDispatch(
+        address strategy,
+        address rwaAsset
     ) external payable;
 
     /**
@@ -151,6 +167,12 @@ interface ILockbox {
     ) external view returns (uint256);
 
     /// @notice Helper
+    function quoteDispatchRouteRegistry(
+        address strategy,
+        address rwaAsset
+    ) external view returns (uint256);
+
+    /// @notice Helper
     function quoteDispatchStakeInfo(
         address strategy,
         address sender,
@@ -171,6 +193,12 @@ interface ILockbox {
         address sender,
         uint256 stake,
         uint256 shares
+    ) external pure returns (bytes memory body);
+
+    /// @notice Helper
+    function generateRouteRegistryBody(
+        address strategy,
+        address rwaAsset
     ) external pure returns (bytes memory body);
 
     /// @notice Helper

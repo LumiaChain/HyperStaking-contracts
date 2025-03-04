@@ -2,7 +2,7 @@
 pragma solidity =0.8.27;
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
-import {LastMessage} from "../libraries/LibInterchainFactory.sol";
+import {RouteInfo, LastMessage} from "../libraries/LibInterchainFactory.sol";
 
 /**
  * @title IHyperlaneHandler
@@ -36,6 +36,14 @@ interface IHyperlaneHandler {
         uint256 shares
     );
 
+    event RouteRegistered(
+        address indexed originLockbox,
+        uint32 indexed originDestination,
+        address strategy,
+        address rwaAssetOwner,
+        address indexed rwaAsset
+    );
+
     //===========================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
@@ -48,7 +56,7 @@ interface IHyperlaneHandler {
     error NotFromHyperStaking(address sender);
     error BadOriginDestination(uint32 originDestination);
 
-    error RouteDoesNotExist(address strategy);
+    error RouteAlreadyExist();
 
     //============================================================================================//
     //                                          Mutable                                           //
@@ -120,4 +128,7 @@ interface IHyperlaneHandler {
         address sender,
         uint256 shares
     ) external pure returns (bytes memory body);
+
+    /// @notice Returns detailed route information for a given strategy
+    function getRouteInfo(address strategy) external view returns (RouteInfo memory);
 }

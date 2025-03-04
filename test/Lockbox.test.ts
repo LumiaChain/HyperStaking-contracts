@@ -292,49 +292,68 @@ describe("Lockbox", function () {
       expect(await testWrapper.sharesAmount(bytes2)).to.equal(message2.shares);
       expect(await testWrapper.tokenBridgeMetadata(bytes2)).to.equal(message2.metadata);
 
-      // StakeInfo
+      // RouteRegister
 
-      const message3 = {
+      const messageRR = {
         strategy: ZeroAddress,
-        sender: ZeroAddress,
-        stake: parseEther("3.04"),
-        metadata: "0x1434",
+        rwaAsset: "0x0146109EC55EA184e0f8e6Ea06Ef6e5F45E2e804",
+        metadata: "0x434a",
       };
 
-      const bytes3 = await testWrapper.serializeStakeInfo(
-        message3.strategy,
-        message3.sender,
-        message3.stake,
-        message3.metadata,
+      const bytesRR = await testWrapper.serializeRouteRegistry(
+        messageRR.strategy,
+        messageRR.rwaAsset,
+        messageRR.metadata,
       );
 
-      expect(await testWrapper.messageType(bytes3)).to.equal(2);
-      expect(await testWrapper.strategy(bytes3)).to.equal(message3.strategy);
-      expect(await testWrapper.sender(bytes3)).to.equal(message3.sender);
-      expect(await testWrapper.stakeAmount(bytes3)).to.equal(message3.stake);
-      expect(await testWrapper.stakeInfoMetadata(bytes3)).to.equal(message3.metadata);
+      expect(await testWrapper.messageType(bytesRR)).to.equal(2);
+      expect(await testWrapper.strategy(bytesRR)).to.equal(messageRR.strategy);
+      expect(await testWrapper.rwaAsset(bytesRR)).to.equal(messageRR.rwaAsset);
+      expect(await testWrapper.routeRegistryMetadata(bytesRR)).to.equal(messageRR.metadata);
+
+      // StakeInfo
+
+      const messageSI = {
+        strategy: ZeroAddress,
+        sender: ZeroAddress,
+        stake: parseEther("4.04"),
+        metadata: "0x1433",
+      };
+
+      const bytesSI = await testWrapper.serializeStakeInfo(
+        messageSI.strategy,
+        messageSI.sender,
+        messageSI.stake,
+        messageSI.metadata,
+      );
+
+      expect(await testWrapper.messageType(bytesSI)).to.equal(3);
+      expect(await testWrapper.strategy(bytesSI)).to.equal(messageSI.strategy);
+      expect(await testWrapper.sender(bytesSI)).to.equal(messageSI.sender);
+      expect(await testWrapper.stakeAmount(bytesSI)).to.equal(messageSI.stake);
+      expect(await testWrapper.stakeInfoMetadata(bytesSI)).to.equal(messageSI.metadata);
 
       // TokenRedeem
 
-      const message4 = {
+      const message5 = {
         strtegy: ZeroAddress,
         sender: ZeroAddress,
         amount: parseEther("2"),
         metadata: "0x1256",
       };
 
-      const bytes4 = await testWrapper.serializeTokenRedeem(
-        message4.strtegy,
-        message4.sender,
-        message4.amount,
-        message4.metadata,
+      const bytes5 = await testWrapper.serializeTokenRedeem(
+        message5.strtegy,
+        message5.sender,
+        message5.amount,
+        message5.metadata,
       );
 
-      expect(await testWrapper.messageType(bytes4)).to.equal(3);
-      expect(await testWrapper.strategy(bytes4)).to.equal(message4.strtegy);
-      expect(await testWrapper.sender(bytes4)).to.equal(message4.sender);
-      expect(await testWrapper.redeemAmount(bytes4)).to.equal(message4.amount);
-      expect(await testWrapper.tokenRedeemMetadata(bytes4)).to.equal(message4.metadata);
+      expect(await testWrapper.messageType(bytes5)).to.equal(4);
+      expect(await testWrapper.strategy(bytes5)).to.equal(message5.strtegy);
+      expect(await testWrapper.sender(bytes5)).to.equal(message5.sender);
+      expect(await testWrapper.redeemAmount(bytes5)).to.equal(message5.amount);
+      expect(await testWrapper.tokenRedeemMetadata(bytes5)).to.equal(message5.metadata);
     });
 
     it("string limitations", async function () {

@@ -66,11 +66,15 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
 
     /// @inheritdoc IHyperFactory
     function addDirectStrategy(
-        address strategy
+        address strategy,
+        address rwaAsset
     ) external payable onlyVaultManager nonReentrant {
         require(IStrategy(strategy).isDirectStakeStrategy(), NotDirectStrategy(strategy));
 
         _storeVaultInfo(strategy, address(0));
+
+        // deploy lp token on lumia
+        _dispatchRouteRegistry(strategy, rwaAsset);
 
         emit DirectVaultCreate(
             msg.sender,
@@ -127,6 +131,28 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
             name,
             symbol,
             decimals
+        );
+    }
+
+    /**
+     * @notice Dispatches an interchain message to instruct the registration of new strategy
+     * @dev Uses the Lockbox Facet to send a message containing required details
+     * @param strategy The address of the strategy which will be registered
+     * @param rwaAsset The RWA token address representing the bridged asset on the destination chain
+     */
+    function _dispatchRouteRegistry(
+        address strategy,
+        address rwaAsset
+    ) internal {
+        // quote message fee for forwarding a RouteRegistry message across chains
+        uint256 fee = ILockbox(address(this)).quoteDispatchRouteRegistry(
+            strategy,
+            rwaAsset
+        );
+
+        ILockbox(address(this)).routeRegistryDispatch{value: fee}(
+            strategy,
+            rwaAsset
         );
     }
 

@@ -47,7 +47,7 @@ const ThreeADaoMockModule = buildModule("ThreeADaoMockModule", (m) => {
 
   // -------
 
-  return { rwaUSD, threeAVaultFactory: vaultFactory, tokenToPriceFeed };
+  return { rwaUSD, rwaUSDOwner, threeAVaultFactory: vaultFactory, tokenToPriceFeed };
 });
 
 export default ThreeADaoMockModule;
