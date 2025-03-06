@@ -28,16 +28,21 @@ struct UserTier2Info {
     uint256 stake;
 }
 
-struct VaultTier1 {
+struct Tier1Info {
     uint256 assetAllocation;
     uint256 totalStake; // all users stake in this tier
     uint256 revenueFee; // 18 dec precision
 }
 
-// Users at Tier2 don't have stake stored in the pool (storage) anymore,
-// as it is represented by ERC4626 vault token - liquid shares
-struct VaultTier2 {
+/// Users at Tier2 don't have stake stored in the pool (storage) anymore,
+/// as it is represented by ERC4626 vault token - liquid shares
+struct Tier2Info {
     IERC4626 vaultToken;
+}
+
+/// DirectStake specific info
+struct DirectStakeInfo {
+    uint256 totalStake; // TODO
 }
 
 /// Main vault details
@@ -50,6 +55,9 @@ struct VaultInfo {
     Currency stakeCurrency;
     address strategy;
     IERC20Metadata asset;
+    // directStake
+    // tier1
+    // tier2
 }
 
 struct HyperlaneMessage {
@@ -76,10 +84,13 @@ struct HyperStakingStorage {
     mapping (address strategy => VaultInfo) vaultInfo;
 
     /// @notice Info of vaults tier1
-    mapping (address strategy => VaultTier1) vaultTier1Info;
+    mapping (address strategy => Tier1Info) tier1Info;
 
     /// @notice Info of vaults tier2
-    mapping (address strategy => VaultTier2) vaultTier2Info;
+    mapping (address strategy => Tier2Info) tier2Info;
+
+    /// @notice Info of directStake
+    mapping (address strategy => DirectStakeInfo) directStakeInfo;
 
     /// @notice General lockbox data
     LockboxData lockboxData;

@@ -15,7 +15,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
-    LibHyperStaking, HyperStakingStorage, UserTier1Info, VaultInfo, VaultTier1, VaultTier2
+    LibHyperStaking, HyperStakingStorage, UserTier1Info, VaultInfo, Tier1Info, Tier2Info
 } from "../libraries/LibHyperStaking.sol";
 
 /**
@@ -39,7 +39,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     ) external payable diamondInternal {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
-        VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
+        Tier1Info storage tier1 = v.tier1Info[strategy];
 
         { // alloc point, lock
             UserTier1Info storage userVault = v.userInfo[strategy][user];
@@ -103,7 +103,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         require(revenueFee <= 30 * onePercent, InvalidRevenueFeeValue());
 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        v.vaultTier1Info[strategy].revenueFee = revenueFee;
+        v.tier1Info[strategy].revenueFee = revenueFee;
 
         emit RevenueFeeSet(strategy, revenueFee);
     }
@@ -111,9 +111,9 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     // ========= View ========= //
 
     /// @inheritdoc ITier1Vault
-    function vaultTier1Info(address strategy) external view returns (VaultTier1 memory) {
+    function tier1Info(address strategy) external view returns (Tier1Info memory) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        return v.vaultTier1Info[strategy];
+        return v.tier1Info[strategy];
     }
 
     /// @inheritdoc ITier1Vault
@@ -130,7 +130,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
 
         UserTier1Info memory userVault = v.userInfo[strategy][user];
-        VaultTier1 memory tier1 = v.vaultTier1Info[strategy];
+        Tier1Info memory tier1 = v.tier1Info[strategy];
 
         if (userVault.stake== 0) {
             return 0;
@@ -170,7 +170,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         uint256 allocation
     ) public view returns (uint256 feeAmount) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
+        Tier1Info storage tier1 = v.tier1Info[strategy];
         return allocation * tier1.revenueFee / LibHyperStaking.PERCENT_PRECISION;
     }
 
@@ -205,7 +205,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
      */
     function _lockUserStake(
         UserTier1Info storage userVault,
-        VaultTier1 storage tier1,
+        Tier1Info storage tier1,
         uint256 stake
     ) internal {
         userVault.stake += stake;
@@ -221,7 +221,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
      */
     function _unlockUserStake(
         UserTier1Info storage userVault,
-        VaultTier1 storage tier1,
+        Tier1Info storage tier1,
         uint256 stake
     ) internal {
         userVault.stake -= stake;
@@ -241,8 +241,8 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     ) internal returns (uint256 exitAllocation) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
-        VaultTier1 storage tier1 = v.vaultTier1Info[strategy];
-        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
+        Tier1Info storage tier1 = v.tier1Info[strategy];
+        Tier2Info storage tier2 = v.tier2Info[strategy];
 
         uint256 allocation = _convertToAllocation(tier1, stake);
         tier1.assetAllocation -= allocation;
@@ -305,7 +305,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
      * @return The calculated Tier 1 allocation for the given stake amount
      */
     function _convertToAllocation(
-        VaultTier1 storage tier1,
+        Tier1Info storage tier1,
         uint256 stake
     ) internal view returns (uint256) {
         // amout ratio of the total stake locked in vault

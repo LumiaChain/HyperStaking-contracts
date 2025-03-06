@@ -93,24 +93,24 @@ describe("Staking", function () {
       await expect(deposit.connect(bob).pauseDeposit()).to.be.reverted;
       await expect(deposit.connect(stakingManager).pauseDeposit()).to.not.be.reverted;
 
-      await expect(deposit.stakeDeposit(reserveStrategy1, 100, bob, { value: 100 }))
+      await expect(deposit.stakeDepositTier1(reserveStrategy1, 100, bob, { value: 100 }))
         .to.be.reverted;
 
-      await expect(deposit.connect(bob).stakeWithdraw(reserveStrategy1, 100, bob)).to.be.reverted;
+      await expect(deposit.connect(bob).stakeWithdrawTier1(reserveStrategy1, 100, bob)).to.be.reverted;
 
       // unpause
       await expect(deposit.connect(bob).unpauseDeposit()).to.be.reverted;
       await expect(deposit.connect(stakingManager).unpauseDeposit()).to.not.be.reverted;
 
-      await deposit.stakeDeposit(reserveStrategy1, 100, bob, { value: 100 });
-      await deposit.connect(bob).stakeWithdraw(reserveStrategy1, 100, bob);
+      await deposit.stakeDepositTier1(reserveStrategy1, 100, bob, { value: 100 });
+      await deposit.connect(bob).stakeWithdrawTier1(reserveStrategy1, 100, bob);
     });
 
     it("should be able to deposit stake", async function () {
       const { deposit, tier1, reserveStrategy1, owner, alice } = await loadFixture(deployHyperStaking);
 
       const stakeAmount = parseEther("5");
-      await expect(deposit.stakeDeposit(reserveStrategy1, stakeAmount, owner, { value: stakeAmount }))
+      await expect(deposit.stakeDepositTier1(reserveStrategy1, stakeAmount, owner, { value: stakeAmount }))
         .to.changeEtherBalances(
           [owner, reserveStrategy1],
           [-stakeAmount, stakeAmount],
@@ -118,19 +118,19 @@ describe("Staking", function () {
 
       // event
       const tier1Id = 1;
-      await expect(deposit.stakeDeposit(reserveStrategy1, stakeAmount, owner, { value: stakeAmount }))
+      await expect(deposit.stakeDepositTier1(reserveStrategy1, stakeAmount, owner, { value: stakeAmount }))
         .to.emit(deposit, "StakeDeposit")
         .withArgs(owner, owner, reserveStrategy1, stakeAmount, tier1Id);
 
       const stakeAmountForAlice = parseEther("11");
-      await expect(deposit.connect(alice).stakeDeposit(
+      await expect(deposit.connect(alice).stakeDepositTier1(
         reserveStrategy1, stakeAmountForAlice, alice, { value: stakeAmountForAlice }),
       )
         .to.emit(deposit, "StakeDeposit")
         .withArgs(alice, alice, reserveStrategy1, stakeAmountForAlice, tier1Id);
 
       // Tier1
-      const vaultInfo = await tier1.vaultTier1Info(reserveStrategy1);
+      const vaultInfo = await tier1.tier1Info(reserveStrategy1);
       expect(vaultInfo.totalStake).to.equal(stakeAmount * 2n + stakeAmountForAlice);
 
       // UserInfo
@@ -148,27 +148,28 @@ describe("Staking", function () {
       const stakeAmount = parseEther("6.4");
       const withdrawAmount = parseEther(".8");
 
-      await deposit.stakeDeposit(reserveStrategy1, stakeAmount, owner, { value: stakeAmount });
+      await deposit.stakeDepositTier1(reserveStrategy1, stakeAmount, owner, { value: stakeAmount });
 
-      await expect(deposit.stakeWithdraw(reserveStrategy1, withdrawAmount, owner))
+      await expect(deposit.stakeWithdrawTier1(reserveStrategy1, withdrawAmount, owner))
         .to.changeEtherBalances(
           [owner, reserveStrategy1],
           [withdrawAmount, -withdrawAmount],
         );
 
-      await expect(deposit.stakeWithdraw(reserveStrategy1, withdrawAmount, owner))
+      const tier1StakeType = 1;
+      await expect(deposit.stakeWithdrawTier1(reserveStrategy1, withdrawAmount, owner))
         .to.emit(deposit, "StakeWithdraw")
-        .withArgs(owner, owner, reserveStrategy1, withdrawAmount, anyValue);
+        .withArgs(owner, owner, reserveStrategy1, withdrawAmount, anyValue, tier1StakeType);
 
       const precisionError = 4n; // 4wei
-      await expect(deposit.stakeWithdraw(reserveStrategy1, withdrawAmount, alice))
+      await expect(deposit.stakeWithdrawTier1(reserveStrategy1, withdrawAmount, alice))
         .to.changeEtherBalances(
           [alice, reserveStrategy1],
           [withdrawAmount - precisionError, -withdrawAmount + precisionError],
         );
 
       // Tier1
-      const vaultInfo = await tier1.vaultTier1Info(reserveStrategy1);
+      const vaultInfo = await tier1.tier1Info(reserveStrategy1);
       expect(vaultInfo.totalStake).to.equal(stakeAmount - 3n * withdrawAmount);
 
       // UserInfo
@@ -187,27 +188,28 @@ describe("Staking", function () {
       const withdrawAmount = parseEther("1.4");
 
       await testERC20.approve(deposit, stakeAmount);
-      await deposit.stakeDeposit(reserveStrategy2, stakeAmount, owner);
+      await deposit.stakeDepositTier1(reserveStrategy2, stakeAmount, owner);
 
       const precisionError = 2n; // 2wei
-      await expect(deposit.stakeWithdraw(reserveStrategy2, withdrawAmount, owner))
+      await expect(deposit.stakeWithdrawTier1(reserveStrategy2, withdrawAmount, owner))
         .to.changeTokenBalances(testERC20,
           [owner, reserveStrategy2],
           [withdrawAmount - precisionError, -withdrawAmount + precisionError],
         );
 
-      await expect(deposit.stakeWithdraw(reserveStrategy2, withdrawAmount, owner))
+      const tier1StakeType = 1;
+      await expect(deposit.stakeWithdrawTier1(reserveStrategy2, withdrawAmount, owner))
         .to.emit(deposit, "StakeWithdraw")
-        .withArgs(owner, owner, reserveStrategy2, withdrawAmount, withdrawAmount);
+        .withArgs(owner, owner, reserveStrategy2, withdrawAmount, withdrawAmount, tier1StakeType);
 
-      await expect(deposit.stakeWithdraw(reserveStrategy2, withdrawAmount, alice))
+      await expect(deposit.stakeWithdrawTier1(reserveStrategy2, withdrawAmount, alice))
         .to.changeTokenBalances(testERC20,
           [alice, reserveStrategy2],
           [withdrawAmount, -withdrawAmount],
         );
 
       // Tier1
-      const vaultInfo = await tier1.vaultTier1Info(reserveStrategy2);
+      const vaultInfo = await tier1.tier1Info(reserveStrategy2);
       expect(vaultInfo.totalStake).to.equal(stakeAmount - 3n * withdrawAmount);
 
       // UserInfo
@@ -226,7 +228,7 @@ describe("Staking", function () {
         const stakeAmount = parseEther("1");
         const value = parseEther("0.99");
 
-        await expect(deposit.stakeDeposit(reserveStrategy1, stakeAmount, owner, { value }))
+        await expect(deposit.stakeDepositTier1(reserveStrategy1, stakeAmount, owner, { value }))
           .to.be.revertedWith("Insufficient native value");
       });
 
@@ -238,8 +240,8 @@ describe("Staking", function () {
 
         const stakeAmount = parseEther("1");
 
-        await deposit.stakeDeposit(reserveStrategy1, stakeAmount, owner, { value: stakeAmount });
-        await expect(deposit.stakeWithdraw(reserveStrategy1, stakeAmount, revertingContract))
+        await deposit.stakeDepositTier1(reserveStrategy1, stakeAmount, owner, { value: stakeAmount });
+        await expect(deposit.stakeWithdrawTier1(reserveStrategy1, stakeAmount, revertingContract))
           .to.be.revertedWith("Transfer call failed");
       });
     });

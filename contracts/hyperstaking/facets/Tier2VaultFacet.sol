@@ -15,7 +15,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
-    LibHyperStaking, HyperStakingStorage, VaultInfo, VaultTier2, UserTier2Info
+    LibHyperStaking, HyperStakingStorage, VaultInfo, Tier2Info, UserTier2Info
 } from "../libraries/LibHyperStaking.sol";
 
 /**
@@ -39,7 +39,7 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
 
     modifier onlyVaultToken(address strategy) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
+        Tier2Info storage tier2 = v.tier2Info[strategy];
 
         require(msg.sender == address(tier2.vaultToken), NotVaultToken());
         _;
@@ -100,7 +100,7 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     ) external onlyVaultToken(strategy) nonReentrant returns (uint256 withdrawAmount) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
-        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
+        Tier2Info storage tier2 = v.tier2Info[strategy];
 
         // VaultToken should approved DIAMOND first
         vault.asset.safeTransferFrom(address(tier2.vaultToken), address(this), allocation);
@@ -116,9 +116,9 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     // ========= View ========= //
 
     /// @inheritdoc ITier2Vault
-    function vaultTier2Info(address strategy) external view returns (VaultTier2 memory) {
+    function tier2Info(address strategy) external view returns (Tier2Info memory) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        return v.vaultTier2Info[strategy];
+        return v.tier2Info[strategy];
     }
 
     /// @inheritdoc ITier2Vault
@@ -126,7 +126,7 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         address strategy,
         address user
     ) external view returns (UserTier2Info memory) {
-        VaultTier2 storage tier2 = LibHyperStaking.diamondStorage().vaultTier2Info[strategy];
+        Tier2Info storage tier2 = LibHyperStaking.diamondStorage().tier2Info[strategy];
         uint256 shares = tier2.vaultToken.balanceOf(user);
 
         return sharesTier2Info(strategy, shares);
@@ -137,7 +137,7 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         address strategy,
         uint256 shares
     ) public view returns (UserTier2Info memory) {
-        VaultTier2 storage tier2 = LibHyperStaking.diamondStorage().vaultTier2Info[strategy];
+        Tier2Info storage tier2 = LibHyperStaking.diamondStorage().tier2Info[strategy];
 
         uint256 allocation = tier2.vaultToken.convertToAssets(shares);
         uint256 stake = IStrategy(strategy).previewExit(allocation);
@@ -162,7 +162,7 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     ) internal {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
-        VaultTier2 storage tier2 = v.vaultTier2Info[strategy];
+        Tier2Info storage tier2 = v.tier2Info[strategy];
 
         vault.asset.safeIncreaseAllowance(address(tier2.vaultToken), allocation);
 

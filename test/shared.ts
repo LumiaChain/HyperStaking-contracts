@@ -65,7 +65,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
 
   const { rwaUSD, rwaUSDOwner, threeAVaultFactory, tokenToPriceFeed } = await ignition.deploy(ThreeADaoMockModule);
 
-  const { lumiaDiamond, hyperlaneHandler, routeFactory } = await ignition.deploy(LumiaDiamondModule, {
+  const { lumiaDiamond, hyperlaneHandler, routeFactory, realAsset } = await ignition.deploy(LumiaDiamondModule, {
     parameters: {
       LumiaDiamondModule: {
         lumiaMailbox: mailboxAddress,
@@ -97,7 +97,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   await rwaUSDOwner.addMinter(lumiaDiamond);
 
   return {
-    mailbox, hyperlaneHandler, routeFactory, diamond, deposit, hyperFactory, tier1, tier2, lockbox, superVault, superformIntegration, rwaUSD, rwaUSDOwner, threeAVaultFactory, tokenToPriceFeed,
+    mailbox, hyperlaneHandler, routeFactory, diamond, deposit, hyperFactory, tier1, tier2, lockbox, superVault, superformIntegration, realAsset, rwaUSD, rwaUSDOwner, threeAVaultFactory, tokenToPriceFeed,
   };
 }
 
@@ -220,7 +220,7 @@ export async function addTestPriceFeed(
 // -------------------- Other Helpers --------------------
 
 export async function getDerivedTokens(tier2: Contract, routeFactory: Contract, strategy: string) {
-  const vaultTokenAddress = (await tier2.vaultTier2Info(strategy)).vaultToken;
+  const vaultTokenAddress = (await tier2.tier2Info(strategy)).vaultToken;
   const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
 
   const lpTokenAddress = await routeFactory.getLpToken(strategy);

@@ -17,7 +17,7 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {Currency} from "../libraries/CurrencyHandler.sol";
 import {
-    LibHyperStaking, HyperStakingStorage, VaultInfo, VaultTier1, VaultTier2
+    LibHyperStaking, HyperStakingStorage, VaultInfo, Tier1Info, Tier2Info
 } from "../libraries/LibHyperStaking.sol";
 
 import {VaultToken} from "../VaultToken.sol";
@@ -192,14 +192,14 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         require(v.vaultInfo[strategy].strategy == address(0), VaultAlreadyExist());
 
         // init tier1
-        v.vaultTier1Info[strategy] = VaultTier1({
+        v.tier1Info[strategy] = Tier1Info({
             assetAllocation: 0,
             totalStake: 0,
             revenueFee: tier1RevenueFee
         });
 
         // init tier2
-        v.vaultTier2Info[strategy] = VaultTier2({
+        v.tier2Info[strategy] = Tier2Info({
             vaultToken: vaultToken
         });
     }

@@ -3,7 +3,8 @@ pragma solidity =0.8.27;
 
 import {LumiaLPToken} from "../LumiaLPToken.sol";
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
-import {MintableToken} from "../../external/3adao-lumia/tokens/MintableToken.sol";
+import {IMintableToken} from "../../external/3adao-lumia/interfaces/IMintableToken.sol";
+import {IMintableTokenOwner} from "../../external/3adao-lumia/interfaces/IMintableTokenOwner.sol";
 import {MintableTokenOwner} from "../../external/3adao-lumia/gobernance/MintableTokenOwner.sol";
 
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
@@ -36,8 +37,8 @@ struct RouteInfo {
     LumiaLPToken lpToken;
     IVault lendingVault;
     uint256 borrowSafetyBuffer;
-    MintableTokenOwner rwaAssetOwner;
-    MintableToken rwaAsset;
+    IMintableTokenOwner rwaAssetOwner;
+    IMintableToken rwaAsset;
 }
 
 struct LastMessage {
@@ -74,13 +75,23 @@ struct InterchainFactoryStorage {
 }
 
 library LibInterchainFactory {
+    // -------------------- Errors
+
     error RouteDoesNotExist(address strategy);
+
+    error InvalidRwaAsset(address badRwaAsset);
+    error NotOwnableRwaAsset(address badRwaAsset);
+    error NotMintableRwaAsset(address badRwaAsset);
+
+    // -------------------- Constants
 
     bytes32 constant internal INTERCHAIN_FACTORY_STORAGE_POSITION
         = keccak256("lumia-interchain-factory.storage");
 
     // 1e18 as a scaling factor, e.g. 0.1 ETH (1e17) == 10%
     uint256 constant internal PERCENT_PRECISION = 1e18; // represent 100%
+
+    // -------------------- Checks
 
     /// @notice Checks whether route exists
     /// @dev reverts if route does not exist
@@ -90,6 +101,29 @@ library LibInterchainFactory {
     ) internal view {
         require(ifs.routes[strategy].exists, RouteDoesNotExist(strategy));
     }
+
+    /// @notice Verifies properties of the RWA asset
+    /// @dev reverts if invalid
+    function checkRwaAsset(address rwaAsset) internal view {
+        require(
+            rwaAsset != address(0) && rwaAsset.code.length > 0,
+            InvalidRwaAsset(rwaAsset)
+        );
+
+        // additional check if the token has an owner (MintableTokenOwner)
+        (bool success, ) = rwaAsset.staticcall(abi.encodeWithSignature("owner()"));
+        require(success, NotOwnableRwaAsset(rwaAsset));
+
+
+        // expect this contract to have the right to mint
+        MintableTokenOwner rwaAssetOwner = MintableTokenOwner(IMintableToken(rwaAsset).owner());
+        require(rwaAssetOwner.minters(address(this)), NotMintableRwaAsset(rwaAsset));
+    }
+
+    // -------------------- Storage Access
+
+    /// @notice Checks whether rwaAsset is valid
+    /// @dev reverts if rwaAsset dont some aingv roperties
 
     function diamondStorage() internal pure returns (InterchainFactoryStorage storage s) {
         bytes32 position = INTERCHAIN_FACTORY_STORAGE_POSITION;

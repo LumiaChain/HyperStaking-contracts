@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {IRealAsset} from "../interfaces/IRealAsset.sol";
+import {IHyperlaneHandler} from "../interfaces/IHyperlaneHandler.sol";
 import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
 import {
     LibInterchainFactory, InterchainFactoryStorage, RouteInfo
@@ -9,8 +10,8 @@ import {
 
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {MintableToken} from "../../external/3adao-lumia/tokens/MintableToken.sol";
-import {MintableTokenOwner} from "../../external/3adao-lumia/gobernance/MintableTokenOwner.sol";
+import {IMintableToken} from "../../external/3adao-lumia/interfaces/IMintableToken.sol";
+import {IMintableTokenOwner} from "../../external/3adao-lumia/interfaces/IMintableTokenOwner.sol";
 import {
     HyperlaneMailboxMessages
 } from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
@@ -40,7 +41,8 @@ contract RealAssetFacet is IRealAsset, LumiaDiamondAcl {
 
         LibInterchainFactory.checkRoute(ifs, strategy);
 
-        ifs.userBridgedState[strategy][sender];
+        // store information about bridged stake
+        ifs.userBridgedState[strategy][sender] += stakeAmount;
 
         r.rwaAssetOwner.mint(sender, stakeAmount);
 
@@ -50,7 +52,8 @@ contract RealAssetFacet is IRealAsset, LumiaDiamondAcl {
     /// @inheritdoc IRealAsset
     function handleDirectRedeem(
         address strategy,
-        address user,
+        address from,
+        address to,
         uint256 assetAmount
     ) external payable {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
@@ -58,26 +61,33 @@ contract RealAssetFacet is IRealAsset, LumiaDiamondAcl {
 
         LibInterchainFactory.checkRoute(ifs, strategy);
 
-        // TODO
-        emit DirectRwaRedeem(strategy, address(r.rwaAsset), user, assetAmount);
+        // decrease bridged stake
+        ifs.userBridgedState[strategy][from] -= assetAmount;
+
+        IERC20(address(r.rwaAsset)).safeTransferFrom(from, address(this), assetAmount);
+
+        // use hyperlane handler function for dispatching rwaAsset
+        IHyperlaneHandler(address(this)).directRedeemDispatch{value: msg.value}(
+            strategy,
+            to,
+            assetAmount
+        );
+
+        emit DirectRwaRedeem(strategy, address(r.rwaAsset), from, to, assetAmount);
     }
 
     // ========= Restricted ========= //
 
     /// @inheritdoc IRealAsset
     function setRwaAsset(address strategy, address rwaAsset) external onlyLumiaFactoryManager {
-        require(
-            rwaAsset != address(0) && rwaAsset.code.length > 0,
-            InvalidRwaAsset(rwaAsset)
-        );
-
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
         RouteInfo storage r = ifs.routes[strategy];
 
         LibInterchainFactory.checkRoute(ifs, strategy);
+        LibInterchainFactory.checkRwaAsset(rwaAsset);
 
-        r.rwaAsset = MintableToken(rwaAsset);
-        r.rwaAssetOwner = MintableTokenOwner(r.rwaAsset.owner());
+        r.rwaAsset = IMintableToken(rwaAsset);
+        r.rwaAssetOwner = IMintableTokenOwner(r.rwaAsset.owner());
 
         emit RwaAssetSet(strategy, address(r.rwaAssetOwner), rwaAsset);
     }

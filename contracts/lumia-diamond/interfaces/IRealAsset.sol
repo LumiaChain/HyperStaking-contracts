@@ -20,7 +20,8 @@ interface IRealAsset {
     event DirectRwaRedeem(
         address indexed strategy,
         address indexed rwaAsset,
-        address sender,
+        address from,
+        address to,
         uint256 assetAmount
     );
 
@@ -29,12 +30,6 @@ interface IRealAsset {
         address newRwaAssetOwner,
         address newRwaAsset
     );
-
-    //===========================================================================================//
-    //                                          Errors                                            //
-    //============================================================================================//
-
-    error InvalidRwaAsset(address badRwaAsset);
 
     //============================================================================================//
     //                                          Mutable                                           //
@@ -46,7 +41,8 @@ interface IRealAsset {
     /// @notice Handles the direct redemption of bridged RWA tokens for a user
     function handleDirectRedeem(
         address strategy,
-        address user,
+        address from,
+        address to,
         uint256 assetAmount
     ) external payable;
 

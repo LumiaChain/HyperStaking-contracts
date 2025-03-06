@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {UserTier1Info, VaultTier1} from "../libraries/LibHyperStaking.sol";
+import {UserTier1Info, Tier1Info} from "../libraries/LibHyperStaking.sol";
 
 /**
  * @title ITierVault
@@ -82,14 +82,14 @@ interface ITier1Vault {
     //============================================================================================//
 
     /**
-     * @notice Retrieves Tier 1 vault information for a specified strategy
+     * @notice Retrieves Tier 1 information for a specified strategy
      * @param strategy The address of the strategy
-     * @return The VaultTier1 struct containing information about this specific tier
+     * @return The Tier1Info struct containing information about this specific tier
      */
-    function vaultTier1Info(address strategy) external view returns (VaultTier1 memory);
+    function tier1Info(address strategy) external view returns (Tier1Info memory);
 
     /**
-     * @notice Retrieves tier1 vault information specific to a user within a given strategy
+     * @notice Retrieves tier1 information specific to a user within a given strategy
      * @param strategy The address of the strategy
      * @param user The address of the user
      * @return A UserTier1Info struct containing the user's specific vault details

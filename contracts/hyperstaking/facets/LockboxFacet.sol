@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {ILockbox} from "../interfaces/ILockbox.sol";
+import {IDeposit} from "../interfaces/IDeposit.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {IERC20, IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
@@ -165,11 +166,21 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
             NotFromLumiaFactory(box.lastMessage.sender)
         );
 
-        // parse message data (HyperlaneMailboxMessages)
+        // parse message type (HyperlaneMailboxMessages)
         MessageType msgType = data.messageType();
-        require(msgType == MessageType.TokenRedeem, UnsupportedMessage());
 
-        _handleTokenRedeem(data);
+        // route message
+        if (msgType == MessageType.DirectRedeem) {
+            _handleDirectRedeem(data);
+            return;
+        }
+
+        if (msgType == MessageType.TokenRedeem) {
+            _handleTokenRedeem(data);
+            return;
+        }
+
+        revert UnsupportedMessage();
     }
 
     /* ========== ACL  ========== */
@@ -329,15 +340,22 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     //                                     Internal Functions                                     //
     //============================================================================================//
 
+    /// @notice Handle specific DirectRedeem message
+    function _handleDirectRedeem(bytes calldata data) internal {
+        address strategy = data.strategy();
+        address user = data.sender(); // sender -> actual hyperstaking user
+        uint256 stake = data.redeemAmount(); // amount -> amount of direct rwa asset
+
+        IDeposit(address(this)).directStakeWithdraw(strategy, stake, user);
+    }
+
     /// @notice Handle specific TokenRedeem message
     function _handleTokenRedeem(bytes calldata data) internal {
         address strategy = data.strategy();
         address user = data.sender(); // sender -> actual hyperstaking user
         uint256 shares = data.redeemAmount(); // amount -> amount of shares
+        // TODO is it still shares??
 
-        IERC4626 vaultToken = LibHyperStaking.diamondStorage().vaultTier2Info[strategy].vaultToken;
-
-        vaultToken.redeem(shares, user, address(this));
+        IDeposit(address(this)).stakeWithdrawTier2(strategy, shares, user);
     }
-
 }

@@ -72,6 +72,16 @@ interface IHyperlaneHandler {
     ) external payable;
 
     /**
+     * @notice Initiates direct redemption
+     * @dev Handles cross-chain unstaking via hyperlane bridge
+     */
+    function directRedeemDispatch(
+        address strategy,
+        address to,
+        uint256 assetAmount
+    ) external payable;
+
+    /**
      * @notice Initiates token redemption
      * @dev Handles cross-chain unstaking via hyperlane bridge
      * @param strategy Address of the strategy (on the origin chain) to redeem tokens from
@@ -114,6 +124,20 @@ interface IHyperlaneHandler {
 
     /// @notice Returns the last message saved in storage
     function lastMessage() external view returns(LastMessage memory);
+
+    /// @notice Helper: separated function for getting mailbox dispatch quote
+    function quoteDispatchDirectRedeem(
+        address strategy,
+        address to,
+        uint256 assetAmount
+    ) external view returns (uint256);
+
+    /// @notice Helper: separated function for generating hyperlane message body
+    function generateDirectRedeemBody(
+        address strategy,
+        address to,
+        uint256 assetAmount
+    ) external pure returns (bytes memory body);
 
     /// @notice Helper: separated function for getting mailbox dispatch quote
     function quoteDispatchTokenRedeem(

@@ -6,8 +6,8 @@ import {IHyperlaneHandler} from "../interfaces/IHyperlaneHandler.sol";
 import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
 import {LumiaLPToken} from "../LumiaLPToken.sol";
 
-import {MintableToken} from "../../external/3adao-lumia/tokens/MintableToken.sol";
-import {MintableTokenOwner} from "../../external/3adao-lumia/gobernance/MintableTokenOwner.sol";
+import {IMintableToken} from "../../external/3adao-lumia/interfaces/IMintableToken.sol";
+import {IMintableTokenOwner} from "../../external/3adao-lumia/interfaces/IMintableTokenOwner.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -62,8 +62,8 @@ contract RouteFactoryFacet is IRouteFactory, LumiaDiamondAcl {
             lpToken: lpToken,
             lendingVault: _createLendingVault(ifs, name),
             borrowSafetyBuffer: 5e16, // 5%
-            rwaAssetOwner: MintableTokenOwner(address(0)),
-            rwaAsset: MintableToken(address(0))
+            rwaAssetOwner: IMintableTokenOwner(address(0)),
+            rwaAsset: IMintableToken(address(0))
         });
 
         emit TokenDeployed(strategy, address(lpToken), name, symbol, decimals);

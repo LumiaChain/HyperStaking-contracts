@@ -150,7 +150,7 @@ describe("Lockbox", function () {
 
       // stake values should be 0 in tier1
       expect((await tier1.userTier1Info(reserveStrategy, alice)).stake).to.equal(0);
-      expect((await tier1.vaultTier1Info(reserveStrategy)).totalStake).to.equal(0);
+      expect((await tier1.tier1Info(reserveStrategy)).totalStake).to.equal(0);
     });
 
     it("mailbox fee is needed when adding strategy too", async function () {
@@ -333,27 +333,48 @@ describe("Lockbox", function () {
       expect(await testWrapper.stakeAmount(bytesSI)).to.equal(messageSI.stake);
       expect(await testWrapper.stakeInfoMetadata(bytesSI)).to.equal(messageSI.metadata);
 
+      // DirectRedeem
+
+      const messageDR = {
+        strtegy: ZeroAddress,
+        sender: ZeroAddress,
+        amount: parseEther("2"),
+        metadata: "0x1456",
+      };
+
+      const bytesDR = await testWrapper.serializeDirectRedeem(
+        messageDR.strtegy,
+        messageDR.sender,
+        messageDR.amount,
+        messageDR.metadata,
+      );
+
+      expect(await testWrapper.messageType(bytesDR)).to.equal(4);
+      expect(await testWrapper.strategy(bytesDR)).to.equal(messageDR.strtegy);
+      expect(await testWrapper.sender(bytesDR)).to.equal(messageDR.sender);
+      expect(await testWrapper.redeemAmount(bytesDR)).to.equal(messageDR.amount);
+
       // TokenRedeem
 
-      const message5 = {
+      const messageTR = {
         strtegy: ZeroAddress,
         sender: ZeroAddress,
         amount: parseEther("2"),
         metadata: "0x1256",
       };
 
-      const bytes5 = await testWrapper.serializeTokenRedeem(
-        message5.strtegy,
-        message5.sender,
-        message5.amount,
-        message5.metadata,
+      const bytesTR = await testWrapper.serializeTokenRedeem(
+        messageTR.strtegy,
+        messageTR.sender,
+        messageTR.amount,
+        messageTR.metadata,
       );
 
-      expect(await testWrapper.messageType(bytes5)).to.equal(4);
-      expect(await testWrapper.strategy(bytes5)).to.equal(message5.strtegy);
-      expect(await testWrapper.sender(bytes5)).to.equal(message5.sender);
-      expect(await testWrapper.redeemAmount(bytes5)).to.equal(message5.amount);
-      expect(await testWrapper.tokenRedeemMetadata(bytes5)).to.equal(message5.metadata);
+      expect(await testWrapper.messageType(bytesTR)).to.equal(5);
+      expect(await testWrapper.strategy(bytesTR)).to.equal(messageTR.strtegy);
+      expect(await testWrapper.sender(bytesTR)).to.equal(messageTR.sender);
+      expect(await testWrapper.redeemAmount(bytesTR)).to.equal(messageTR.amount);
+      expect(await testWrapper.tokenRedeemMetadata(bytesTR)).to.equal(messageTR.metadata);
     });
 
     it("string limitations", async function () {

@@ -149,7 +149,7 @@ describe("Superform", function () {
 
     // --------------------
 
-    const vaultAddress = (await tier2.vaultTier2Info(superformStrategy)).vaultToken;
+    const vaultAddress = (await tier2.tier2Info(superformStrategy)).vaultToken;
     const vault = await ethers.getContractAt("VaultToken", vaultAddress);
 
     const lpTokenAddress = await routeFactory.getLpToken(superformStrategy);
@@ -355,7 +355,7 @@ describe("Superform", function () {
       expect((await hyperFactory.vaultInfo(superformStrategy)).strategy).to.equal(superformStrategy);
       expect((await hyperFactory.vaultInfo(superformStrategy)).asset).to.equal(revenueAsset);
 
-      const [vaultToken] = await tier2.vaultTier2Info(superformStrategy);
+      const [vaultToken] = await tier2.tier2Info(superformStrategy);
       expect(vaultToken).to.not.equal(ZeroAddress);
 
       expect(await routeFactory.getLpToken(superformStrategy)).to.not.equal(ZeroAddress);
@@ -367,7 +367,7 @@ describe("Superform", function () {
       const amount = parseUnits("400", 6);
 
       await testUSDC.connect(alice).approve(deposit, amount);
-      await expect(deposit.connect(alice).stakeDeposit(superformStrategy, amount, alice))
+      await expect(deposit.connect(alice).stakeDepositTier1(superformStrategy, amount, alice))
         .to.changeTokenBalances(testUSDC,
           [alice, deposit, superformStrategy, erc4626Vault], [-amount, 0, 0, amount]);
 
@@ -375,7 +375,7 @@ describe("Superform", function () {
       expect(stakeLocked).to.equal(amount);
       expect(allocationPoint).to.be.greaterThan(0);
 
-      await expect(deposit.connect(alice).stakeWithdraw(superformStrategy, amount, alice))
+      await expect(deposit.connect(alice).stakeWithdrawTier1(superformStrategy, amount, alice))
         .to.changeTokenBalances(testUSDC,
           [alice, deposit, superformStrategy, erc4626Vault], [amount, 0, 0, -amount]);
 
@@ -399,7 +399,7 @@ describe("Superform", function () {
       const [enabled] = await hyperFactory.vaultInfo(superformStrategy, alice);
       expect(enabled).to.be.eq(true);
 
-      const [vaultToken] = await tier2.vaultTier2Info(superformStrategy, alice);
+      const [vaultToken] = await tier2.tier2Info(superformStrategy, alice);
       expect(vaultToken).to.be.eq(vault.target);
 
       // lpToken on the Lumia chain side

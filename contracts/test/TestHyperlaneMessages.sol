@@ -79,6 +79,20 @@ contract TestHyperlaneMessages {
         );
     }
 
+    function serializeDirectRedeem(
+        address strategy_,
+        address sender_,
+        uint256 redeemAmount_,
+        bytes memory metadata_
+    ) external pure returns (bytes memory) {
+        return HyperlaneMailboxMessages.serializeDirectRedeem(
+            strategy_,
+            sender_,
+            redeemAmount_,
+            metadata_
+        );
+    }
+
     function serializeTokenRedeem(
         address strategy_,
         address sender_,

@@ -9,6 +9,7 @@ enum MessageType {
     TokenBridge,
     RouteRegistry,
     StakeInfo,
+    DirectRedeem,
     TokenRedeem
 }
 
@@ -121,6 +122,21 @@ library HyperlaneMailboxMessages {
             TypeCasts.addressToBytes32(strategy_),      // 32-bytes: strategy address
             TypeCasts.addressToBytes32(sender_),        // 32-bytes: sender address
             stakeAmount_,                               // 32-bytes: stake amount
+            metadata_                                   // XX-bytes: additional metadata
+        );
+    }
+
+    function serializeDirectRedeem(
+        address strategy_,
+        address sender_,
+        uint256 redeemAmount_,
+        bytes memory metadata_
+    ) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            bytes8(uint64(MessageType.DirectRedeem)),   //  8-bytes: msg type
+            TypeCasts.addressToBytes32(strategy_),      // 32-bytes: strategy address
+            TypeCasts.addressToBytes32(sender_),        // 32-bytes: sender address
+            redeemAmount_,                              // 32-bytes: amount of shares to reedeem
             metadata_                                   // XX-bytes: additional metadata
         );
     }

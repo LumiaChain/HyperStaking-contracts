@@ -39,7 +39,7 @@ describe("VaultToken", function () {
       defaultRevenueFee,
     );
 
-    const vaultTokenAddress = (await tier2.vaultTier2Info(reserveStrategy)).vaultToken;
+    const vaultTokenAddress = (await tier2.tier2Info(reserveStrategy)).vaultToken;
     const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
 
     const lpTokenAddress = await routeFactory.getLpToken(reserveStrategy);
@@ -129,12 +129,12 @@ describe("VaultToken", function () {
 
       const stakeAmount = parseEther("6");
 
-      const tier2 = 2;
+      const stakeTypeTier2 = 2;
       await expect(deposit.stakeDepositTier2(
         reserveStrategy, stakeAmount, alice, { value: stakeAmount },
       ))
         .to.emit(deposit, "StakeDeposit")
-        .withArgs(owner, alice, reserveStrategy, stakeAmount, tier2);
+        .withArgs(owner, alice, reserveStrategy, stakeAmount, stakeTypeTier2);
 
       const lpAfter = await lpToken.balanceOf(alice);
       expect(lpAfter).to.be.gt(lpBefore);
@@ -147,7 +147,7 @@ describe("VaultToken", function () {
 
       // stake values should be 0 in tier1
       expect((await tier1.userTier1Info(reserveStrategy, alice)).stake).to.equal(0);
-      expect((await tier1.vaultTier1Info(reserveStrategy)).totalStake).to.equal(0);
+      expect((await tier1.tier1Info(reserveStrategy)).totalStake).to.equal(0);
     });
 
     it("shars should be minted equally regardless of the deposit order", async function () {
@@ -234,6 +234,7 @@ describe("VaultToken", function () {
         reserveStrategy, alice, lpBalance, { value: dispatchFee },
       );
 
+      // back to zero
       expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
       expect(await lpToken.balanceOf(alice)).to.be.eq(0);
       expect(await testReserveAsset.balanceOf(vaultToken)).to.be.eq(0);
@@ -274,7 +275,7 @@ describe("VaultToken", function () {
       const bobStakeAmount = parseEther("1");
 
       // alice stake to tier1, bob stake to tier2
-      await deposit.stakeDeposit(reserveStrategy, aliceStakeAmount, alice, { value: aliceStakeAmount });
+      await deposit.stakeDepositTier1(reserveStrategy, aliceStakeAmount, alice, { value: aliceStakeAmount });
       await deposit.stakeDepositTier2(reserveStrategy, bobStakeAmount, bob, { value: bobStakeAmount });
 
       await reserveStrategy.connect(strategyManager).setAssetPrice(price2);
@@ -290,7 +291,7 @@ describe("VaultToken", function () {
       expect(await vaultToken.totalAssets()).to.be.eq(expectedBobAllocation);
 
       // Tier1 withdraw generates fee
-      await deposit.connect(alice).stakeWithdraw(reserveStrategy, aliceStakeAmount, alice);
+      await deposit.connect(alice).stakeWithdrawTier1(reserveStrategy, aliceStakeAmount, alice);
 
       const allocationFee = await tier1.allocationFee(
         reserveStrategy,
@@ -337,7 +338,7 @@ describe("VaultToken", function () {
       const stakeAmount = parseEther("10");
 
       // alice stake to tier1
-      await deposit.stakeDeposit(reserveStrategy, stakeAmount, alice, { value: stakeAmount });
+      await deposit.stakeDepositTier1(reserveStrategy, stakeAmount, alice, { value: stakeAmount });
 
       await reserveStrategy.connect(strategyManager).setAssetPrice(price2);
 
@@ -354,8 +355,8 @@ describe("VaultToken", function () {
 
       // check Tier1 values
       expect((await tier1.userTier1Info(reserveStrategy, alice)).stake).to.equal(0);
-      expect((await tier1.vaultTier1Info(reserveStrategy)).assetAllocation).to.equal(0);
-      expect((await tier1.vaultTier1Info(reserveStrategy)).totalStake).to.equal(0);
+      expect((await tier1.tier1Info(reserveStrategy)).assetAllocation).to.equal(0);
+      expect((await tier1.tier1Info(reserveStrategy)).totalStake).to.equal(0);
 
       // assets
       expect(await ethers.provider.getBalance(deposit)).to.equal(0);
@@ -365,7 +366,7 @@ describe("VaultToken", function () {
 
       // staking
       expect((await tier1.userTier1Info(reserveStrategy, alice)).stake).to.equal(0);
-      expect((await tier1.vaultTier1Info(reserveStrategy)).totalStake).to.equal(0);
+      expect((await tier1.tier1Info(reserveStrategy)).totalStake).to.equal(0);
 
       // check Tier2 shares
       const shares = await vaultToken.convertToShares(stakeAmount - allocationFee); // assume price == 1

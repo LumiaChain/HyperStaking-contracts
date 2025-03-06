@@ -16,7 +16,9 @@ import {
 } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
-import {HyperStakingStorage, LibHyperStaking, VaultInfo, VaultTier2} from "../libraries/LibHyperStaking.sol";
+import {
+    HyperStakingStorage, LibHyperStaking, VaultInfo, Tier2Info, DirectStakeInfo
+} from "../libraries/LibHyperStaking.sol";
 
 /**
  * @title DepositFacet
@@ -41,9 +43,73 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     //                                      Public Functions                                      //
     //============================================================================================//
 
+    /* ========== Direct Deposit ========== */
+
+    /// @notice Direct stake deposit
+    /// @inheritdoc IDeposit
+    function directStakeDeposit(address strategy, uint256 stake, address to)
+        external
+        payable
+        nonReentrant
+        whenNotPaused
+        onlyDirect(strategy)
+    {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+
+        require(vault.strategy != address(0), VaultDoesNotExist(strategy));
+        require(vault.enabled, StrategyDisabled(strategy));
+
+        v.directStakeInfo[strategy].totalStake += stake; // TODO test
+
+        vault.stakeCurrency.transferFrom(
+            msg.sender,
+            address(this),
+            stake
+        );
+
+        // quote bridge message fee
+        uint256 fee = ILockbox(address(this)).quoteDispatchStakeInfo(
+            strategy,
+            to,
+            stake
+        );
+
+        // direct forwarding a StakeInfo message across chains
+        ILockbox(address(this)).stakeInfoDispatch{value: fee}(
+            strategy,
+            to,
+            stake
+        );
+
+        emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Direct);
+    }
+
+    /// @notice Tier2 withdraw function (internal)
+    /// @inheritdoc IDeposit
+    function directStakeWithdraw(address strategy, uint256 stake, address to)
+        external
+        whenNotPaused
+        diamondInternal
+    {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+
+        v.directStakeInfo[strategy].totalStake -= stake; // TODO test
+
+        vault.stakeCurrency.transfer(
+            to,
+            stake
+        );
+
+        emit StakeWithdraw(address(this), to, strategy, stake, stake, DepositType.Direct);
+    }
+
+    /* ========== Tier 1  ========== */
+
     /// @notice Main Tier1 deposit function
     /// @inheritdoc IDeposit
-    function stakeDeposit(address strategy, uint256 stake, address to)
+    function stakeDepositTier1(address strategy, uint256 stake, address to)
         external
         payable
         nonReentrant
@@ -66,7 +132,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
     /// @notice Tier1 withdraw function
     /// @inheritdoc IDeposit
-    function stakeWithdraw(address strategy, uint256 stake, address to)
+    function stakeWithdrawTier1(address strategy, uint256 stake, address to)
         external
         nonReentrant
         whenNotPaused
@@ -82,7 +148,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             withdrawAmount
         );
 
-        emit StakeWithdraw(msg.sender, to, strategy, stake, withdrawAmount);
+        emit StakeWithdraw(msg.sender, to, strategy, stake, withdrawAmount, DepositType.Tier1);
     }
 
     /* ========== Tier 2  ========== */
@@ -111,47 +177,22 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Tier2);
     }
 
-    /* ========== Simple Deposit ========== */
-
-    /// @notice Direct stake deposit
+    /// @notice Tier2 withdraw function (internal)
     /// @inheritdoc IDeposit
-    function directStakeDeposit(address strategy, uint256 stake, address to)
+    function stakeWithdrawTier2(address strategy, uint256 shares, address to)
         external
-        payable
-        nonReentrant
-        whenNotPaused
-        onlyDirect(strategy)
+        diamondInternal
     {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        VaultInfo storage vault = v.vaultInfo[strategy];
+        Tier2Info storage tier2 = v.tier2Info[strategy];
 
-        require(vault.strategy != address(0), VaultDoesNotExist(strategy));
-        require(vault.enabled, StrategyDisabled(strategy));
+        // actual withdraw (ERC4626 redeem)
+        uint256 withdrawAmount = tier2.vaultToken.redeem(shares, to, address(this));
 
-        vault.stakeCurrency.transferFrom(
-            msg.sender,
-            address(this),
-            stake
-        );
-
-        // quote bridge message fee
-        uint256 fee = ILockbox(address(this)).quoteDispatchStakeInfo(
-            strategy,
-            to,
-            stake
-        );
-
-        // direct forwarding a StakeInfo message across chains
-        ILockbox(address(this)).stakeInfoDispatch{value: fee}(
-            strategy,
-            to,
-            stake
-        );
-
-        emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Direct);
+        emit StakeWithdraw(address(this), to, strategy, shares, withdrawAmount, DepositType.Tier2);
     }
 
-    /* ========== ACL  ========== */
+    /* ========== ACL ========== */
 
     /// @inheritdoc IDeposit
     function pauseDeposit() external onlyStakingManager whenNotPaused {
@@ -161,5 +202,13 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     /// @inheritdoc IDeposit
     function unpauseDeposit() external onlyStakingManager whenPaused {
         _unpause();
+    }
+
+    // ========= View ========= //
+
+    /// @inheritdoc IDeposit
+    function directStakeInfo(address strategy) external view returns (DirectStakeInfo memory) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        return v.directStakeInfo[strategy];
     }
 }

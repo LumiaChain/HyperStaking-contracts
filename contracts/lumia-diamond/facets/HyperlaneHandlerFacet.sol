@@ -8,8 +8,8 @@ import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
-import {MintableToken} from "../../external/3adao-lumia/tokens/MintableToken.sol";
-import {MintableTokenOwner} from "../../external/3adao-lumia/gobernance/MintableTokenOwner.sol";
+import {IMintableToken} from "../../external/3adao-lumia/interfaces/IMintableToken.sol";
+import {IMintableTokenOwner} from "../../external/3adao-lumia/interfaces/IMintableTokenOwner.sol";
 
 import {
     LibInterchainFactory, InterchainFactoryStorage, RouteInfo, LastMessage, EnumerableSet
@@ -63,9 +63,10 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
 
         require(origin == ifs.destinations[originLockbox], BadOriginDestination(origin));
 
-        // parse message data (HyperlaneMailboxMessages)
+        // parse message type (HyperlaneMailboxMessages)
         MessageType msgType = data.messageType();
 
+        // route message
         if (msgType == MessageType.TokenBridge) {
             IRouteFactory(address(this)).handleTokenBridge(data);
             return;
@@ -90,6 +91,31 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
     }
 
     /// @inheritdoc IHyperlaneHandler
+    function directRedeemDispatch(
+        address strategy,
+        address to,
+        uint256 assetAmount
+    ) external payable diamondInternal {
+        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+        RouteInfo storage r = ifs.routes[strategy];
+
+        LibInterchainFactory.checkRoute(ifs, strategy);
+
+        // burn rwaAsset
+        r.rwaAsset.burn(assetAmount);
+
+        bytes memory body = generateDirectRedeemBody(strategy, to, assetAmount);
+
+        // address left-padded to bytes32 for compatibility with hyperlane
+        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(r.originLockbox);
+
+        // msg.value should already include fee calculated
+        ifs.mailbox.dispatch{value: msg.value}(r.originDestination, recipientBytes32, body);
+
+        emit RedeemTokenDispatched(address(ifs.mailbox), r.originLockbox, strategy, to, assetAmount);
+    }
+
+    /// @inheritdoc IHyperlaneHandler
     function redeemLpTokensDispatch(
         address strategy,
         address user,
@@ -100,13 +126,13 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
 
         LibInterchainFactory.checkRoute(ifs, strategy);
 
-        // burn lpTokens
-        r.lpToken.burnFrom(msg.sender, shares);
-
         bytes memory body = generateTokenRedeemBody(strategy, user, shares);
 
         // address left-padded to bytes32 for compatibility with hyperlane
         bytes32 recipientBytes32 = TypeCasts.addressToBytes32(r.originLockbox);
+
+        // burn lpTokens
+        r.lpToken.burnFrom(msg.sender, shares);
 
         // msg.value should already include fee calculated
         ifs.mailbox.dispatch{value: msg.value}(r.originDestination, recipientBytes32, body);
@@ -168,6 +194,23 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
     }
 
     /// @inheritdoc IHyperlaneHandler
+    function quoteDispatchDirectRedeem(
+        address strategy,
+        address to,
+        uint256 assetAmount
+    ) external view returns (uint256) {
+        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+
+        RouteInfo storage r = ifs.routes[strategy];
+
+        return ifs.mailbox.quoteDispatch(
+            r.originDestination,
+            TypeCasts.addressToBytes32(r.originLockbox),
+            generateDirectRedeemBody(strategy, to, assetAmount)
+        );
+    }
+
+    /// @inheritdoc IHyperlaneHandler
     function quoteDispatchTokenRedeem(
         address strategy,
         address sender,
@@ -181,6 +224,20 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
             r.originDestination,
             TypeCasts.addressToBytes32(r.originLockbox),
             generateTokenRedeemBody(strategy, sender, shares)
+        );
+    }
+
+    /// @inheritdoc IHyperlaneHandler
+    function generateDirectRedeemBody(
+        address strategy,
+        address to,
+        uint256 assetAmount
+    ) public pure returns (bytes memory body) {
+        body = HyperlaneMailboxMessages.serializeDirectRedeem(
+            strategy,
+            to,
+            assetAmount,
+            bytes("") // no metadata
         );
     }
 
@@ -217,13 +274,15 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         bytes calldata data
     ) internal {
         address strategy = data.strategy(); // origin strategy address
-        MintableToken rwaAsset = MintableToken(data.rwaAsset()); // rwaAsset
+        IMintableToken rwaAsset = IMintableToken(data.rwaAsset()); // rwaAsset
 
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
         RouteInfo storage r = ifs.routes[strategy];
         require(r.exists == false, RouteAlreadyExist());
 
-        MintableTokenOwner rwaAssetOwner = MintableTokenOwner(rwaAsset.owner());
+        LibInterchainFactory.checkRwaAsset(address(rwaAsset));
+
+        IMintableTokenOwner rwaAssetOwner = IMintableTokenOwner(rwaAsset.owner());
 
         ifs.routes[strategy] = RouteInfo({
             exists: true,

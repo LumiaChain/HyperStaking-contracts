@@ -82,10 +82,11 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
 
   const hyperlaneHandler = m.contractAt("IHyperlaneHandler", diamond);
   const routeFactory = m.contractAt("IRouteFactory", diamond);
+  const realAsset = m.contractAt("IRealAsset", diamond);
 
   // --- return
 
-  return { lumiaDiamond: diamond, hyperlaneHandler, routeFactory };
+  return { lumiaDiamond: diamond, hyperlaneHandler, routeFactory, realAsset };
 });
 
 export default LumiaDiamondModule;
