@@ -38,11 +38,16 @@ struct Tier1Info {
 /// as it is represented by ERC4626 vault token - liquid shares
 struct Tier2Info {
     IERC4626 vaultToken;
+    uint256 bridgeSafetyMargin;
+    uint256 sharesMinted;
+    uint256 sharesRedeemed;
+    uint256 stakeBridged;
+    uint256 stakeWithdrawn;
 }
 
 /// DirectStake specific info
 struct DirectStakeInfo {
-    uint256 totalStake; // TODO
+    uint256 totalStake;
 }
 
 /// Main vault details
@@ -103,6 +108,8 @@ library LibHyperStaking {
     // 1e18 as a scaling factor, e.g. for allocation, percent, e.g. 0.1 ETH (1e17) == 10%
     uint256 constant internal ALLOCATION_POINT_PRECISION = 1e18;
     uint256 constant internal PERCENT_PRECISION = 1e18; // represent 100%
+
+    uint256 constant internal MIN_BRIDGE_SAFETY_MARGIN = 2e16; // 2%
 
     function diamondStorage() internal pure returns (HyperStakingStorage storage s) {
         bytes32 position = STRATEGY_VAULT_STORAGE_POSITION;

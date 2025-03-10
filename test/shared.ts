@@ -5,9 +5,9 @@ import HyperStakingModule from "../ignition/modules/HyperStaking";
 import LumiaDiamondModule from "../ignition/modules/LumiaDiamond";
 import OneChainMailboxModule from "../ignition/modules/test/OneChainMailbox";
 import SuperformMockModule from "../ignition/modules/test/SuperformMock";
-import ThreeADaoMockModule from "../ignition/modules/test/3adaoMock";
 
 import TestERC20Module from "../ignition/modules/test/TestERC20";
+import TestRwaAssetModule from "../ignition/modules/test/TestRwaAsset";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
 import ZeroYieldStrategyModule from "../ignition/modules/ZeroYieldStrategy";
 import DirectStakeStrategyModule from "../ignition/modules/DirectStakeStrategy";
@@ -63,13 +63,25 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     },
   });
 
-  const { rwaUSD, rwaUSDOwner, threeAVaultFactory, tokenToPriceFeed } = await ignition.deploy(ThreeADaoMockModule);
+  const rwa1 = await ignition.deploy(TestRwaAssetModule);
+  const rwaUSD = rwa1.rwaAsset;
+  const rwaUSDOwner = rwa1.rwaAssetOwner;
 
-  const { lumiaDiamond, hyperlaneHandler, routeFactory, realAsset } = await ignition.deploy(LumiaDiamondModule, {
+  const rwa2 = await ignition.deploy(TestRwaAssetModule, {
+    parameters: {
+      TestRwaAssetModule: {
+        name: "rwaETH",
+        symbol: "rwaETH",
+      },
+    },
+  });
+  const rwaETH = rwa2.rwaAsset;
+  const rwaETHOwner = rwa2.rwaAssetOwner;
+
+  const { lumiaDiamond, hyperlaneHandler, realAssets } = await ignition.deploy(LumiaDiamondModule, {
     parameters: {
       LumiaDiamondModule: {
         lumiaMailbox: mailboxAddress,
-        lumiaVaultFactory: await threeAVaultFactory.getAddress(),
       },
     },
   });
@@ -93,11 +105,12 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     testDestination,
   );
 
-  // authorize lumia diamond to mint rwaUSD
+  // authorize lumia diamond to mint rwa assets
   await rwaUSDOwner.addMinter(lumiaDiamond);
+  await rwaETHOwner.addMinter(lumiaDiamond);
 
   return {
-    mailbox, hyperlaneHandler, routeFactory, diamond, deposit, hyperFactory, tier1, tier2, lockbox, superVault, superformIntegration, realAsset, rwaUSD, rwaUSDOwner, threeAVaultFactory, tokenToPriceFeed,
+    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, tier1, tier2, lockbox, superVault, superformIntegration, realAssets, rwaUSD, rwaUSDOwner, rwaETH, rwaETHOwner,
   };
 }
 
@@ -190,31 +203,6 @@ export async function createDirectStakeStrategy(
   });
 
   return directStakeStrategy;
-}
-
-// -------------------- 3ADAO Lending --------------------
-
-export async function addTestPriceFeed(
-  tokenToPriceFeed: Contract,
-  token: Contract,
-  price: bigint,
-) {
-  const mcr = 100;
-  const mlr = 100;
-  const borrowRate = 0;
-
-  const priceFeed = await ethers.deployContract("FixedPriceOracle", [token, price]);
-
-  await tokenToPriceFeed.setTokenPriceFeed(
-    token,
-    priceFeed,
-    mcr,
-    mlr,
-    borrowRate,
-    0,
-  );
-
-  return priceFeed;
 }
 
 // -------------------- Other Helpers --------------------

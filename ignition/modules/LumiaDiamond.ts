@@ -7,7 +7,6 @@ import DiamondModule from "./Diamond";
 // LumiaDiamondModule is a Diamond Proxy setup for Lumia and with applied Facets
 const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
   const mailbox = m.getParameter("lumiaMailbox");
-  const vaultFactory = m.getParameter("lumiaVaultFactory");
 
   const { diamond } = m.useModule(DiamondModule);
 
@@ -21,11 +20,8 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
   const hyperlaneHandlerFacet = m.contract("HyperlaneHandlerFacet");
   const hyperlaneHandlerInterface = getContractInterface("IHyperlaneHandler");
 
-  const routeFactoryFacet = m.contract("RouteFactoryFacet");
-  const routeFactoryInterface = getContractInterface("IRouteFactory");
-
-  const realAssetFacet = m.contract("RealAssetFacet");
-  const realAssetInterface = getContractInterface("IRealAsset");
+  const realAssetFacet = m.contract("RealAssetsFacet");
+  const realAssetInterface = getContractInterface("IRealAssets");
 
   const aclInterface = getContractInterface("LumiaDiamondAcl");
   const aclInterfaceSelectors = getSelectors(aclInterface).remove(["supportsInterface(bytes4)"]);
@@ -38,11 +34,6 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
       action: FacetCutAction.Add,
       // acl roles are applied to all potential facets
       functionSelectors: getSelectors(hyperlaneHandlerInterface).add(aclInterfaceSelectors),
-    },
-    {
-      facetAddress: routeFactoryFacet,
-      action: FacetCutAction.Add,
-      functionSelectors: getSelectors(routeFactoryInterface),
     },
     {
       facetAddress: realAssetFacet,
@@ -58,7 +49,7 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
   // _calldata A function call, including function selector and arguments,
   // _calldata is executed with delegatecall on _init
   const initCall = m.encodeFunctionCall(
-    lumiaDiamondInit, "init", [mailbox, vaultFactory],
+    lumiaDiamondInit, "init", [mailbox],
   );
 
   const diamondCut = m.contractAt("IDiamondCut", diamond);
@@ -81,12 +72,11 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
   // --- init facets
 
   const hyperlaneHandler = m.contractAt("IHyperlaneHandler", diamond);
-  const routeFactory = m.contractAt("IRouteFactory", diamond);
-  const realAsset = m.contractAt("IRealAsset", diamond);
+  const realAssets = m.contractAt("IRealAssets", diamond);
 
   // --- return
 
-  return { lumiaDiamond: diamond, hyperlaneHandler, routeFactory, realAsset };
+  return { lumiaDiamond: diamond, hyperlaneHandler, realAssets };
 });
 
 export default LumiaDiamondModule;

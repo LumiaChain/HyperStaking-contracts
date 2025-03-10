@@ -28,7 +28,7 @@ interface IHyperlaneHandler {
         uint32 originDestination
     );
 
-    event RedeemTokenDispatched(
+    event StakeRedeemDispatched(
         address indexed mailbox,
         address recipient,
         address indexed strategy,
@@ -72,26 +72,13 @@ interface IHyperlaneHandler {
     ) external payable;
 
     /**
-     * @notice Initiates direct redemption
+     * @notice Initiates stake redemption
      * @dev Handles cross-chain unstaking via hyperlane bridge
      */
-    function directRedeemDispatch(
+    function stakeRedeemDispatch(
         address strategy,
         address to,
         uint256 assetAmount
-    ) external payable;
-
-    /**
-     * @notice Initiates token redemption
-     * @dev Handles cross-chain unstaking via hyperlane bridge
-     * @param strategy Address of the strategy (on the origin chain) to redeem tokens from
-     * @param user Address of the user whose process is initiated
-     * @param shares Amount of shares to redeem
-     */
-    function redeemLpTokensDispatch(
-        address strategy,
-        address user,
-        uint256 shares
     ) external payable;
 
     /**
@@ -126,31 +113,17 @@ interface IHyperlaneHandler {
     function lastMessage() external view returns(LastMessage memory);
 
     /// @notice Helper: separated function for getting mailbox dispatch quote
-    function quoteDispatchDirectRedeem(
+    function quoteDispatchStakeRedeem(
         address strategy,
         address to,
         uint256 assetAmount
     ) external view returns (uint256);
 
     /// @notice Helper: separated function for generating hyperlane message body
-    function generateDirectRedeemBody(
+    function generateStakeRedeemBody(
         address strategy,
         address to,
         uint256 assetAmount
-    ) external pure returns (bytes memory body);
-
-    /// @notice Helper: separated function for getting mailbox dispatch quote
-    function quoteDispatchTokenRedeem(
-        address strategy,
-        address sender,
-        uint256 shares
-    ) external view returns (uint256);
-
-    /// @notice Helper: separated function for generating hyperlane message body
-    function generateTokenRedeemBody(
-        address strategy,
-        address sender,
-        uint256 shares
     ) external pure returns (bytes memory body);
 
     /// @notice Returns detailed route information for a given strategy

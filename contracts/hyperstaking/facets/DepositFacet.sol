@@ -60,7 +60,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         require(vault.strategy != address(0), VaultDoesNotExist(strategy));
         require(vault.enabled, StrategyDisabled(strategy));
 
-        v.directStakeInfo[strategy].totalStake += stake; // TODO test
+        v.directStakeInfo[strategy].totalStake += stake;
 
         vault.stakeCurrency.transferFrom(
             msg.sender,
@@ -95,7 +95,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
 
-        v.directStakeInfo[strategy].totalStake -= stake; // TODO test
+        v.directStakeInfo[strategy].totalStake -= stake;
 
         vault.stakeCurrency.transfer(
             to,
@@ -179,17 +179,25 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
     /// @notice Tier2 withdraw function (internal)
     /// @inheritdoc IDeposit
-    function stakeWithdrawTier2(address strategy, uint256 shares, address to)
+    function stakeWithdrawTier2(address strategy, uint256 stake, address to)
         external
         diamondInternal
     {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         Tier2Info storage tier2 = v.tier2Info[strategy];
 
-        // actual withdraw (ERC4626 redeem)
-        uint256 withdrawAmount = tier2.vaultToken.redeem(shares, to, address(this));
+        // how many shares must be withdrawn from the vault to withdraw a given amount of stake
+        uint256 allocation = IStrategy(strategy).previewAllocation(stake);
+        uint256 shares = tier2.vaultToken.previewWithdraw(allocation);
 
-        emit StakeWithdraw(address(this), to, strategy, shares, withdrawAmount, DepositType.Tier2);
+        // save information
+        tier2.sharesRedeemed += shares;
+        tier2.stakeWithdrawn += stake;
+
+        // actual withdraw (ERC4626 withdraw)
+        tier2.vaultToken.withdraw(allocation, to, address(this));
+
+        emit StakeWithdraw(address(this), to, strategy, shares, stake, DepositType.Tier2);
     }
 
     /* ========== ACL ========== */

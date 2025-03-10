@@ -43,42 +43,44 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         address strategy,
         string memory vaultTokenName,
         string memory vaultTokenSymbol,
-        uint256 tier1RevenueFee
+        uint256 tier1RevenueFee,
+        address lumiaRwaAsset
     ) external payable onlyVaultManager nonReentrant {
         // The ERC20-compliant asset associated with the strategy
         address asset = IStrategy(strategy).revenueAsset();
-        uint8 assetDecimals = IERC20Metadata(asset).decimals();
 
         IERC4626 vaultToken = _deployVaultToken(asset, strategy, vaultTokenName, vaultTokenSymbol);
         _storeVaultTiers(strategy, tier1RevenueFee, vaultToken);
         _storeVaultInfo(strategy, asset);
 
-        // deploy lp token on lumia
-        _dispatchTokenDeploy(strategy, vaultTokenName, vaultTokenSymbol, assetDecimals);
+        // register new route on lumia
+        _dispatchRouteRegistry(strategy, lumiaRwaAsset);
 
         emit VaultCreate(
             msg.sender,
             strategy,
             address(asset),
-            address(vaultToken)
+            address(vaultToken),
+            lumiaRwaAsset
         );
     }
 
     /// @inheritdoc IHyperFactory
     function addDirectStrategy(
         address strategy,
-        address rwaAsset
+        address lumiaRwaAsset
     ) external payable onlyVaultManager nonReentrant {
         require(IStrategy(strategy).isDirectStakeStrategy(), NotDirectStrategy(strategy));
 
         _storeVaultInfo(strategy, address(0));
 
-        // deploy lp token on lumia
-        _dispatchRouteRegistry(strategy, rwaAsset);
+        // register new route on lumia
+        _dispatchRouteRegistry(strategy, lumiaRwaAsset);
 
         emit DirectVaultCreate(
             msg.sender,
-            strategy
+            strategy,
+            lumiaRwaAsset
         );
     }
 
@@ -108,51 +110,24 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
     //============================================================================================//
 
     /**
-     * @notice Dispatches an interchain message to instruct the deployment on the destination chain
-     * @dev Uses the Lockbox Facet to send a message containing required details
-     * @param strategy The address of the strategy that the new LP token will represent
-     */
-    function _dispatchTokenDeploy(
-        address strategy,
-        string memory name,
-        string memory symbol,
-        uint8 decimals
-    ) internal {
-        // quote message fee for forwarding a TokenDeploy message across chains
-        uint256 fee = ILockbox(address(this)).quoteDispatchTokenDeploy(
-            strategy,
-            name,
-            symbol,
-            decimals
-        );
-
-        ILockbox(address(this)).tokenDeployDispatch{value: fee}(
-            strategy,
-            name,
-            symbol,
-            decimals
-        );
-    }
-
-    /**
      * @notice Dispatches an interchain message to instruct the registration of new strategy
      * @dev Uses the Lockbox Facet to send a message containing required details
      * @param strategy The address of the strategy which will be registered
-     * @param rwaAsset The RWA token address representing the bridged asset on the destination chain
+     * @param lumiaRwaAsset The RWA token address representing the bridged asset on the lumia chain
      */
     function _dispatchRouteRegistry(
         address strategy,
-        address rwaAsset
+        address lumiaRwaAsset
     ) internal {
         // quote message fee for forwarding a RouteRegistry message across chains
         uint256 fee = ILockbox(address(this)).quoteDispatchRouteRegistry(
             strategy,
-            rwaAsset
+            lumiaRwaAsset
         );
 
         ILockbox(address(this)).routeRegistryDispatch{value: fee}(
             strategy,
-            rwaAsset
+            lumiaRwaAsset
         );
     }
 
@@ -200,7 +175,12 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
 
         // init tier2
         v.tier2Info[strategy] = Tier2Info({
-            vaultToken: vaultToken
+            vaultToken: vaultToken,
+            bridgeSafetyMargin: 2e16, // 2%
+            sharesMinted: 0,
+            sharesRedeemed: 0,
+            stakeBridged: 0,
+            stakeWithdrawn: 0
         });
     }
 

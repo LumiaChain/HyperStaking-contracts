@@ -15,12 +15,14 @@ interface IHyperFactory {
         address indexed from,
         address strategy,
         address asset,
-        address vaultToken
+        address vaultToken,
+        address indexed lumiaRwaAsset
     );
 
     event DirectVaultCreate(
         address indexed from,
-        address strategy
+        address strategy,
+        address indexed lumiaRwaAsset
     );
 
     event VaultEnabledSet(address indexed strategy, bool enabled);
@@ -47,28 +49,32 @@ interface IHyperFactory {
     /**
      * @notice Adds a new strategy and links it to a specific staking currency and vault
      * @dev Sets up the strategy with an associated asset and a revenue fee for Tier 1 users
-     *      payable for dispatching interchain "TokenDeploy" messages to other chains
+     *      payable for dispatching interchain "RouteRegistry" messages to other chain
      * @param strategy The address of the strategy being added
+     * @param strategy The existing strategy (IStrategy) for which a new vault will be created
      * @param vaultTokenName The name of the vault token to be deployed
      * @param vaultTokenSymbol The symbol of the vault token to be deployed
      * @param tier1RevenueFee The revenue fee for Tier 1 users, specified as an 18-decimal fraction
+     * @param lumiaRwaAsset The RWA token address representing the bridged asset on the lumia chain
      */
     function addStrategy(
         address strategy,
         string memory vaultTokenName,
         string memory vaultTokenSymbol,
-        uint256 tier1RevenueFee
+        uint256 tier1RevenueFee,
+        address lumiaRwaAsset
     ) external payable;
 
     /**
      * @notice Adds a new direct strategy and links it to a specific staking currency and vault
      * @dev Sets up the direct strategy which requires only strategy address
-     * @param strategy The address of the strategy being added
-     * @param rwaAsset The RWA token address representing the bridged asset on the destination chain
+     *      payable for dispatching interchain "RouteRegistry" messages to other chain
+     * @param strategy The existing strategy (IStrategy) for which a new vault will be created
+     * @param lumiaRwaAsset The RWA token address representing the bridged asset on the lumia chain
      */
     function addDirectStrategy(
         address strategy,
-        address rwaAsset
+        address lumiaRwaAsset
     ) external payable;
 
     /**

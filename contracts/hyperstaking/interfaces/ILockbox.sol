@@ -12,24 +12,6 @@ interface ILockbox {
     //                                          Events                                            //
     //============================================================================================//
 
-    event TokenDeployDispatched(
-        address indexed mailbox,
-        address lumiaFactory,
-        address strategy,
-        string name,
-        string symbol,
-        uint8 decimals
-    );
-
-    event TokenBridgeDispatched(
-        address indexed mailbox,
-        address lumiaFactory,
-        address indexed strategy,
-        address indexed user,
-        uint256 stake,
-        uint256 shares
-    );
-
     event RouteRegistryDispatched(
         address indexed mailbox,
         address lumiaFactory,
@@ -74,28 +56,6 @@ interface ILockbox {
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
-
-    /**
-     * @notice Dispatches a cross-chain message responsible for minting corresponding lp token
-     * @dev This function sends a message to trigger the token deploy
-     */
-    function tokenDeployDispatch(
-        address strategy,
-        string memory name,
-        string memory symbol,
-        uint8 decimals
-    ) external payable;
-
-    /**
-     * @notice Dispatches a cross-chain message responsible for bridiging vault token
-     * @dev This function sends a message to trigger the token mint process
-     */
-    function tokenBridgeDispatch(
-        address strategy,
-        address user,
-        uint256 stake,
-        uint256 shares
-    ) external payable;
 
     /**
      * @notice Dispatches a cross-chain message informing about new strategy to register
@@ -150,22 +110,6 @@ interface ILockbox {
     /// @notice Returns Lockbox data, including mailbox address, destination, and recipient address
     function lockboxData() external view returns (LockboxData memory);
 
-    /// @notice Helper: separated function for getting mailbox dispatch quote
-    function quoteDispatchTokenDeploy(
-        address strategy,
-        string memory name,
-        string memory symbol,
-        uint8 decimals
-    ) external view returns (uint256);
-
-    /// @notice Helper
-    function quoteDispatchTokenBridge(
-        address strategy,
-        address sender,
-        uint256 stake,
-        uint256 shares
-    ) external view returns (uint256);
-
     /// @notice Helper
     function quoteDispatchRouteRegistry(
         address strategy,
@@ -180,22 +124,6 @@ interface ILockbox {
     ) external view returns (uint256);
 
     /// @notice Helper: separated function for generating hyperlane message body
-    function generateTokenDeployBody(
-        address strategy,
-        string memory name,
-        string memory symbol,
-        uint8 decimals
-    ) external pure returns (bytes memory body);
-
-    /// @notice Helper
-    function generateTokenBridgeBody(
-        address strategy,
-        address sender,
-        uint256 stake,
-        uint256 shares
-    ) external pure returns (bytes memory body);
-
-    /// @notice Helper
     function generateRouteRegistryBody(
         address strategy,
         address rwaAsset

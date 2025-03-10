@@ -33,7 +33,7 @@ describe("Strategy", function () {
 
     // --------------------- Hyperstaking Diamond --------------------
 
-    const { diamond, deposit, hyperFactory, tier1, tier2 } = await shared.deployTestHyperStaking(0n, erc4626Vault);
+    const { diamond, deposit, hyperFactory, tier1, tier2, rwaETH } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // -------------------- Apply Strategies --------------------
 
@@ -51,6 +51,7 @@ describe("Strategy", function () {
       "eth reserve vault1",
       "rETH1",
       defaultRevenueFee,
+      rwaETH,
     );
 
     const { pxEth, upxEth, pirexEth, autoPxEth } = await loadFixture(getMockedPirex);
@@ -70,6 +71,7 @@ describe("Strategy", function () {
       "eth vault2",
       "dETH2",
       defaultRevenueFee,
+      rwaETH,
     );
 
     // ----------------------------------------
@@ -79,7 +81,7 @@ describe("Strategy", function () {
       diamond, // diamond
       deposit, hyperFactory, tier1, tier2, // diamond facets
       pxEth, upxEth, pirexEth, autoPxEth, // pirex mock
-      testWstETH, reserveStrategy, dineroStrategy, // test contracts
+      testWstETH, reserveStrategy, dineroStrategy, rwaETH, // test contracts
       defaultRevenueFee, reserveAssetPrice, // values
       owner, stakingManager, vaultManager, strategyManager, alice, bob, // addresses
     };
@@ -363,13 +365,14 @@ describe("Strategy", function () {
       });
 
       it("OnlyVaultManager", async function () {
-        const { hyperFactory, reserveStrategy, alice, defaultRevenueFee } = await loadFixture(deployHyperStaking);
+        const { hyperFactory, reserveStrategy, rwaETH, alice, defaultRevenueFee } = await loadFixture(deployHyperStaking);
 
         await expect(hyperFactory.addStrategy(
           reserveStrategy,
           "vault3",
           "V3",
           defaultRevenueFee,
+          rwaETH,
         ))
           .to.be.reverted;
 
@@ -378,6 +381,7 @@ describe("Strategy", function () {
           "vault4",
           "V4",
           defaultRevenueFee,
+          rwaETH,
         ))
           // hardhat unfortunately does not recognize custom errors from child contracts
           // .to.be.revertedWithCustomError(hyperFactory, "OnlyVaultManager");
@@ -396,7 +400,7 @@ describe("Strategy", function () {
 
       it("VaultAlreadyExist", async function () {
         const {
-          hyperFactory, vaultManager, reserveStrategy, defaultRevenueFee,
+          hyperFactory, rwaETH, vaultManager, reserveStrategy, defaultRevenueFee,
         } = await loadFixture(deployHyperStaking);
 
         await expect(hyperFactory.connect(vaultManager).addStrategy(
@@ -404,6 +408,7 @@ describe("Strategy", function () {
           "vault5",
           "V5",
           defaultRevenueFee,
+          rwaETH,
         ))
           .to.be.revertedWithCustomError(hyperFactory, "VaultAlreadyExist");
       });

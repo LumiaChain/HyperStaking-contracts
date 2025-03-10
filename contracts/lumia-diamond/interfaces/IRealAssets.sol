@@ -2,22 +2,22 @@
 pragma solidity =0.8.27;
 
 /**
- * @title IRealAsset
- * @dev Interface for RealAssetFacet
+ * @title IRealAssets
+ * @dev Interface for RealAssetsFacet
  */
-interface IRealAsset {
+interface IRealAssets {
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
 
-    event DirectRwaMint(
+    event RwaMint(
         address indexed strategy,
         address indexed rwaAsset,
         address sender,
         uint256 stakeAmount
     );
 
-    event DirectRwaRedeem(
+    event RwaRedeem(
         address indexed strategy,
         address indexed rwaAsset,
         address from,
@@ -31,15 +31,21 @@ interface IRealAsset {
         address newRwaAsset
     );
 
+    //===========================================================================================//
+    //                                          Errors                                            //
+    //============================================================================================//
+
+    error InsufficientBridgedState();
+
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
 
-    /// @notice Handles the direct minting of RWA tokens based on the provided data
-    function handleDirectMint(bytes calldata data) external;
+    /// @notice Handles the minting of RWA tokens based on the provided data
+    function handleRwaMint(bytes calldata data) external;
 
-    /// @notice Handles the direct redemption of bridged RWA tokens for a user
-    function handleDirectRedeem(
+    /// @notice Handles the redemption of bridged RWA tokens for a user
+    function handleRwaRedeem(
         address strategy,
         address from,
         address to,

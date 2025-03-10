@@ -71,7 +71,7 @@ interface IDeposit {
 
     /**
      * @notice Withdraws a specified stake
-     * @dev Used internally and is called by Lockbox after getting DirectRedeem message
+     * @dev Used internally and is called by Lockbox after getting StakeRedeem message
      * @param strategy The address of the strategy associated with the vault
      * @param stake The amount of the staked token to withdraw
      * @param to The address to receive the withdrawn tokens
@@ -128,7 +128,7 @@ interface IDeposit {
     /**
      * @notice Withdraws a specified amount of Tier2 shares, which are then exchanged for stake
      *         and send to the user
-     * @dev Used internally and is called by Lockbox after getting TokenRedeem message
+     * @dev Used internally and is called by Lockbox after getting StakeRedeem message
      * @param strategy The address of the strategy associated with the vault
      * @param stake The amount of the staked token to withdraw
      * @param to The address to receive the withdrawn tokens

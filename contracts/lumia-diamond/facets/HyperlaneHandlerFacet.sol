@@ -2,8 +2,7 @@
 pragma solidity =0.8.27;
 
 import {IHyperlaneHandler} from "../interfaces/IHyperlaneHandler.sol";
-import {IRouteFactory} from "../interfaces/IRouteFactory.sol";
-import {IRealAsset} from "../interfaces/IRealAsset.sol";
+import {IRealAssets} from "../interfaces/IRealAssets.sol";
 import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
@@ -18,10 +17,6 @@ import {
 import {
     MessageType, HyperlaneMailboxMessages
 } from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
-
-// TODO remove
-import {LumiaLPToken} from "../LumiaLPToken.sol";
-import {IVault} from "../../external/3adao-lumia/interfaces/IVault.sol";
 
 /**
  * @title HyperlaneHandlerFacet
@@ -67,23 +62,13 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         MessageType msgType = data.messageType();
 
         // route message
-        if (msgType == MessageType.TokenBridge) {
-            IRouteFactory(address(this)).handleTokenBridge(data);
-            return;
-        }
-
-        if (msgType == MessageType.TokenDeploy) {
-            IRouteFactory(address(this)).handleTokenDeploy(originLockbox, origin, data);
-            return;
-        }
-
         if (msgType == MessageType.RouteRegistry) {
             _handleRouteRegistry(originLockbox, origin, data);
             return;
         }
 
         if (msgType == MessageType.StakeInfo) {
-            IRealAsset(address(this)).handleDirectMint(data);
+            IRealAssets(address(this)).handleRwaMint(data);
             return;
         }
 
@@ -91,7 +76,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
     }
 
     /// @inheritdoc IHyperlaneHandler
-    function directRedeemDispatch(
+    function stakeRedeemDispatch(
         address strategy,
         address to,
         uint256 assetAmount
@@ -104,7 +89,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         // burn rwaAsset
         r.rwaAsset.burn(assetAmount);
 
-        bytes memory body = generateDirectRedeemBody(strategy, to, assetAmount);
+        bytes memory body = generateStakeRedeemBody(strategy, to, assetAmount);
 
         // address left-padded to bytes32 for compatibility with hyperlane
         bytes32 recipientBytes32 = TypeCasts.addressToBytes32(r.originLockbox);
@@ -112,32 +97,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         // msg.value should already include fee calculated
         ifs.mailbox.dispatch{value: msg.value}(r.originDestination, recipientBytes32, body);
 
-        emit RedeemTokenDispatched(address(ifs.mailbox), r.originLockbox, strategy, to, assetAmount);
-    }
-
-    /// @inheritdoc IHyperlaneHandler
-    function redeemLpTokensDispatch(
-        address strategy,
-        address user,
-        uint256 shares
-    ) external payable {
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        RouteInfo storage r = ifs.routes[strategy];
-
-        LibInterchainFactory.checkRoute(ifs, strategy);
-
-        bytes memory body = generateTokenRedeemBody(strategy, user, shares);
-
-        // address left-padded to bytes32 for compatibility with hyperlane
-        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(r.originLockbox);
-
-        // burn lpTokens
-        r.lpToken.burnFrom(msg.sender, shares);
-
-        // msg.value should already include fee calculated
-        ifs.mailbox.dispatch{value: msg.value}(r.originDestination, recipientBytes32, body);
-
-        emit RedeemTokenDispatched(address(ifs.mailbox), r.originLockbox, strategy, user, shares);
+        emit StakeRedeemDispatched(address(ifs.mailbox), r.originLockbox, strategy, to, assetAmount);
     }
 
     // ========= Restricted ========= //
@@ -194,7 +154,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
     }
 
     /// @inheritdoc IHyperlaneHandler
-    function quoteDispatchDirectRedeem(
+    function quoteDispatchStakeRedeem(
         address strategy,
         address to,
         uint256 assetAmount
@@ -206,52 +166,20 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         return ifs.mailbox.quoteDispatch(
             r.originDestination,
             TypeCasts.addressToBytes32(r.originLockbox),
-            generateDirectRedeemBody(strategy, to, assetAmount)
+            generateStakeRedeemBody(strategy, to, assetAmount)
         );
     }
 
     /// @inheritdoc IHyperlaneHandler
-    function quoteDispatchTokenRedeem(
-        address strategy,
-        address sender,
-        uint256 shares
-    ) external view returns (uint256) {
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-
-        RouteInfo storage r = ifs.routes[strategy];
-
-        return ifs.mailbox.quoteDispatch(
-            r.originDestination,
-            TypeCasts.addressToBytes32(r.originLockbox),
-            generateTokenRedeemBody(strategy, sender, shares)
-        );
-    }
-
-    /// @inheritdoc IHyperlaneHandler
-    function generateDirectRedeemBody(
+    function generateStakeRedeemBody(
         address strategy,
         address to,
         uint256 assetAmount
     ) public pure returns (bytes memory body) {
-        body = HyperlaneMailboxMessages.serializeDirectRedeem(
+        body = HyperlaneMailboxMessages.serializeStakeRedeem(
             strategy,
             to,
-            assetAmount,
-            bytes("") // no metadata
-        );
-    }
-
-    /// @inheritdoc IHyperlaneHandler
-    function generateTokenRedeemBody(
-        address strategy,
-        address sender,
-        uint256 shares
-    ) public pure returns (bytes memory body) {
-        body = HyperlaneMailboxMessages.serializeTokenRedeem(
-            strategy,
-            sender,
-            shares,
-            bytes("") // no metadata
+            assetAmount
         );
     }
 
@@ -286,12 +214,8 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
 
         ifs.routes[strategy] = RouteInfo({
             exists: true,
-            isLendingEnabled: false, // TODO remove
             originDestination: originDestination,
             originLockbox: originLockbox,
-            lpToken: LumiaLPToken(address(0)), // TODO remove
-            lendingVault: IVault(address(0)), // TODO remove
-            borrowSafetyBuffer: 0, // TODO remove
             rwaAssetOwner: rwaAssetOwner,
             rwaAsset: rwaAsset
         });

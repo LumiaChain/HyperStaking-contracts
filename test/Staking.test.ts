@@ -30,7 +30,7 @@ describe("Staking", function () {
 
     // -------------------- Hyperstaking Diamond --------------------
 
-    const { diamond, deposit, hyperFactory, tier1 } = await shared.deployTestHyperStaking(0n, erc4626Vault);
+    const { diamond, deposit, hyperFactory, tier1, rwaUSD } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // -------------------- Apply Strategies --------------------
 
@@ -50,6 +50,7 @@ describe("Staking", function () {
       "eth vault1",
       "vETH1",
       defaultRevenueFee,
+      rwaUSD,
     );
 
     // strategy with erc20 staking token and 2:1 asset price
@@ -58,6 +59,7 @@ describe("Staking", function () {
       "erc20 vault2",
       "vERC2",
       defaultRevenueFee,
+      rwaUSD,
     );
 
     /* eslint-disable object-property-newline */

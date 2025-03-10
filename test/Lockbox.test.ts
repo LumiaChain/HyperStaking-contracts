@@ -17,7 +17,7 @@ describe("Lockbox", function () {
     // -------------------- Hyperstaking Diamond --------------------
 
     const {
-      mailbox, hyperlaneHandler, routeFactory, diamond, deposit, hyperFactory, tier1, tier2, lockbox,
+      mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, realAssets, tier1, tier2, lockbox, rwaETH,
     } = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
     // -------------------- Apply Strategies --------------------
@@ -36,24 +36,21 @@ describe("Lockbox", function () {
       "reserve eth vault 1",
       "rETH1",
       defaultRevenueFee,
+      rwaETH,
     );
 
     // set fee after strategy is added
     const mailboxFee = parseEther("0.05");
     await mailbox.connect(owner).setFee(mailboxFee);
 
-    const { vaultToken, lpToken } = await shared.getDerivedTokens(
-      tier2, routeFactory, await reserveStrategy.getAddress(),
-    );
-
-    // disable lending functionality for reserveStrategy
-    await routeFactory.connect(lumiaFactoryManager).updateLendingProperties(reserveStrategy, false, 0);
+    const vaultTokenAddress = (await tier2.tier2Info(reserveStrategy)).vaultToken;
+    const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
 
     /* eslint-disable object-property-newline */
     return {
       diamond, // diamond
-      deposit, hyperFactory, tier1, tier2, lockbox, // diamond facets
-      mailbox, hyperlaneHandler, routeFactory, testReserveAsset, reserveStrategy, vaultToken, lpToken, // test contracts
+      deposit, hyperFactory, tier1, tier2, lockbox, realAssets, // diamond facets
+      mailbox, hyperlaneHandler, testReserveAsset, reserveStrategy, vaultToken, rwaETH, // test contracts
       defaultRevenueFee, reserveAssetPrice, mailboxFee, // values
       owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, alice, bob, // addresses
     };
@@ -61,44 +58,34 @@ describe("Lockbox", function () {
   }
 
   describe("Lockbox", function () {
-    it("lp token properties should be derived from vault token", async function () {
+    it("vault token properties should be correct", async function () {
       const {
-        diamond, tier2, hyperFactory, routeFactory, mailbox, vaultToken, lpToken, vaultManager, owner,
+        diamond, tier2, hyperFactory, mailbox, vaultManager, owner, rwaETH,
       } = await loadFixture(deployHyperStaking);
 
-      expect(await lpToken.name()).to.equal(await vaultToken.name());
-      expect(await lpToken.symbol()).to.equal(await vaultToken.symbol());
-      expect(await lpToken.decimals()).to.equal(await vaultToken.decimals());
+      const strangeToken = await shared.deloyTestERC20("Test 14 dec Coin", "t14c", 14);
+      const reserveStrategy2 = await shared.createReserveStrategy(
+        diamond, shared.nativeTokenAddress, await strangeToken.getAddress(), parseEther("1"),
+      );
 
-      {
-        const strangeToken = await shared.deloyTestERC20("Test 14 dec Coin", "t14c", 14);
-        const reserveStrategy2 = await shared.createReserveStrategy(
-          diamond, shared.nativeTokenAddress, await strangeToken.getAddress(), parseEther("1"),
-        );
+      const vname = "strange vault";
+      const vsymbol = "sv";
 
-        const vname = "strange vault";
-        const vsymbol = "sv";
+      await mailbox.connect(owner).setFee(0n);
+      await hyperFactory.connect(vaultManager).addStrategy(
+        reserveStrategy2,
+        vname,
+        vsymbol,
+        0n,
+        rwaETH,
+      );
 
-        await mailbox.connect(owner).setFee(0n);
-        await hyperFactory.connect(vaultManager).addStrategy(
-          reserveStrategy2,
-          vname,
-          vsymbol,
-          0n,
-        );
+      const vault2Address = (await tier2.tier2Info(reserveStrategy2)).vaultToken;
+      const vault2Token = await ethers.getContractAt("VaultToken", vault2Address);
 
-        const tokens2 = await shared.getDerivedTokens(
-          tier2, routeFactory, await reserveStrategy2.getAddress(),
-        );
-
-        expect(await tokens2.vaultToken.name()).to.equal(vname);
-        expect(await tokens2.vaultToken.symbol()).to.equal(vsymbol);
-        expect(await tokens2.vaultToken.decimals()).to.equal(14); // 14
-
-        expect(await tokens2.lpToken.name()).to.equal(vname);
-        expect(await tokens2.lpToken.symbol()).to.equal(vsymbol);
-        expect(await tokens2.lpToken.decimals()).to.equal(14); // 14
-      }
+      expect(await vault2Token.name()).to.equal(vname);
+      expect(await vault2Token.symbol()).to.equal(vsymbol);
+      expect(await vault2Token.decimals()).to.equal(14); // 14
     });
 
     it("test origin update and acl", async function () {
@@ -125,10 +112,10 @@ describe("Lockbox", function () {
 
     it("stake deposit to tier2 with non-zero mailbox fee", async function () {
       const {
-        deposit, tier1, reserveStrategy, vaultToken, lpToken, mailboxFee, owner, alice,
+        deposit, tier1, reserveStrategy, vaultToken, mailboxFee, owner, alice, rwaETH,
       } = await loadFixture(deployHyperStaking);
 
-      const lpBefore = await lpToken.balanceOf(alice);
+      const rwaBefore = await rwaETH.balanceOf(alice);
 
       const stakeAmount = parseEther("2");
 
@@ -139,14 +126,15 @@ describe("Lockbox", function () {
         .to.emit(deposit, "StakeDeposit")
         .withArgs(owner, alice, reserveStrategy, stakeAmount, tier2);
 
-      const lpAfter = await lpToken.balanceOf(alice);
-      expect(lpAfter).to.be.gt(lpBefore);
+      const rwaAfter = await rwaETH.balanceOf(alice);
+      expect(rwaAfter).to.be.gt(rwaBefore);
+      expect(rwaAfter).to.be.eq(stakeAmount);
 
       // more accurate amount calculation
       const allocation = await reserveStrategy.previewAllocation(stakeAmount);
-      const lpAmount = await vaultToken.previewDeposit(allocation);
+      const vaultShares = await vaultToken.previewDeposit(allocation);
 
-      expect(lpAfter).to.be.eq(lpBefore + lpAmount);
+      expect(vaultShares).to.be.eq(await vaultToken.totalSupply());
 
       // stake values should be 0 in tier1
       expect((await tier1.userTier1Info(reserveStrategy, alice)).stake).to.equal(0);
@@ -155,7 +143,7 @@ describe("Lockbox", function () {
 
     it("mailbox fee is needed when adding strategy too", async function () {
       const {
-        diamond, hyperFactory, lockbox, mailboxFee, vaultManager,
+        diamond, hyperFactory, lockbox, mailboxFee, vaultManager, rwaETH,
       } = await loadFixture(deployHyperStaking);
 
       // new pool and strategy
@@ -171,10 +159,11 @@ describe("Lockbox", function () {
         "vault2",
         "v2",
         0n,
+        rwaETH,
       )).to.be.reverted;
 
       expect( // in a real scenario fee could depend on the token address, correct name and symbol
-        await lockbox.quoteDispatchTokenDeploy(ZeroAddress, "Test Reserve Asset 2", "t2", 18),
+        await lockbox.quoteDispatchRouteRegistry(ZeroAddress, rwaETH),
       ).to.equal(mailboxFee);
 
       await hyperFactory.connect(vaultManager).addStrategy(
@@ -182,14 +171,15 @@ describe("Lockbox", function () {
         "vault3",
         "v3",
         0n,
+        rwaETH,
         { value: mailboxFee },
       );
     });
 
     it("redeem the should triger tier2 leave on the origin chain - non-zero mailbox fee", async function () {
       const {
-        deposit, reserveStrategy, mailbox, vaultToken, hyperlaneHandler, routeFactory,
-        testReserveAsset, lpToken, mailboxFee, reserveAssetPrice, alice,
+        deposit, reserveStrategy, mailbox, vaultToken, hyperlaneHandler, realAssets, rwaETH,
+        testReserveAsset, mailboxFee, reserveAssetPrice, alice,
       } = await loadFixture(deployHyperStaking);
 
       const stakeAmount = parseEther("3");
@@ -198,99 +188,46 @@ describe("Lockbox", function () {
       await expect(deposit.stakeDepositTier2(
         reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
       ))
-        .to.emit(routeFactory, "TokenBridged")
-        .withArgs(reserveStrategy, lpToken, alice.address, expectedLpAmount);
+        .to.emit(realAssets, "RwaMint")
+        .withArgs(reserveStrategy, rwaETH, alice.address, stakeAmount);
 
-      const lpAfter = await lpToken.balanceOf(alice);
-      expect(lpAfter).to.eq(expectedLpAmount);
+      const rwaAfter = await rwaETH.balanceOf(alice);
+      expect(rwaAfter).to.eq(stakeAmount);
 
-      await lpToken.connect(alice).approve(hyperlaneHandler, lpAfter);
+      await rwaETH.connect(alice).approve(realAssets, rwaAfter);
 
-      await expect(hyperlaneHandler.connect(alice).redeemLpTokensDispatch(
-        reserveStrategy, alice, lpAfter,
+      await expect(realAssets.connect(alice).handleRwaRedeem(
+        reserveStrategy, alice, alice, rwaAfter,
       ))
         .to.be.revertedWithCustomError(mailbox, "DispatchUnderpaid");
 
-      const dispatchFee = await hyperlaneHandler.quoteDispatchTokenRedeem(reserveStrategy, alice, lpAfter);
+      const dispatchFee = await hyperlaneHandler.quoteDispatchStakeRedeem(reserveStrategy, alice, rwaAfter);
 
-      await expect(hyperlaneHandler.redeemLpTokensDispatch(ZeroAddress, alice, lpAfter))
-        .to.be.revertedWithCustomError(routeFactory, "RouteDoesNotExist")
-        .withArgs(ZeroAddress);
+      await expect(realAssets.handleRwaRedeem(ZeroAddress, alice, alice, rwaAfter))
+        // custom error from LibInterchainFactory (unfortunetaly hardhat doesn't support it)
+        // .to.be.revertedWithCustomError(realAssets, "RouteDoesNotExist")
+        .to.be.reverted;
 
       // redeem should return stakeAmount
-      const redeemTx = hyperlaneHandler.connect(alice).redeemLpTokensDispatch(
-        reserveStrategy, alice, lpAfter, { value: dispatchFee },
+      const redeemTx = realAssets.connect(alice).handleRwaRedeem(
+        reserveStrategy, alice, alice, rwaAfter, { value: dispatchFee },
       );
 
       // lpToken -> vaultAsset -> strategy allocation -> stake withdraw
       await expect(redeemTx).to.changeEtherBalance(alice, stakeAmount - dispatchFee);
       await expect(redeemTx).to.changeTokenBalance(testReserveAsset, vaultToken, -expectedLpAmount);
 
-      expect(await lpToken.balanceOf(alice)).to.eq(0);
+      expect(await rwaETH.balanceOf(alice)).to.eq(0);
     });
   });
 
   describe("Hyperlane Mailbox Messages", function () {
-    // remove null bytes from (solidity bytes32) the end of a string (right padding)
-    const decodeString = (s: string) => {
-      return s.replace(/\0+$/, "");
-    };
-
     async function deployTestWrapper() {
       return await ethers.deployContract("TestHyperlaneMessages", []);
     }
 
     it("serialization and deserialization", async function () {
       const testWrapper = await loadFixture(deployTestWrapper);
-
-      // TokenDeploy
-
-      const message1 = {
-        strategy: ZeroAddress,
-        name: "Test Token",
-        symbol: "TT",
-        decimals: 2,
-        metadata: "0x1234",
-      };
-
-      const bytes1 = await testWrapper.serializeTokenDeploy(
-        message1.strategy,
-        message1.name,
-        message1.symbol,
-        message1.decimals,
-        message1.metadata,
-      );
-
-      expect(await testWrapper.messageType(bytes1)).to.equal(0);
-      expect(await testWrapper.strategy(bytes1)).to.equal(message1.strategy);
-      expect(decodeString(await testWrapper.name(bytes1))).to.equal(message1.name);
-      expect(decodeString(await testWrapper.symbol(bytes1))).to.equal(message1.symbol);
-      expect(await testWrapper.tokenDeployMetadata(bytes1)).to.equal(message1.metadata);
-
-      // TokenBridge
-
-      const message2 = {
-        strategy: ZeroAddress,
-        sender: ZeroAddress,
-        stake: parseEther("1"),
-        shares: parseEther("0.9"),
-        metadata: "0x1234",
-      };
-
-      const bytes2 = await testWrapper.serializeTokenBridge(
-        message2.strategy,
-        message2.sender,
-        message2.stake,
-        message2.shares,
-        message2.metadata,
-      );
-
-      expect(await testWrapper.messageType(bytes2)).to.equal(1);
-      expect(await testWrapper.strategy(bytes2)).to.equal(message2.strategy);
-      expect(await testWrapper.sender(bytes2)).to.equal(message2.sender);
-      expect(await testWrapper.stakeAmount(bytes2)).to.equal(message2.stake);
-      expect(await testWrapper.sharesAmount(bytes2)).to.equal(message2.shares);
-      expect(await testWrapper.tokenBridgeMetadata(bytes2)).to.equal(message2.metadata);
 
       // RouteRegister
 
@@ -306,7 +243,7 @@ describe("Lockbox", function () {
         messageRR.metadata,
       );
 
-      expect(await testWrapper.messageType(bytesRR)).to.equal(2);
+      expect(await testWrapper.messageType(bytesRR)).to.equal(0);
       expect(await testWrapper.strategy(bytesRR)).to.equal(messageRR.strategy);
       expect(await testWrapper.rwaAsset(bytesRR)).to.equal(messageRR.rwaAsset);
       expect(await testWrapper.routeRegistryMetadata(bytesRR)).to.equal(messageRR.metadata);
@@ -317,89 +254,41 @@ describe("Lockbox", function () {
         strategy: ZeroAddress,
         sender: ZeroAddress,
         stake: parseEther("4.04"),
-        metadata: "0x1433",
       };
 
       const bytesSI = await testWrapper.serializeStakeInfo(
         messageSI.strategy,
         messageSI.sender,
         messageSI.stake,
-        messageSI.metadata,
       );
 
-      expect(await testWrapper.messageType(bytesSI)).to.equal(3);
+      expect(await testWrapper.messageType(bytesSI)).to.equal(1);
       expect(await testWrapper.strategy(bytesSI)).to.equal(messageSI.strategy);
       expect(await testWrapper.sender(bytesSI)).to.equal(messageSI.sender);
       expect(await testWrapper.stakeAmount(bytesSI)).to.equal(messageSI.stake);
-      expect(await testWrapper.stakeInfoMetadata(bytesSI)).to.equal(messageSI.metadata);
 
-      // DirectRedeem
+      // StakeRedeem
 
-      const messageDR = {
+      const messageSR = {
         strtegy: ZeroAddress,
         sender: ZeroAddress,
         amount: parseEther("2"),
-        metadata: "0x1456",
       };
 
-      const bytesDR = await testWrapper.serializeDirectRedeem(
-        messageDR.strtegy,
-        messageDR.sender,
-        messageDR.amount,
-        messageDR.metadata,
+      const bytesSR = await testWrapper.serializeStakeRedeem(
+        messageSR.strtegy,
+        messageSR.sender,
+        messageSR.amount,
       );
 
-      expect(await testWrapper.messageType(bytesDR)).to.equal(4);
-      expect(await testWrapper.strategy(bytesDR)).to.equal(messageDR.strtegy);
-      expect(await testWrapper.sender(bytesDR)).to.equal(messageDR.sender);
-      expect(await testWrapper.redeemAmount(bytesDR)).to.equal(messageDR.amount);
-
-      // TokenRedeem
-
-      const messageTR = {
-        strtegy: ZeroAddress,
-        sender: ZeroAddress,
-        amount: parseEther("2"),
-        metadata: "0x1256",
-      };
-
-      const bytesTR = await testWrapper.serializeTokenRedeem(
-        messageTR.strtegy,
-        messageTR.sender,
-        messageTR.amount,
-        messageTR.metadata,
-      );
-
-      expect(await testWrapper.messageType(bytesTR)).to.equal(5);
-      expect(await testWrapper.strategy(bytesTR)).to.equal(messageTR.strtegy);
-      expect(await testWrapper.sender(bytesTR)).to.equal(messageTR.sender);
-      expect(await testWrapper.redeemAmount(bytesTR)).to.equal(messageTR.amount);
-      expect(await testWrapper.tokenRedeemMetadata(bytesTR)).to.equal(messageTR.metadata);
+      expect(await testWrapper.messageType(bytesSR)).to.equal(2);
+      expect(await testWrapper.strategy(bytesSR)).to.equal(messageSR.strtegy);
+      expect(await testWrapper.sender(bytesSR)).to.equal(messageSR.sender);
+      expect(await testWrapper.redeemAmount(bytesSR)).to.equal(messageSR.amount);
     });
 
     it("string limitations", async function () {
       const testWrapper = await loadFixture(deployTestWrapper);
-
-      const message = {
-        strategy: ZeroAddress,
-        name: "Test Token with a little longer name than usual, still working?",
-        symbol: "TTSYMBOLEXTENDED 123456789",
-        decimals: 15,
-        metadata: "0x",
-      };
-
-      const bytes1 = await testWrapper.serializeTokenDeploy(
-        message.strategy,
-        message.name,
-        message.symbol,
-        message.decimals,
-        message.metadata,
-      );
-
-      expect(decodeString(await testWrapper.name(bytes1))).to.equal(message.name);
-      expect(decodeString(await testWrapper.symbol(bytes1))).to.equal(message.symbol);
-
-      // but
 
       await testWrapper.stringToBytes32("X".repeat(32)); // ok
       await expect(testWrapper.stringToBytes32("X".repeat(33)))

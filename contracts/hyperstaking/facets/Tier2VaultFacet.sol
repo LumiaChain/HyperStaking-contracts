@@ -70,8 +70,8 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         // fetch allocation to this vault
         vault.asset.safeTransferFrom(strategy, address(this), allocation);
 
-        // mint and bridge vaultToken shares
-        _bridgeVaultTokens(strategy, user, stake, allocation);
+        // mint and shares and bridge stakeInfo
+        _bridgeStakeInfo(strategy, user, stake, allocation);
 
         emit Tier2Join(strategy, user, allocation);
     }
@@ -86,8 +86,8 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         // use the current price, allocation ration == include generated revenue
         uint256 stake = IStrategy(strategy).previewExit(allocation);
 
-        // mint and bridge vaultToken shares
-        _bridgeVaultTokens(strategy, user, stake, allocation);
+        // mint and shares and bridge stakeInfo
+        _bridgeStakeInfo(strategy, user, stake, allocation);
 
         emit Tier2Join(strategy, user, allocation);
     }
@@ -111,6 +111,35 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         vault.stakeCurrency.transfer(user, withdrawAmount);
 
         emit Tier2Leave(strategy, user, withdrawAmount, allocation);
+    }
+
+    /// @inheritdoc ITier2Vault
+    function collectTier2Revenue(address strategy, address to, uint256 amount)
+        external
+        onlyVaultManager
+    {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+
+        uint256 revenue = checkTier2Revenue(strategy);
+        require(amount <= revenue, InsufficientRevenue());
+
+        vault.stakeCurrency.transfer(to, amount);
+
+        emit Tier2RevenueCollected(strategy, to, amount);
+    }
+
+    /// @inheritdoc ITier2Vault
+    function setBridgeSafetyMargin(address strategy, uint256 newMargin) external onlyVaultManager {
+        require(newMargin >= LibHyperStaking.MIN_BRIDGE_SAFETY_MARGIN, SafetyMarginTooLow());
+
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        Tier2Info storage tier2 = v.tier2Info[strategy];
+
+        uint256 oldMargin = tier2.bridgeSafetyMargin;
+        tier2.bridgeSafetyMargin = newMargin;
+
+        emit BridgeSafetyMarginUpdated(oldMargin, newMargin);
     }
 
     // ========= View ========= //
@@ -149,12 +178,41 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         });
     }
 
+    /// @inheritdoc ITier2Vault
+    function checkTier2Revenue(address strategy) public view returns (uint256) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        Tier2Info storage tier2 = v.tier2Info[strategy];
+
+        // get the total diffeerence of shares
+        uint256 shares = tier2.sharesMinted - tier2.sharesRedeemed;
+
+        // calculate total possible stake withdraw
+        uint256 allocation = tier2.vaultToken.previewRedeem(shares);
+        uint256 stake = IStrategy(strategy).previewExit(allocation);
+
+        // total stake that needs to be preserved for potential user bridge-outs
+        uint256 bridgeCollateral = tier2.stakeBridged - tier2.stakeWithdrawn;
+
+        // add safety margin to protect users from strategy asset volatility
+        uint256 marginAmount = (
+            bridgeCollateral * tier2.bridgeSafetyMargin
+        ) / LibHyperStaking.PERCENT_PRECISION;
+
+        // check for negative revenue
+        if (bridgeCollateral + marginAmount > stake) {
+            return 0;
+        }
+
+        return stake - (bridgeCollateral + marginAmount);
+    }
+
+
     //============================================================================================//
     //                                     Internal Functions                                     //
     //============================================================================================//
 
-    /// @notice helper function which mints, locks and initiates bridge token transfer
-    function _bridgeVaultTokens(
+    /// @notice helper function which mints, locks ERC4626 shares and initiates bridge data transfer
+    function _bridgeStakeInfo(
         address strategy,
         address user,
         uint256 stake,
@@ -166,22 +224,24 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
 
         vault.asset.safeIncreaseAllowance(address(tier2.vaultToken), allocation);
 
-        // vaultToken - shares are deposited to Lockbox (this diamond facet)
+        // vaultToken - shares are deposited to Lockbox (this diamond)
         uint256 shares = tier2.vaultToken.deposit(allocation, address(this));
 
+        // save information
+        tier2.sharesMinted += shares;
+        tier2.stakeBridged += stake;
+
         // quote message fee for forwarding a TokenBridge message across chains
-        uint256 fee = ILockbox(address(this)).quoteDispatchTokenBridge(
+        uint256 fee = ILockbox(address(this)).quoteDispatchStakeInfo(
             strategy,
             user,
-            stake,
-            shares
+            stake
         );
 
-        ILockbox(address(this)).tokenBridgeDispatch{value: fee}(
+        ILockbox(address(this)).stakeInfoDispatch{value: fee}(
             strategy,
             user,
-            stake,
-            shares
+            stake
         );
     }
 }

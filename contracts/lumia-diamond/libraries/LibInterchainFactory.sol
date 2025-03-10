@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {LumiaLPToken} from "../LumiaLPToken.sol";
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {IMintableToken} from "../../external/3adao-lumia/interfaces/IMintableToken.sol";
 import {IMintableTokenOwner} from "../../external/3adao-lumia/interfaces/IMintableTokenOwner.sol";
 import {MintableTokenOwner} from "../../external/3adao-lumia/gobernance/MintableTokenOwner.sol";
 
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-
-import {IVaultFactory} from "../../external/3adao-lumia/interfaces/IVaultFactory.sol";
-import {IVault} from "../../external/3adao-lumia/interfaces/IVault.sol";
 
 //================================================================================================//
 //                                            Types                                               //
@@ -19,24 +15,15 @@ import {IVault} from "../../external/3adao-lumia/interfaces/IVault.sol";
 /**
  * @notice Stores routing information about specific token route
  * @param exists Helper boolean for easy determination if the route exists
- * @param isLendingEnabled Indicates whether the asset can be used for lending
  * @param originDestination The Chain id of the origin
  * @param originLockbox The address of the origin Lockbox
- * @param lpToken The token address on this chain representing a HyperStaking position
- * @param lendingVault The 3A DAO Smart Vault address, created for this route
- * @param borrowSafetyBuffer The percentage of collateral to be reserved for safety,
- *        expressed with 18 decimals. For example, 5e16 represents 5% (default value)
  * @param rwaAssetOwner The MintableTokenOwner contract, owner contract of rwaAsset
  * @param rwaAsset The MintableToken contract representing the Real-World Asset
  */
 struct RouteInfo {
     bool exists;
-    bool isLendingEnabled;
     uint32 originDestination;
     address originLockbox;
-    LumiaLPToken lpToken;
-    IVault lendingVault;
-    uint256 borrowSafetyBuffer;
     IMintableTokenOwner rwaAssetOwner;
     IMintableToken rwaAsset;
 }
@@ -53,9 +40,6 @@ struct LastMessage {
 struct InterchainFactoryStorage {
     /// @notice Hyperlane Mailbox
     IMailbox mailbox;
-
-    /// @notice 3adao Vault Factory
-    IVaultFactory vaultFactory;
 
     /// @notice Temporary data about last msg
     LastMessage lastMessage;
