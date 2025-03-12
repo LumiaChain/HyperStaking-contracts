@@ -18,16 +18,6 @@ struct UserTier1Info {
     uint256 allocationPoint; // average asset price - maturity
 }
 
-/// @notice Information for each Tier 2 user
-/// @param shares VaultToken shares held by the user
-/// @param allocation Allocation corresponding to the user’s shares
-/// @param stake Amount of the underlying asset allocation corresponding to the user's shares
-struct UserTier2Info {
-    uint256 shares;
-    uint256 allocation;
-    uint256 stake;
-}
-
 struct Tier1Info {
     uint256 assetAllocation;
     uint256 totalStake; // all users stake in this tier
@@ -82,7 +72,7 @@ struct LockboxData {
 //================================================================================================//
 
 struct HyperStakingStorage {
-    /// @notice Info of each user that stakes using vault
+    /// @notice Info of each user that stakes using Tier1 vault
     mapping (address strategy => mapping (address user => UserTier1Info)) userInfo;
 
     /// @notice Info of each vault

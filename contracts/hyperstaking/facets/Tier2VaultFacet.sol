@@ -15,7 +15,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
-    LibHyperStaking, HyperStakingStorage, VaultInfo, Tier2Info, UserTier2Info
+    LibHyperStaking, HyperStakingStorage, VaultInfo, Tier2Info
 } from "../libraries/LibHyperStaking.sol";
 
 /**
@@ -55,7 +55,9 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         address user,
         uint256 stake
     ) external payable diamondInternal {
-        VaultInfo storage vault = LibHyperStaking.diamondStorage().vaultInfo[strategy];
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+        Tier2Info storage tier2 = v.tier2Info[strategy];
 
         // allocate stake amount in strategy
         // and receive allocation
@@ -70,24 +72,17 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         // fetch allocation to this vault
         vault.asset.safeTransferFrom(strategy, address(this), allocation);
 
-        // mint and shares and bridge stakeInfo
-        _bridgeStakeInfo(strategy, user, stake, allocation);
+        vault.asset.safeIncreaseAllowance(address(tier2.vaultToken), allocation);
 
-        emit Tier2Join(strategy, user, allocation);
-    }
+        // vaultToken - shares are deposited to Lockbox (this diamond)
+        uint256 shares = tier2.vaultToken.deposit(allocation, address(this));
 
-    /// @inheritdoc ITier2Vault
-    function joinTier2WithAllocation(
-        address strategy,
-        address user,
-        uint256 allocation
-    ) external payable diamondInternal {
-        // recalculate stake amount based on exit allocation instead of the initial stake
-        // use the current price, allocation ration == include generated revenue
-        uint256 stake = IStrategy(strategy).previewExit(allocation);
+        // save information
+        tier2.sharesMinted += shares;
+        tier2.stakeBridged += stake;
 
         // mint and shares and bridge stakeInfo
-        _bridgeStakeInfo(strategy, user, stake, allocation);
+        _bridgeStakeInfo(strategy, user, stake);
 
         emit Tier2Join(strategy, user, allocation);
     }
@@ -151,34 +146,6 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     }
 
     /// @inheritdoc ITier2Vault
-    function userTier2Info(
-        address strategy,
-        address user
-    ) external view returns (UserTier2Info memory) {
-        Tier2Info storage tier2 = LibHyperStaking.diamondStorage().tier2Info[strategy];
-        uint256 shares = tier2.vaultToken.balanceOf(user);
-
-        return sharesTier2Info(strategy, shares);
-    }
-
-    /// @inheritdoc ITier2Vault
-    function sharesTier2Info(
-        address strategy,
-        uint256 shares
-    ) public view returns (UserTier2Info memory) {
-        Tier2Info storage tier2 = LibHyperStaking.diamondStorage().tier2Info[strategy];
-
-        uint256 allocation = tier2.vaultToken.convertToAssets(shares);
-        uint256 stake = IStrategy(strategy).previewExit(allocation);
-
-        return UserTier2Info({
-            shares: shares,
-            allocation: allocation,
-            stake: stake
-        });
-    }
-
-    /// @inheritdoc ITier2Vault
     function checkTier2Revenue(address strategy) public view returns (uint256) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         Tier2Info storage tier2 = v.tier2Info[strategy];
@@ -211,26 +178,12 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     //                                     Internal Functions                                     //
     //============================================================================================//
 
-    /// @notice helper function which mints, locks ERC4626 shares and initiates bridge data transfer
+    /// @notice helper function which locks ERC4626 shares and initiates bridge data transfer
     function _bridgeStakeInfo(
         address strategy,
         address user,
-        uint256 stake,
-        uint256 allocation
+        uint256 stake
     ) internal {
-        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        VaultInfo storage vault = v.vaultInfo[strategy];
-        Tier2Info storage tier2 = v.tier2Info[strategy];
-
-        vault.asset.safeIncreaseAllowance(address(tier2.vaultToken), allocation);
-
-        // vaultToken - shares are deposited to Lockbox (this diamond)
-        uint256 shares = tier2.vaultToken.deposit(allocation, address(this));
-
-        // save information
-        tier2.sharesMinted += shares;
-        tier2.stakeBridged += stake;
-
         // quote message fee for forwarding a TokenBridge message across chains
         uint256 fee = ILockbox(address(this)).quoteDispatchStakeInfo(
             strategy,

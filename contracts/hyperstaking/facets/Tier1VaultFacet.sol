@@ -2,7 +2,6 @@
 pragma solidity =0.8.27;
 
 import {ITier1Vault} from "../interfaces/ITier1Vault.sol";
-import {ITier2Vault} from "../interfaces/ITier2Vault.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
@@ -82,14 +81,6 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
 
         vault.asset.safeIncreaseAllowance(strategy, exitAllocation);
         withdrawAmount = IStrategy(strategy).exit(exitAllocation, user);
-    }
-
-    /// @inheritdoc ITier1Vault
-    function migrateToTier2(address strategy, uint256 stake) external {
-        // use msg.sender to leave tier1 and join tier2
-        uint256 exitAllocation = _leaveTier1(strategy, msg.sender, stake);
-
-        ITier2Vault(address(this)).joinTier2WithAllocation(strategy, msg.sender, exitAllocation);
     }
 
     // ========= Managed ========= //

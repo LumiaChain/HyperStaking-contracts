@@ -229,7 +229,6 @@ describe("VaultToken", function () {
 
       const price1 = parseEther("2");
       const price2 = parseEther("4");
-      const priceRatio = price2 / price1;
 
       await reserveStrategy.connect(strategyManager).setAssetPrice(price1);
 
@@ -251,9 +250,7 @@ describe("VaultToken", function () {
       const expectedBobShares = expectedBobAllocation;
 
       expect(await vaultToken.totalAssets()).to.be.eq(expectedBobAllocation);
-      expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).shares).to.be.eq(expectedBobShares);
-      expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).allocation).to.be.eq(expectedBobAllocation);
-      expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).stake).to.be.eq(bobStakeAmount * priceRatio);
+      expect((await tier2.tier2Info(reserveStrategy)).sharesMinted).to.be.eq(expectedBobShares);
 
       expect(await vaultToken.totalAssets()).to.be.eq(expectedBobAllocation);
 
@@ -268,13 +265,8 @@ describe("VaultToken", function () {
       // shares amount does not change, but allocation should increase
       expectedBobAllocation += allocationFee;
 
-      const precisionError = 1n;
-      const expectedNewBobStake = await reserveStrategy.previewExit(expectedBobAllocation - precisionError);
-
       expect(await vaultToken.totalAssets()).to.be.eq(expectedBobAllocation);
-      expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).shares).to.be.eq(expectedBobShares);
-      expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).allocation).to.be.eq(expectedBobAllocation - precisionError);
-      expect((await tier2.sharesTier2Info(reserveStrategy, expectedBobShares)).stake).to.be.eq(expectedNewBobStake);
+      expect((await tier2.tier2Info(reserveStrategy)).sharesMinted).to.be.eq(expectedBobShares);
 
       // actual withdraw -> redeem of lpTokens
       await rwaUSD.connect(bob).approve(hyperlaneHandler, bobStakeAmount);

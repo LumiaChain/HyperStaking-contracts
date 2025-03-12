@@ -64,13 +64,6 @@ interface ITier1Vault {
     function leaveTier1(address strategy, address user, uint256 stake) external returns (uint256);
 
     /**
-     * @notice Migrate Tier1 locked stake to Tier2 liquid vault
-     * @param strategy The strategy address
-     * @param stake The amount of initial stake the user is migrating
-     */
-    function migrateToTier2(address strategy, uint256 stake) external;
-
-    /**
      * @notice Sets the revenue fee for users in a specified strategy
      * @param strategy The strategy for which the Tier 1 revenue fee is being set
      * @param revenueFee The new revenue fee, specified as an 18-decimal fraction
