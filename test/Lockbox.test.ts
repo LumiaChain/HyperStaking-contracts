@@ -286,17 +286,5 @@ describe("Lockbox", function () {
       expect(await testWrapper.sender(bytesSR)).to.equal(messageSR.sender);
       expect(await testWrapper.redeemAmount(bytesSR)).to.equal(messageSR.amount);
     });
-
-    it("string limitations", async function () {
-      const testWrapper = await loadFixture(deployTestWrapper);
-
-      await testWrapper.stringToBytes32("X".repeat(32)); // ok
-      await expect(testWrapper.stringToBytes32("X".repeat(33)))
-        .to.be.revertedWith("stringToBytes32: overflow");
-
-      await testWrapper.stringToBytes64("X".repeat(64)); // ok
-      await expect(testWrapper.stringToBytes64("X".repeat(65)))
-        .to.be.revertedWith("stringToBytes64: overflow");
-    });
   });
 });

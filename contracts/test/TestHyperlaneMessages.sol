@@ -9,16 +9,6 @@ import {
 contract TestHyperlaneMessages {
     using HyperlaneMailboxMessages for bytes;
 
-    // ========= Utils ========= //
-
-    function stringToBytes32(string memory source) external pure returns (uint8 size, bytes32 result) {
-        return HyperlaneMailboxMessages.stringToBytes32(source);
-    }
-
-    function stringToBytes64(string memory source) external pure returns (uint8 size, bytes32[2] memory result) {
-        return HyperlaneMailboxMessages.stringToBytes64(source);
-    }
-
     // ========= Serialize ========= //
 
     function serializeRouteRegistry(

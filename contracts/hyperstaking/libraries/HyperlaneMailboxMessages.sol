@@ -11,49 +11,6 @@ enum MessageType {
 }
 
 library HyperlaneMailboxMessages {
-    // ========= Utils ========= //
-
-    function stringToBytes32(
-        string memory source
-    ) internal pure returns (uint8 size, bytes32 result) {
-        bytes memory temp = bytes(source);
-        if (temp.length == 0) {
-            return (0, 0x0);
-        }
-
-        require(temp.length <= 32, "stringToBytes32: overflow"); // limitation
-
-        assembly {
-            // Load the size of temp
-            size := mload(temp)
-
-            // Load next 32 bytes and assign it to result
-            result := mload(add(source, 0x20))
-        }
-    }
-
-    function stringToBytes64(string memory source) internal pure returns (uint8 size, bytes32[2] memory result) {
-        bytes memory temp = bytes(source);
-
-        require(temp.length <= 64, "stringToBytes64: overflow"); // limitation
-        if (temp.length == 0) {
-            return (0, result);
-        }
-
-        assembly {
-            // Load the size of temp
-            size := mload(temp)
-
-            // store the first 32 bytes from temp to result (don't store size)
-            mstore(result, mload(add(temp, 0x20)))
-
-            // store the next 32 bytes if size is greater than 32
-            if gt(size, 0x20) {
-                mstore(add(result, 0x20), mload(add(temp, 0x40)))
-            }
-        }
-    }
-
     // ========= Serialize ========= //
 
     function serializeRouteRegistry(
