@@ -57,8 +57,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
 
-        require(vault.strategy != address(0), VaultDoesNotExist(strategy));
-        require(vault.enabled, StrategyDisabled(strategy));
+        _checkDeposit(vault, strategy, stake);
 
         v.directStakeInfo[strategy].totalStake += stake;
 
@@ -117,8 +116,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     {
         VaultInfo storage vault = LibHyperStaking.diamondStorage().vaultInfo[strategy];
 
-        require(vault.strategy != address(0), VaultDoesNotExist(strategy));
-        require(vault.enabled, StrategyDisabled(strategy));
+        _checkDeposit(vault, strategy, stake);
 
         vault.stakeCurrency.transferFrom(
             msg.sender,
@@ -164,8 +162,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
 
-        require(vault.strategy != address(0), VaultDoesNotExist(strategy));
-        require(vault.enabled, StrategyDisabled(strategy));
+        _checkDeposit(vault, strategy, stake);
 
         vault.stakeCurrency.transferFrom(
             msg.sender,
@@ -181,6 +178,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     /// @inheritdoc IDeposit
     function stakeWithdrawTier2(address strategy, uint256 stake, address to)
         external
+        whenNotPaused
         diamondInternal
     {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
@@ -218,5 +216,20 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     function directStakeInfo(address strategy) external view returns (DirectStakeInfo memory) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         return v.directStakeInfo[strategy];
+    }
+
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
+    /// @notice helper check function for deposits
+    function _checkDeposit(
+        VaultInfo storage vault,
+        address strategy,
+        uint256 stake
+    ) internal view {
+        require(stake > 0, ZeroStake());
+        require(vault.strategy != address(0), VaultDoesNotExist(strategy));
+        require(vault.enabled, StrategyDisabled(strategy));
     }
 }

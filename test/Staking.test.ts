@@ -67,7 +67,7 @@ describe("Staking", function () {
       diamond, // diamond
       deposit, hyperFactory, tier1, // diamond facets
       testERC20, testWstETH, reserveStrategy1, reserveStrategy2, // test contracts
-      owner, stakingManager, alice, bob, // addresses
+      owner, stakingManager, vaultManager, alice, bob, // addresses
     };
     /* eslint-enable object-property-newline */
   }
@@ -88,8 +88,8 @@ describe("Staking", function () {
   });
 
   describe("Staking", function () {
-    it("staking can be paused", async function () {
-      const { deposit, reserveStrategy1, stakingManager, bob } = await loadFixture(deployHyperStaking);
+    it("deposit staking can be paused", async function () {
+      const { deposit, hyperFactory, reserveStrategy1, stakingManager, vaultManager, bob } = await loadFixture(deployHyperStaking);
 
       // pause
       await expect(deposit.connect(bob).pauseDeposit()).to.be.reverted;
@@ -106,10 +106,25 @@ describe("Staking", function () {
 
       await deposit.stakeDepositTier1(reserveStrategy1, 100, bob, { value: 100 });
       await deposit.connect(bob).stakeWithdrawTier1(reserveStrategy1, 100, bob);
+
+      // by individual strategy
+
+      await expect(hyperFactory.setStrategyEnabled(reserveStrategy1, false)).to.be.reverted;
+      await hyperFactory.connect(vaultManager).setStrategyEnabled(reserveStrategy1, false); // OK
+
+      await expect(deposit.stakeDepositTier1(reserveStrategy1, 100, bob, { value: 100 }))
+        .to.be.reverted;
+
+      await hyperFactory.connect(vaultManager).setStrategyEnabled(reserveStrategy1, true); // enable
+
+      await deposit.stakeDepositTier1(reserveStrategy1, 100, bob, { value: 100 }); // OK
     });
 
     it("should be able to deposit stake", async function () {
       const { deposit, tier1, reserveStrategy1, owner, alice } = await loadFixture(deployHyperStaking);
+
+      await expect(deposit.stakeDepositTier1(reserveStrategy1, 0, owner))
+        .to.be.revertedWithCustomError(deposit, "ZeroStake");
 
       const stakeAmount = parseEther("5");
       await expect(deposit.stakeDepositTier1(reserveStrategy1, stakeAmount, owner, { value: stakeAmount }))

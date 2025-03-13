@@ -158,7 +158,6 @@ describe("Direct Stake", function () {
     expect(await rwaUSD.balanceOf(bob)).to.be.eq(0);
     expect(await rwaUSD.balanceOf(owner)).to.be.eq(initBalance);
 
-    // TODO: test that only the initial staker can bridge out
     await rwaUSD.approve(realAssets, initBalance);
     await expect(realAssets.handleRwaRedeem(directStakeStrategy, owner, owner, stakeAmount))
       .to.be.revertedWithCustomError(realAssets, "InsufficientBridgedState");

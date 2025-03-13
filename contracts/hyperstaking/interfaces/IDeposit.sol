@@ -41,6 +41,9 @@ interface IDeposit {
     //                                          Errors                                            //
     //============================================================================================//
 
+    /// @notice Thrown when attempting to stake zero amount
+    error ZeroStake();
+
     /// @notice Thrown when attempting to stake to disabled strategy
     error StrategyDisabled(address strategy);
 
@@ -49,6 +52,7 @@ interface IDeposit {
 
     /// @notice Thrown when depositing to a not direct deposit vault
     error NotDirectDeposit(address strategy);
+
 
     //============================================================================================//
     //                                          Mutable                                           //
