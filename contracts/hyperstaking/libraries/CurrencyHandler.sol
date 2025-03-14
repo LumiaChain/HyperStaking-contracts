@@ -35,6 +35,25 @@ library CurrencyHandler {
     }
 
     /**
+     * @notice Returns the balance of a given account for the specified currency
+     * @dev If the currency is a native coin, it returns the native balance of the account
+     *      Otherwise, it retrieves the balance from the ERC-20 contract
+     * @param currency The Currency struct (token address or native coin)
+     * @param account The address of the account to query the balance for
+     * @return The balance of the specified account in the given currency
+     */
+    function balanceOf(
+        Currency memory currency,
+        address account
+    ) internal view returns (uint256) {
+        if (isNativeCoin(currency)) {
+            return account.balance;
+        } else {
+            return IERC20(currency.token).balanceOf(account);
+        }
+    }
+
+    /**
      * @dev Transfers tokens or native coins to a recipient
      * @param currency The Currency struct (token address or native coin)
      * @param recipient The address of the recipient to receive the funds

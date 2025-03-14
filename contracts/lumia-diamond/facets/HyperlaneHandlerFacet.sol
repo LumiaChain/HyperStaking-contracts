@@ -72,6 +72,11 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
             return;
         }
 
+        if (msgType == MessageType.MigrationInfo) {
+            _handleNewMigration(data);
+            return;
+        }
+
         revert UnsupportedMessage();
     }
 
@@ -188,6 +193,15 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         return LibInterchainFactory.diamondStorage().routes[strategy];
     }
 
+    /// @inheritdoc IHyperlaneHandler
+    function getMigrationsState(
+        address fromStrategy,
+        address toStrategy
+    ) external view returns (uint256 migrationAmount) {
+        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+        migrationAmount = ifs.migrationsState[fromStrategy][toStrategy];
+    }
+
     //============================================================================================//
     //                                     Internal Functions                                     //
     //============================================================================================//
@@ -226,6 +240,36 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
             strategy,
             address(rwaAssetOwner),
             address(rwaAsset)
+        );
+    }
+
+    /// @notice Handle migration which happened on the origin chain
+    /// @dev Adds opportunity to bridge out to a different strategy
+    /// @param data Encoded route-specific data
+    function _handleNewMigration(
+        bytes calldata data
+    ) internal {
+        address fromStrategy = data.fromStrategy();
+        address toStrategy = data.toStrategy();
+        uint256 migrationAmount = data.migrationAmount();
+
+        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+        // both strategies and their routes should exist
+        LibInterchainFactory.checkRoute(ifs, fromStrategy);
+        LibInterchainFactory.checkRoute(ifs, toStrategy);
+
+        require(
+            ifs.routes[fromStrategy].rwaAsset == ifs.routes[toStrategy].rwaAsset,
+            IncompatibleMigration()
+        );
+
+        // actual storage change
+        ifs.migrationsState[fromStrategy][toStrategy] += migrationAmount;
+
+        emit MigrationAdded(
+            fromStrategy,
+            toStrategy,
+            migrationAmount
         );
     }
 }

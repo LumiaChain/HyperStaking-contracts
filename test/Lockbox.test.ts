@@ -251,8 +251,8 @@ describe("Lockbox", function () {
       // StakeInfo
 
       const messageSI = {
-        strategy: ZeroAddress,
-        sender: ZeroAddress,
+        strategy: "0x7846C5d815300D27c4975C93Fdbe19b9D352F0d3",
+        sender: "0xE5326B17594A697B27F9807832A0CF7CB025B4bb",
         stake: parseEther("4.04"),
       };
 
@@ -267,11 +267,30 @@ describe("Lockbox", function () {
       expect(await testWrapper.sender(bytesSI)).to.equal(messageSI.sender);
       expect(await testWrapper.stakeAmount(bytesSI)).to.equal(messageSI.stake);
 
+      // MigrationInfo
+
+      const messageMI = {
+        fromStrategy: "0x6df9a4Bf32A9707C9E1D72fD39d4EcFc4D0Da3C7",
+        toStrategy: "0x2edF86433A81797820B986e88E264C3562d5eF20",
+        migrationAmount: parseEther("2.04"),
+      };
+
+      const bytesMI = await testWrapper.serializeMigrationInfo(
+        messageMI.fromStrategy,
+        messageMI.toStrategy,
+        messageMI.migrationAmount,
+      );
+
+      expect(await testWrapper.messageType(bytesMI)).to.equal(2);
+      expect(await testWrapper.fromStrategy(bytesMI)).to.equal(messageMI.fromStrategy);
+      expect(await testWrapper.toStrategy(bytesMI)).to.equal(messageMI.toStrategy);
+      expect(await testWrapper.migrationAmount(bytesMI)).to.equal(messageMI.migrationAmount);
+
       // StakeRedeem
 
       const messageSR = {
-        strtegy: ZeroAddress,
-        sender: ZeroAddress,
+        strtegy: "0x337baDc64C441e6956B87D248E5Bc284828cfa84",
+        sender: "0xcb37D723BE930Fca39F46F019d84E1B359d2170C",
         amount: parseEther("2"),
       };
 
@@ -281,7 +300,7 @@ describe("Lockbox", function () {
         messageSR.amount,
       );
 
-      expect(await testWrapper.messageType(bytesSR)).to.equal(2);
+      expect(await testWrapper.messageType(bytesSR)).to.equal(3);
       expect(await testWrapper.strategy(bytesSR)).to.equal(messageSR.strtegy);
       expect(await testWrapper.sender(bytesSR)).to.equal(messageSR.sender);
       expect(await testWrapper.redeemAmount(bytesSR)).to.equal(messageSR.amount);

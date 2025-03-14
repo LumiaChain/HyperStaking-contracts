@@ -90,6 +90,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         external
         whenNotPaused
         diamondInternal
+        returns (uint256 withdrawAmount)
     {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
@@ -101,7 +102,9 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             stake
         );
 
-        emit StakeWithdraw(address(this), to, strategy, stake, stake, DepositType.Direct);
+        withdrawAmount = stake;
+
+        emit StakeWithdraw(address(this), to, strategy, stake, withdrawAmount, DepositType.Direct);
     }
 
     /* ========== Tier 1  ========== */
@@ -169,7 +172,9 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             address(this),
             stake
         );
-        ITier2Vault(address(this)).joinTier2(strategy, to, stake);
+
+        // true - bridge info to Lumia chain to mint coresponding rwa asset
+        ITier2Vault(address(this)).joinTier2(strategy, to, stake, true);
 
         emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Tier2);
     }
@@ -180,22 +185,23 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         external
         whenNotPaused
         diamondInternal
+        returns (uint256 withdrawAmount)
     {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         Tier2Info storage tier2 = v.tier2Info[strategy];
 
         // how many shares must be withdrawn from the vault to withdraw a given amount of stake
         uint256 allocation = IStrategy(strategy).previewAllocation(stake);
-        uint256 shares = tier2.vaultToken.previewWithdraw(allocation);
+
+        // actual withdraw (ERC4626 withdraw)
+        uint256 shares = tier2.vaultToken.withdraw(allocation, to, address(this));
+        withdrawAmount = IStrategy(strategy).previewExit(allocation);
 
         // save information
         tier2.sharesRedeemed += shares;
-        tier2.stakeWithdrawn += stake;
+        tier2.stakeWithdrawn += withdrawAmount;
 
-        // actual withdraw (ERC4626 withdraw)
-        tier2.vaultToken.withdraw(allocation, to, address(this));
-
-        emit StakeWithdraw(address(this), to, strategy, shares, stake, DepositType.Tier2);
+        emit StakeWithdraw(address(this), to, strategy, shares, withdrawAmount, DepositType.Tier2);
     }
 
     /* ========== ACL ========== */

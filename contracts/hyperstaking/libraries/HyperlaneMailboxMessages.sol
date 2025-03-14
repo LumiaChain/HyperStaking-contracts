@@ -7,6 +7,7 @@ import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 enum MessageType {
     RouteRegistry,
     StakeInfo,
+    MigrationInfo,
     StakeRedeem
 }
 
@@ -36,6 +37,19 @@ library HyperlaneMailboxMessages {
             TypeCasts.addressToBytes32(strategy_),      // 32-bytes: strategy address
             TypeCasts.addressToBytes32(sender_),        // 32-bytes: sender address
             stakeAmount_                                // 32-bytes: stake amount
+        );
+    }
+
+    function serializeMigrationInfo(
+        address fromStrategy_,
+        address toStrategy_,
+        uint256 migrationAmount_
+    ) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            bytes8(uint64(MessageType.MigrationInfo)),  //  8-bytes: msg type
+            TypeCasts.addressToBytes32(fromStrategy_),  // 32-bytes: from strategy address
+            TypeCasts.addressToBytes32(toStrategy_),    // 32-bytes: to strategy address
+            migrationAmount_                            // 32-bytes: migration amount
         );
     }
 
@@ -72,6 +86,20 @@ library HyperlaneMailboxMessages {
 
     function routeRegistryMetadata(bytes calldata message) internal pure returns (bytes calldata) {
         return message[72:];
+    }
+
+    // ========= MigrationInfo ========= //
+
+    function fromStrategy(bytes calldata message) internal pure returns (address) {
+        return TypeCasts.bytes32ToAddress(bytes32(message[8:40]));
+    }
+
+    function toStrategy(bytes calldata message) internal pure returns (address) {
+        return TypeCasts.bytes32ToAddress(bytes32(message[40:72]));
+    }
+
+    function migrationAmount(bytes calldata message) internal pure returns (uint256) {
+        return uint256(bytes32(message[72:104]));
     }
 
     // ========= StakeInfo & StakeRedeem  ========= //

@@ -15,7 +15,8 @@ interface ITier2Vault {
     event Tier2Join(
         address indexed strategy,
         address indexed user,
-        uint256 allocation
+        uint256 allocation,
+        bool indexed bridge
     );
 
     event Tier2Leave(
@@ -52,8 +53,9 @@ interface ITier2Vault {
      * @param strategy The strategy for which the user is joining Tier 2
      * @param user The address of the user
      * @param stake The stake amount
+     * @param bridge Boolean determines whether the data is to be sent to the Lumia chain
      */
-    function joinTier2(address strategy, address user, uint256 stake) external payable;
+    function joinTier2(address strategy, address user, uint256 stake, bool bridge) external payable;
 
     /**
      * @notice Leave Tier 2 for a specified strategy and asset amount.

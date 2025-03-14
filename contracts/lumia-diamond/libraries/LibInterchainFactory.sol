@@ -56,6 +56,10 @@ struct InterchainFactoryStorage {
     /// @notice Tracks the amount of assets a user has bridged for a given strategy,
     ///         reflecting both deposits and redemptions
     mapping (address strategy => mapping(address user => uint256)) userBridgedState;
+
+    /// @notice Tracks the migration status between strategies, maps the source strategy (`from`)
+    ///         to the destination strategy (`to`), and stores the amount being migrated
+    mapping (address from => mapping(address to => uint256 amount)) migrationsState;
 }
 
 library LibInterchainFactory {

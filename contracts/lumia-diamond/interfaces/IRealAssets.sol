@@ -25,6 +25,15 @@ interface IRealAssets {
         uint256 assetAmount
     );
 
+    event MigratedRwaRedeem(
+        address indexed fromStrategy,
+        address indexed toStrategy,
+        address indexed rwaAsset,
+        address from,
+        address to,
+        uint256 assetAmount
+    );
+
     event RwaAssetSet(
         address indexed strategy,
         address newRwaAssetOwner,
@@ -36,6 +45,7 @@ interface IRealAssets {
     //============================================================================================//
 
     error InsufficientBridgedState();
+    error InsufficientMigrationState();
 
     //============================================================================================//
     //                                          Mutable                                           //
@@ -47,6 +57,17 @@ interface IRealAssets {
     /// @notice Handles the redemption of bridged RWA tokens for a user
     function handleRwaRedeem(
         address strategy,
+        address from,
+        address to,
+        uint256 assetAmount
+    ) external payable;
+
+    /// @notice Handles the redemption using the migrationsState
+    /// @dev Require that the migration path is determined off-chain
+    ///      and that the user has bridged the value in the 'from' strategy
+    function handleMigratedRwaRedeem(
+        address fromStrategy,
+        address toStrategy,
         address from,
         address to,
         uint256 assetAmount

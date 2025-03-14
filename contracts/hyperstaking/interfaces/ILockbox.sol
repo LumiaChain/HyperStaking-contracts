@@ -27,6 +27,14 @@ interface ILockbox {
         uint256 stake
     );
 
+    event MigrationInfoDispatched(
+        address indexed mailbox,
+        address lumiaFactory,
+        address indexed fromStrategy,
+        address indexed toStrategy,
+        uint256 migrationAmount
+    );
+
     event ReceivedMessage(
         uint32 indexed origin,
         bytes32 indexed sender,
@@ -77,6 +85,16 @@ interface ILockbox {
     ) external payable;
 
     /**
+     * @notice Dispatches a cross-chain message informing about migration
+     * @dev This function sends a message to setup migration route
+     */
+    function migrationInfoDispatch(
+        address fromStrategy,
+        address toStrategy,
+        uint256 migrationAmount
+    ) external payable;
+
+    /**
      * @notice Function called by the Mailbox contract when a message is received
      */
     function handle(
@@ -123,6 +141,13 @@ interface ILockbox {
         uint256 stake
     ) external view returns (uint256);
 
+    /// @notice Helper
+    function quoteDispatchMigrationInfo(
+        address fromStrategy,
+        address toStrategy,
+        uint256 migrationAmount
+    ) external view returns (uint256);
+
     /// @notice Helper: separated function for generating hyperlane message body
     function generateRouteRegistryBody(
         address strategy,
@@ -134,5 +159,12 @@ interface ILockbox {
         address strategy,
         address sender,
         uint256 stake
+    ) external pure returns (bytes memory body);
+
+    /// @notice Helper
+    function generateMigrationInfoBody(
+        address fromStrategy,
+        address toStrategy,
+        uint256 migrationAmount
     ) external pure returns (bytes memory body);
 }

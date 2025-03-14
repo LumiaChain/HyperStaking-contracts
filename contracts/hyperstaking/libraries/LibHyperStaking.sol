@@ -50,9 +50,6 @@ struct VaultInfo {
     Currency stakeCurrency;
     address strategy;
     IERC20Metadata asset;
-    // directStake
-    // tier1
-    // tier2
 }
 
 struct HyperlaneMessage {

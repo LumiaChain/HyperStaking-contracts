@@ -84,7 +84,7 @@ interface IDeposit {
         address strategy,
         uint256 stake,
         address to
-    ) external;
+    ) external returns (uint256 withdrawAmount);
 
     /* ========== Tier 1  ========== */
 
@@ -141,7 +141,7 @@ interface IDeposit {
         address strategy,
         uint256 stake,
         address to
-    ) external;
+    ) external returns (uint256 withdrawAmount);
 
     /* ========== */
 

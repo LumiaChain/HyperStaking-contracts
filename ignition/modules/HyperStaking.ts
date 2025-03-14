@@ -41,6 +41,9 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const lockboxFacet = m.contract("LockboxFacet");
   const lockboxFacetInterface = getContractInterface("ILockbox");
 
+  const migrationFacet = m.contract("MigrationFacet");
+  const migrationFacetInterface = getContractInterface("IMigration");
+
   const superformIntegrationFacet = m.contract("SuperformIntegrationFacet");
   const superformIntegrationFacetInterface = getContractInterface("ISuperformIntegration");
   const superformIntegrationFacetSelectors = getSelectors(superformIntegrationFacetInterface)
@@ -74,6 +77,11 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       facetAddress: lockboxFacet,
       action: FacetCutAction.Add,
       functionSelectors: getSelectors(lockboxFacetInterface),
+    },
+    {
+      facetAddress: migrationFacet,
+      action: FacetCutAction.Add,
+      functionSelectors: getSelectors(migrationFacetInterface),
     },
     {
       facetAddress: superformIntegrationFacet,
@@ -111,11 +119,14 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const tier1 = m.contractAt("ITier1Vault", diamond);
   const tier2 = m.contractAt("ITier2Vault", diamond);
   const lockbox = m.contractAt("ILockbox", diamond);
+  const migration = m.contractAt("IMigration", diamond);
   const superformIntegration = m.contractAt("ISuperformIntegration", diamond);
 
   // --- return
 
-  return { diamond, acl, deposit, hyperFactory, tier1, tier2, lockbox, superformIntegration };
+  return {
+    diamond, acl, deposit, hyperFactory, tier1, tier2, lockbox, migration, superformIntegration,
+  };
 });
 
 export default HyperStakingModule;

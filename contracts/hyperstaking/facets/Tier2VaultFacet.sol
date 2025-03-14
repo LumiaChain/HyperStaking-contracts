@@ -53,7 +53,8 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     function joinTier2(
         address strategy,
         address user,
-        uint256 stake
+        uint256 stake,
+        bool bridge
     ) external payable diamondInternal {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
@@ -82,9 +83,11 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         tier2.stakeBridged += stake;
 
         // mint and shares and bridge stakeInfo
-        _bridgeStakeInfo(strategy, user, stake);
+        if (bridge) {
+            _bridgeStakeInfo(strategy, user, stake);
+        }
 
-        emit Tier2Join(strategy, user, allocation);
+        emit Tier2Join(strategy, user, allocation, bridge);
     }
 
     /// @inheritdoc ITier2Vault

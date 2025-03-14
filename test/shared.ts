@@ -15,6 +15,14 @@ import DirectStakeStrategyModule from "../ignition/modules/DirectStakeStrategy";
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IHyperFactory";
 import { IERC20 } from "../typechain-types";
 
+// -------------------- Accounts --------------------
+
+export async function getSigners() {
+  const [owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, bob, alice] = await ethers.getSigners();
+
+  return { owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, bob, alice };
+}
+
 // -------------------- Currency --------------------
 
 export const nativeTokenAddress = ZeroAddress;
@@ -51,7 +59,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     },
   });
 
-  const { diamond, deposit, hyperFactory, tier1, tier2, lockbox, superformIntegration } = await ignition.deploy(HyperStakingModule, {
+  const { diamond, deposit, hyperFactory, tier1, tier2, lockbox, migration, superformIntegration } = await ignition.deploy(HyperStakingModule, {
     parameters: {
       HyperStakingModule: {
         lockboxMailbox: mailboxAddress,
@@ -86,18 +94,12 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     },
   });
 
+  const { vaultManager, lumiaFactoryManager } = await getSigners();
+
   // finish setup for hyperstaking
-  const vaultManager = (await ethers.getSigners())[2];
   await lockbox.connect(vaultManager).setLumiaFactory(hyperlaneHandler);
 
   // finish setup for lumia diamond
-  const lumiaFactoryManager = (await ethers.getSigners())[3];
-  const lumiaAcl = await ethers.getContractAt("LumiaDiamondAcl", lumiaDiamond);
-  await lumiaAcl.grantRole(
-    await lumiaAcl.LUMIA_FACTORY_MANAGER_ROLE(),
-    await lumiaFactoryManager.getAddress(),
-  );
-
   const authorized = true;
   await hyperlaneHandler.connect(lumiaFactoryManager).updateAuthorizedOrigin(
     lockbox,
@@ -110,7 +112,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   await rwaETHOwner.addMinter(lumiaDiamond);
 
   return {
-    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, tier1, tier2, lockbox, superVault, superformIntegration, realAssets, rwaUSD, rwaUSDOwner, rwaETH, rwaETHOwner,
+    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, tier1, tier2, lockbox, superVault, migration, superformIntegration, realAssets, rwaUSD, rwaUSDOwner, rwaETH, rwaETHOwner,
   };
 }
 
@@ -153,7 +155,7 @@ export async function createReserveStrategy(
 
   const [owner, , , strategyManager] = await ethers.getSigners();
 
-  const reserveStrategySupply = parseEther("30");
+  const reserveStrategySupply = parseEther("50");
 
   // full - because there are two differnet vesions of IERC20 used in the project
   const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";

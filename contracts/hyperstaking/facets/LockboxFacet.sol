@@ -90,6 +90,32 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     }
 
     /// @inheritdoc ILockbox
+    function migrationInfoDispatch(
+        address fromStrategy,
+        address toStrategy,
+        uint256 migrationAmount
+    ) external payable diamondInternal {
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
+        require(box.lumiaFactory != address(0), RecipientUnset());
+
+        bytes memory body = generateMigrationInfoBody(fromStrategy, toStrategy, migrationAmount);
+
+        // address left-padded to bytes32 for compatibility with hyperlane
+        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.lumiaFactory);
+
+        // msg.value should already include fee calculated
+        box.mailbox.dispatch{value: msg.value}(box.destination, recipientBytes32, body);
+
+        emit MigrationInfoDispatched(
+            address(box.mailbox),
+            box.lumiaFactory,
+            fromStrategy,
+            toStrategy,
+            migrationAmount
+        );
+    }
+
+    /// @inheritdoc ILockbox
     function handle(
         uint32 origin,
         bytes32 sender,
@@ -185,6 +211,20 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     }
 
     /// @inheritdoc ILockbox
+    function quoteDispatchMigrationInfo(
+        address fromStrategy,
+        address toStrategy,
+        uint256 migrationAmount
+    ) external view returns (uint256) {
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
+        return box.mailbox.quoteDispatch(
+            box.destination,
+            TypeCasts.addressToBytes32(box.lumiaFactory),
+            generateMigrationInfoBody(fromStrategy, toStrategy, migrationAmount)
+        );
+    }
+
+    /// @inheritdoc ILockbox
     function generateRouteRegistryBody(
         address strategy,
         address rwaAsset
@@ -206,6 +246,19 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
             strategy,
             sender,
             stake
+        );
+    }
+
+    /// @inheritdoc ILockbox
+    function generateMigrationInfoBody(
+        address fromStrategy,
+        address toStrategy,
+        uint256 migrationAmount
+    ) public pure returns (bytes memory body) {
+        body = HyperlaneMailboxMessages.serializeMigrationInfo(
+            fromStrategy,
+            toStrategy,
+            migrationAmount
         );
     }
 

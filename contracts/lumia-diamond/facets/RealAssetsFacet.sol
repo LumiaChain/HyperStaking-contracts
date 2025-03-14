@@ -57,7 +57,7 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
         uint256 assetAmount
     ) external payable {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        RouteInfo storage r = ifs.routes[strategy];
+        address rwaAsset = address(ifs.routes[strategy].rwaAsset);
 
         LibInterchainFactory.checkRoute(ifs, strategy);
 
@@ -65,7 +65,7 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
         require(ifs.userBridgedState[strategy][from] >= assetAmount, InsufficientBridgedState());
         ifs.userBridgedState[strategy][from] -= assetAmount;
 
-        IERC20(address(r.rwaAsset)).safeTransferFrom(from, address(this), assetAmount);
+        IERC20(rwaAsset).safeTransferFrom(from, address(this), assetAmount);
 
         // use hyperlane handler function for dispatching rwaAsset
         IHyperlaneHandler(address(this)).stakeRedeemDispatch{value: msg.value}(
@@ -74,7 +74,45 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
             assetAmount
         );
 
-        emit RwaRedeem(strategy, address(r.rwaAsset), from, to, assetAmount);
+        emit RwaRedeem(strategy, rwaAsset, from, to, assetAmount);
+    }
+
+    /// @inheritdoc IRealAssets
+    function handleMigratedRwaRedeem(
+        address fromStrategy,
+        address toStrategy,
+        address from,
+        address to,
+        uint256 assetAmount
+    ) external payable {
+        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+
+        // rwaAsset is the same in both strategies
+        address rwaAsset = address(ifs.routes[fromStrategy].rwaAsset);
+
+        LibInterchainFactory.checkRoute(ifs, fromStrategy);
+        LibInterchainFactory.checkRoute(ifs, toStrategy);
+
+        // still require user to have a sufficient balance in the 'from' strategy
+        require(ifs.userBridgedState[fromStrategy][from] >= assetAmount, InsufficientBridgedState());
+
+        // and that the migration state should also be sufficient
+        require(ifs.migrationsState[fromStrategy][toStrategy] >= assetAmount, InsufficientMigrationState());
+
+        // decrease both values
+        ifs.userBridgedState[fromStrategy][from] -= assetAmount;
+        ifs.migrationsState[fromStrategy][toStrategy] -= assetAmount;
+
+        IERC20(rwaAsset).safeTransferFrom(from, address(this), assetAmount);
+
+        // dispatching rwaAsset using "toStrategy"
+        IHyperlaneHandler(address(this)).stakeRedeemDispatch{value: msg.value}(
+            toStrategy,
+            to,
+            assetAmount
+        );
+
+        emit MigratedRwaRedeem(fromStrategy, toStrategy, rwaAsset, from, to, assetAmount);
     }
 
     // ========= Restricted ========= //
