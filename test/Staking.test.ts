@@ -9,69 +9,68 @@ import RevertingContractModule from "../ignition/modules/test/RevertingContract"
 
 import * as shared from "./shared";
 
+async function deployDiamond() {
+  const [owner, alice] = await ethers.getSigners();
+  const { diamond } = await ignition.deploy(DiamondModule);
+
+  const ownershipFacet = await ethers.getContractAt("OwnershipFacet", diamond);
+
+  return { diamond, ownershipFacet, owner, alice };
+}
+
+async function deployHyperStaking() {
+  const signers = await shared.getSigners();
+
+  // -------------------- Deploy Tokens --------------------
+
+  const testERC20 = await shared.deloyTestERC20("Test ERC20 Token", "tERC20");
+  const testWstETH = await shared.deloyTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
+  const erc4626Vault = await shared.deloyTestERC4626Vault(testERC20);
+
+  // -------------------- Hyperstaking Diamond --------------------
+
+  const hyperStaking = await shared.deployTestHyperStaking(0n, erc4626Vault);
+
+  // -------------------- Apply Strategies --------------------
+
+  const defaultRevenueFee = parseEther("0"); // 0% fee
+
+  const reserveStrategy1 = await shared.createReserveStrategy(
+    hyperStaking.diamond, shared.nativeTokenAddress, await testWstETH.getAddress(), parseEther("1"),
+  );
+
+  const reserveStrategy2 = await shared.createReserveStrategy(
+    hyperStaking.diamond, await testERC20.getAddress(), await testWstETH.getAddress(), parseEther("2"),
+  );
+
+  // strategy with neutral to eth 1:1 asset price
+  await hyperStaking.hyperFactory.connect(signers.vaultManager).addStrategy(
+    reserveStrategy1,
+    "eth vault1",
+    "vETH1",
+    defaultRevenueFee,
+    hyperStaking.rwaUSD,
+  );
+
+  // strategy with erc20 staking token and 2:1 asset price
+  await hyperStaking.hyperFactory.connect(signers.vaultManager).addStrategy(
+    reserveStrategy2,
+    "erc20 vault2",
+    "vERC2",
+    defaultRevenueFee,
+    hyperStaking.rwaUSD,
+  );
+
+  /* eslint-disable object-property-newline */
+  return {
+    hyperStaking, // HyperStaking deployment
+    testERC20, testWstETH, reserveStrategy1, reserveStrategy2, // test contracts
+    signers, // signers
+  };
+  /* eslint-enable object-property-newline */
+}
+
 describe("Staking", function () {
-  async function deployDiamond() {
-    const [owner, alice] = await ethers.getSigners();
-    const { diamond } = await ignition.deploy(DiamondModule);
-
-    const ownershipFacet = await ethers.getContractAt("OwnershipFacet", diamond);
-
-    return { diamond, ownershipFacet, owner, alice };
-  }
-
-  async function deployHyperStaking() {
-    const [owner, stakingManager, vaultManager, alice, bob] = await ethers.getSigners();
-
-    // -------------------- Deploy Tokens --------------------
-
-    const testERC20 = await shared.deloyTestERC20("Test ERC20 Token", "tERC20");
-    const testWstETH = await shared.deloyTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
-    const erc4626Vault = await shared.deloyTestERC4626Vault(testERC20);
-
-    // -------------------- Hyperstaking Diamond --------------------
-
-    const { diamond, deposit, hyperFactory, tier1, rwaUSD } = await shared.deployTestHyperStaking(0n, erc4626Vault);
-
-    // -------------------- Apply Strategies --------------------
-
-    const defaultRevenueFee = parseEther("0"); // 0% fee
-
-    const reserveStrategy1 = await shared.createReserveStrategy(
-      diamond, shared.nativeTokenAddress, await testWstETH.getAddress(), parseEther("1"),
-    );
-
-    const reserveStrategy2 = await shared.createReserveStrategy(
-      diamond, await testERC20.getAddress(), await testWstETH.getAddress(), parseEther("2"),
-    );
-
-    // strategy with neutral to eth 1:1 asset price
-    await hyperFactory.connect(vaultManager).addStrategy(
-      reserveStrategy1,
-      "eth vault1",
-      "vETH1",
-      defaultRevenueFee,
-      rwaUSD,
-    );
-
-    // strategy with erc20 staking token and 2:1 asset price
-    await hyperFactory.connect(vaultManager).addStrategy(
-      reserveStrategy2,
-      "erc20 vault2",
-      "vERC2",
-      defaultRevenueFee,
-      rwaUSD,
-    );
-
-    /* eslint-disable object-property-newline */
-    return {
-      diamond, // diamond
-      deposit, hyperFactory, tier1, // diamond facets
-      testERC20, testWstETH, reserveStrategy1, reserveStrategy2, // test contracts
-      owner, stakingManager, vaultManager, alice, bob, // addresses
-    };
-    /* eslint-enable object-property-newline */
-  }
-
   describe("Diamond Ownership", function () {
     it("should set the right owner", async function () {
       const { ownershipFacet, owner } = await loadFixture(deployDiamond);
@@ -89,7 +88,10 @@ describe("Staking", function () {
 
   describe("Staking", function () {
     it("deposit staking can be paused", async function () {
-      const { deposit, hyperFactory, reserveStrategy1, stakingManager, vaultManager, bob } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy1, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, hyperFactory } = hyperStaking;
+
+      const { stakingManager, vaultManager, bob } = signers;
 
       // pause
       await expect(deposit.connect(bob).pauseDeposit()).to.be.reverted;
@@ -121,7 +123,9 @@ describe("Staking", function () {
     });
 
     it("should be able to deposit stake", async function () {
-      const { deposit, tier1, reserveStrategy1, owner, alice } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy1, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, tier1 } = hyperStaking;
+      const { owner, alice } = signers;
 
       await expect(deposit.stakeDepositTier1(reserveStrategy1, 0, owner))
         .to.be.revertedWithCustomError(deposit, "ZeroStake");
@@ -160,7 +164,9 @@ describe("Staking", function () {
     });
 
     it("should be able to withdraw stake", async function () {
-      const { deposit, tier1, reserveStrategy1, owner, alice } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy1, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, tier1 } = hyperStaking;
+      const { owner, alice } = signers;
 
       const stakeAmount = parseEther("6.4");
       const withdrawAmount = parseEther(".8");
@@ -199,7 +205,9 @@ describe("Staking", function () {
     });
 
     it("it should be possible to stake and withdraw with erc20", async function () {
-      const { deposit, tier1, testERC20, reserveStrategy2, owner, alice } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, testERC20, reserveStrategy2, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, tier1 } = hyperStaking;
+      const { owner, alice } = signers;
 
       const stakeAmount = parseEther("7.8");
       const withdrawAmount = parseEther("1.4");
@@ -240,7 +248,9 @@ describe("Staking", function () {
 
     describe("CurrencyHandler Errors", function () {
       it("Invalid deposit value", async function () {
-        const { deposit, reserveStrategy1, owner } = await loadFixture(deployHyperStaking);
+        const { hyperStaking, reserveStrategy1, signers } = await loadFixture(deployHyperStaking);
+        const { deposit } = hyperStaking;
+        const { owner } = signers;
 
         const stakeAmount = parseEther("1");
         const value = parseEther("0.99");
@@ -250,7 +260,9 @@ describe("Staking", function () {
       });
 
       it("Transfer call failed", async function () {
-        const { deposit, reserveStrategy1, owner } = await loadFixture(deployHyperStaking);
+        const { hyperStaking, reserveStrategy1, signers } = await loadFixture(deployHyperStaking);
+        const { deposit } = hyperStaking;
+        const { owner } = signers;
 
         // test contract which reverts on payable call
         const { revertingContract } = await ignition.deploy(RevertingContractModule);

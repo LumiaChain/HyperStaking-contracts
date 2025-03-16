@@ -1,5 +1,6 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { parseEther } from "ethers";
+import { ethers } from "hardhat";
 import { expect } from "chai";
 
 import * as shared from "./shared";
@@ -207,6 +208,49 @@ describe("Migration", function () {
     expect(await hyperlaneHandler.getMigrationsState(reserveUSDStrategy, reserveUSD2Strategy)).to.equal(migrationAmount);
 
     // ---
+
+    const redeemAmount = parseEther("6");
+    await rwaUSD.connect(alice).approve(realAssets, redeemAmount);
+    const redeemTx = realAssets.handleMigratedRwaRedeem(reserveUSDStrategy, reserveUSD2Strategy, alice, alice, redeemAmount);
+
+    await expect(redeemTx)
+      .to.emit(realAssets, "MigratedRwaRedeem")
+      .withArgs(reserveUSDStrategy, reserveUSD2Strategy, rwaUSD, alice, alice, redeemAmount);
+
+    await expect(redeemTx)
+      .to.changeTokenBalances(rwaUSD, [alice], [-redeemAmount]);
+
+    await expect(redeemTx)
+      .to.changeTokenBalances(testUSDC, [alice], [redeemAmount]);
+
+    expect(await hyperlaneHandler.getMigrationsState(reserveUSDStrategy, reserveUSD2Strategy)).to.equal(migrationAmount - redeemAmount);
+    expect(await realAssets.getUserBridgedState(reserveUSDStrategy, alice)).to.equal(stakeAmount - redeemAmount);
+  });
+
+  it("migration from one yield staking strategy to another one with increasing vault value", async function () {
+    const { hyperStaking, testUSDC, testReserveAsset, reserveUSDStrategy, reserveUSD2Strategy, signers } = await loadFixture(deployHyperStaking);
+    const { deposit, tier2, migration, realAssets, hyperlaneHandler, rwaUSD } = hyperStaking;
+    const { vaultManager, alice } = signers;
+
+    const stakeAmount = parseEther("18");
+
+    await testUSDC.approve(deposit, stakeAmount);
+    await deposit.stakeDepositTier2(reserveUSDStrategy, stakeAmount, alice);
+
+    // change vault shares proportion
+    const vaultToken1Address = (await tier2.tier2Info(reserveUSDStrategy)).vaultToken;
+    const vaultToken1 = await ethers.getContractAt("VaultToken", vaultToken1Address);
+    await testReserveAsset.mint(vaultToken1.target, parseEther("200"));
+
+    const migrationAmount = parseEther("10");
+    await expect(migration.connect(vaultManager).migrateStrategy(reserveUSDStrategy, reserveUSD2Strategy, migrationAmount))
+      .to.emit(migration, "StrategyMigrated")
+      .withArgs(vaultManager, reserveUSDStrategy, reserveUSD2Strategy, migrationAmount);
+
+    // ---
+    const vaultToken2Address = (await tier2.tier2Info(reserveUSD2Strategy)).vaultToken;
+    const vaultToken2 = await ethers.getContractAt("VaultToken", vaultToken2Address);
+    await testReserveAsset.mint(vaultToken2.target, parseEther("5000"));
 
     const redeemAmount = parseEther("6");
     await rwaUSD.connect(alice).approve(realAssets, redeemAmount);

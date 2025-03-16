@@ -5,63 +5,60 @@ import { parseEther, ZeroAddress } from "ethers";
 
 import * as shared from "./shared";
 
+async function deployHyperStaking() {
+  const signers = await shared.getSigners();
+
+  // -------------------- Deploy Tokens --------------------
+
+  const testReserveAsset = await shared.deloyTestERC20("Test Reserve Asset", "tRaETH");
+  const erc4626Vault = await shared.deloyTestERC4626Vault(testReserveAsset);
+
+  // -------------------- Hyperstaking Diamond --------------------
+
+  const hyperStaking = await shared.deployTestHyperStaking(0n, erc4626Vault);
+
+  // -------------------- Apply Strategies --------------------
+
+  const defaultRevenueFee = parseEther("0"); // 0% fee
+
+  // strategy asset price to eth 2:1
+  const reserveAssetPrice = parseEther("2");
+
+  const reserveStrategy = await shared.createReserveStrategy(
+    hyperStaking.diamond, shared.nativeTokenAddress, await testReserveAsset.getAddress(), reserveAssetPrice,
+  );
+
+  await hyperStaking.hyperFactory.connect(signers.vaultManager).addStrategy(
+    reserveStrategy,
+    "reserve eth vault 1",
+    "rETH1",
+    defaultRevenueFee,
+    hyperStaking.rwaETH,
+  );
+
+  // set fee after strategy is added
+  const mailboxFee = parseEther("0.05");
+  await hyperStaking.mailbox.connect(signers.owner).setFee(mailboxFee);
+
+  const vaultTokenAddress = (await hyperStaking.tier2.tier2Info(reserveStrategy)).vaultToken;
+  const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
+
+  /* eslint-disable object-property-newline */
+  return {
+    hyperStaking, // HyperStaking deployment
+    testReserveAsset, reserveStrategy, vaultToken, // test contracts
+    defaultRevenueFee, reserveAssetPrice, mailboxFee, // values
+    signers, // signers
+  };
+  /* eslint-enable object-property-newline */
+}
+
 describe("Lockbox", function () {
-  async function deployHyperStaking() {
-    const [owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, bob, alice] = await ethers.getSigners();
-
-    // -------------------- Deploy Tokens --------------------
-
-    const testReserveAsset = await shared.deloyTestERC20("Test Reserve Asset", "tRaETH");
-    const erc4626Vault = await shared.deloyTestERC4626Vault(testReserveAsset);
-
-    // -------------------- Hyperstaking Diamond --------------------
-
-    const {
-      mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, realAssets, tier1, tier2, lockbox, rwaETH,
-    } = await shared.deployTestHyperStaking(0n, erc4626Vault);
-
-    // -------------------- Apply Strategies --------------------
-
-    const defaultRevenueFee = parseEther("0"); // 0% fee
-
-    // strategy asset price to eth 2:1
-    const reserveAssetPrice = parseEther("2");
-
-    const reserveStrategy = await shared.createReserveStrategy(
-      diamond, shared.nativeTokenAddress, await testReserveAsset.getAddress(), reserveAssetPrice,
-    );
-
-    await hyperFactory.connect(vaultManager).addStrategy(
-      reserveStrategy,
-      "reserve eth vault 1",
-      "rETH1",
-      defaultRevenueFee,
-      rwaETH,
-    );
-
-    // set fee after strategy is added
-    const mailboxFee = parseEther("0.05");
-    await mailbox.connect(owner).setFee(mailboxFee);
-
-    const vaultTokenAddress = (await tier2.tier2Info(reserveStrategy)).vaultToken;
-    const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
-
-    /* eslint-disable object-property-newline */
-    return {
-      diamond, // diamond
-      deposit, hyperFactory, tier1, tier2, lockbox, realAssets, // diamond facets
-      mailbox, hyperlaneHandler, testReserveAsset, reserveStrategy, vaultToken, rwaETH, // test contracts
-      defaultRevenueFee, reserveAssetPrice, mailboxFee, // values
-      owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, alice, bob, // addresses
-    };
-    /* eslint-enable object-property-newline */
-  }
-
-  describe("Lockbox", function () {
+  describe("Lockbox Facet", function () {
     it("vault token properties should be correct", async function () {
-      const {
-        diamond, tier2, hyperFactory, mailbox, vaultManager, owner, rwaETH,
-      } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, signers } = await loadFixture(deployHyperStaking);
+      const { diamond, tier2, hyperFactory, mailbox, rwaETH } = hyperStaking;
+      const { owner, vaultManager } = signers;
 
       const strangeToken = await shared.deloyTestERC20("Test 14 dec Coin", "t14c", 14);
       const reserveStrategy2 = await shared.createReserveStrategy(
@@ -89,7 +86,9 @@ describe("Lockbox", function () {
     });
 
     it("test origin update and acl", async function () {
-      const { hyperlaneHandler, lockbox, lumiaFactoryManager } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, signers } = await loadFixture(deployHyperStaking);
+      const { hyperlaneHandler, lockbox } = hyperStaking;
+      const { lumiaFactoryManager } = signers;
 
       await expect(hyperlaneHandler.setMailbox(lockbox)).to.be.reverted;
 
@@ -111,9 +110,9 @@ describe("Lockbox", function () {
     });
 
     it("stake deposit to tier2 with non-zero mailbox fee", async function () {
-      const {
-        deposit, tier1, reserveStrategy, vaultToken, mailboxFee, owner, alice, rwaETH,
-      } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy, vaultToken, mailboxFee, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, tier1, rwaETH } = hyperStaking;
+      const { owner, alice } = signers;
 
       const rwaBefore = await rwaETH.balanceOf(alice);
 
@@ -142,9 +141,9 @@ describe("Lockbox", function () {
     });
 
     it("mailbox fee is needed when adding strategy too", async function () {
-      const {
-        diamond, hyperFactory, lockbox, mailboxFee, vaultManager, rwaETH,
-      } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, mailboxFee, signers } = await loadFixture(deployHyperStaking);
+      const { diamond, hyperFactory, lockbox, rwaETH } = hyperStaking;
+      const { vaultManager } = signers;
 
       // new pool and strategy
       const asset2 = await shared.deloyTestERC20("Test Reserve Asset 2", "t2");
@@ -177,10 +176,9 @@ describe("Lockbox", function () {
     });
 
     it("redeem the should triger tier2 leave on the origin chain - non-zero mailbox fee", async function () {
-      const {
-        deposit, reserveStrategy, mailbox, vaultToken, hyperlaneHandler, realAssets, rwaETH,
-        testReserveAsset, mailboxFee, reserveAssetPrice, alice,
-      } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy, vaultToken, testReserveAsset, reserveAssetPrice, mailboxFee, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, hyperlaneHandler, realAssets, mailbox, rwaETH } = hyperStaking;
+      const { alice } = signers;
 
       const stakeAmount = parseEther("3");
       const expectedLpAmount = stakeAmount * parseEther("1") / reserveAssetPrice;

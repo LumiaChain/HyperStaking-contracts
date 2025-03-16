@@ -12,87 +12,86 @@ import TxCostTracker from "./txCostTracker";
 import { PirexEth } from "../typechain-types";
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/facets/HyperFactoryFacet";
 
-describe("Strategy", function () {
-  async function getMockedPirex() {
-    const [, , rewardRecipient] = await ethers.getSigners();
-    const { pxEth, upxEth, pirexEth, autoPxEth } = await ignition.deploy(PirexMockModule);
+async function getMockedPirex() {
+  const [, , rewardRecipient] = await ethers.getSigners();
+  const { pxEth, upxEth, pirexEth, autoPxEth } = await ignition.deploy(PirexMockModule);
 
-    // increase rewards buffer
-    await (pirexEth.connect(rewardRecipient) as PirexEth).harvest(await ethers.provider.getBlockNumber(), { value: parseEther("100") });
+  // increase rewards buffer
+  await (pirexEth.connect(rewardRecipient) as PirexEth).harvest(await ethers.provider.getBlockNumber(), { value: parseEther("100") });
 
-    return { pxEth, upxEth, pirexEth, autoPxEth };
-  }
+  return { pxEth, upxEth, pirexEth, autoPxEth };
+}
 
-  async function deployHyperStaking() {
-    const [owner, stakingManager, vaultManager, strategyManager, bob, alice] = await ethers.getSigners();
+async function deployHyperStaking() {
+  const signers = await shared.getSigners();
 
-    // -------------------- Deploy Tokens --------------------
+  // -------------------- Deploy Tokens --------------------
 
-    const testWstETH = await shared.deloyTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
-    const erc4626Vault = await shared.deloyTestERC4626Vault(testWstETH);
+  const testWstETH = await shared.deloyTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
+  const erc4626Vault = await shared.deloyTestERC4626Vault(testWstETH);
 
-    // --------------------- Hyperstaking Diamond --------------------
+  // --------------------- Hyperstaking Diamond --------------------
 
-    const { diamond, deposit, hyperFactory, tier1, tier2, rwaETH } = await shared.deployTestHyperStaking(0n, erc4626Vault);
+  const hyperStaking = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
-    // -------------------- Apply Strategies --------------------
+  // -------------------- Apply Strategies --------------------
 
-    const defaultRevenueFee = parseEther("0"); // 0% fee
+  const defaultRevenueFee = parseEther("0"); // 0% fee
 
-    // strategy asset price to eth 2:1
-    const reserveAssetPrice = parseEther("2");
+  // strategy asset price to eth 2:1
+  const reserveAssetPrice = parseEther("2");
 
-    const reserveStrategy = await shared.createReserveStrategy(
-      diamond, shared.nativeTokenAddress, await testWstETH.getAddress(), reserveAssetPrice,
-    );
+  const reserveStrategy = await shared.createReserveStrategy(
+    hyperStaking.diamond, shared.nativeTokenAddress, await testWstETH.getAddress(), reserveAssetPrice,
+  );
 
-    await hyperFactory.connect(vaultManager).addStrategy(
-      reserveStrategy,
-      "eth reserve vault1",
-      "rETH1",
-      defaultRevenueFee,
-      rwaETH,
-    );
+  await hyperStaking.hyperFactory.connect(signers.vaultManager).addStrategy(
+    reserveStrategy,
+    "eth reserve vault1",
+    "rETH1",
+    defaultRevenueFee,
+    hyperStaking.rwaETH,
+  );
 
-    const { pxEth, upxEth, pirexEth, autoPxEth } = await loadFixture(getMockedPirex);
-    const { dineroStrategy } = await ignition.deploy(DineroStrategyModule, {
-      parameters: {
-        DineroStrategyModule: {
-          diamond: await diamond.getAddress(),
-          pxEth: await pxEth.getAddress(),
-          pirexEth: await pirexEth.getAddress(),
-          autoPxEth: await autoPxEth.getAddress(),
-        },
+  const { pxEth, upxEth, pirexEth, autoPxEth } = await loadFixture(getMockedPirex);
+  const { dineroStrategy } = await ignition.deploy(DineroStrategyModule, {
+    parameters: {
+      DineroStrategyModule: {
+        diamond: await hyperStaking.diamond.getAddress(),
+        pxEth: await pxEth.getAddress(),
+        pirexEth: await pirexEth.getAddress(),
+        autoPxEth: await autoPxEth.getAddress(),
       },
-    });
+    },
+  });
 
-    await hyperFactory.connect(vaultManager).addStrategy(
-      dineroStrategy,
-      "eth vault2",
-      "dETH2",
-      defaultRevenueFee,
-      rwaETH,
-    );
+  await hyperStaking.hyperFactory.connect(signers.vaultManager).addStrategy(
+    dineroStrategy,
+    "eth vault2",
+    "dETH2",
+    defaultRevenueFee,
+    hyperStaking.rwaETH,
+  );
 
-    // ----------------------------------------
+  // ----------------------------------------
 
-    /* eslint-disable object-property-newline */
-    return {
-      diamond, // diamond
-      deposit, hyperFactory, tier1, tier2, // diamond facets
-      pxEth, upxEth, pirexEth, autoPxEth, // pirex mock
-      testWstETH, reserveStrategy, dineroStrategy, rwaETH, // test contracts
-      defaultRevenueFee, reserveAssetPrice, // values
-      owner, stakingManager, vaultManager, strategyManager, alice, bob, // addresses
-    };
-    /* eslint-enable object-property-newline */
-  }
+  /* eslint-disable object-property-newline */
+  return {
+    hyperStaking, // HyperStaking deployment
+    pxEth, upxEth, pirexEth, autoPxEth, // pirex mock
+    testWstETH, reserveStrategy, dineroStrategy, // test contracts
+    defaultRevenueFee, reserveAssetPrice, // values
+    signers, // signers
+  };
+  /* eslint-enable object-property-newline */
+}
 
+describe("Strategy", function () {
   describe("ReserveStrategy", function () {
     it("check state after allocation", async function () {
-      const {
-        deposit, hyperFactory, tier1, tier2, testWstETH, reserveStrategy, reserveAssetPrice, owner, alice,
-      } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, testWstETH, reserveStrategy, reserveAssetPrice, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, hyperFactory, tier1, tier2 } = hyperStaking;
+      const { owner, alice } = signers;
 
       const ownerAmount = parseEther("2");
       const aliceAmount = parseEther("8");
@@ -140,9 +139,9 @@ describe("Strategy", function () {
     });
 
     it("check state after exit", async function () {
-      const {
-        deposit, hyperFactory, tier1, testWstETH, reserveStrategy, reserveAssetPrice, owner,
-      } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, testWstETH, reserveStrategy, reserveAssetPrice, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, hyperFactory, tier1 } = hyperStaking;
+      const { owner } = signers;
 
       const stakeAmount = parseEther("2.4");
       const withdrawAmount = parseEther("0.6");
@@ -183,9 +182,9 @@ describe("Strategy", function () {
     });
 
     it("allocation point should depend on weighted price", async function () {
-      const {
-        deposit, tier1, reserveStrategy, owner, strategyManager,
-      } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, tier1 } = hyperStaking;
+      const { owner, strategyManager } = signers;
 
       // reverse asset:eth to eth:asset price
       const reversePrice = (amount: bigint) => parseUnits("1", 36) / amount;
@@ -222,7 +221,9 @@ describe("Strategy", function () {
     });
 
     it("user generates revenue when asset increases in price", async function () {
-      const { deposit, tier1, reserveStrategy, strategyManager, alice } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, tier1 } = hyperStaking;
+      const { alice, strategyManager } = signers;
 
       const price1 = parseEther("2");
       const price2 = parseEther("4");
@@ -246,7 +247,9 @@ describe("Strategy", function () {
     });
 
     it("users revenue should work with a more complex scenario", async function () {
-      const { deposit, tier1, reserveStrategy, strategyManager, bob, alice } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, tier1 } = hyperStaking;
+      const { alice, bob, strategyManager } = signers;
 
       const price1 = parseEther("1");
       const price2 = parseEther("2");
@@ -276,9 +279,9 @@ describe("Strategy", function () {
     });
 
     it("vault manager should be able to set revenue fee", async function () {
-      const {
-        tier1, reserveStrategy, vaultManager,
-      } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+      const { tier1 } = hyperStaking;
+      const { vaultManager } = signers;
 
       const bigFee = parseEther("0.31"); // 31%
       const newFee = parseEther("0.1"); // 10%
@@ -294,7 +297,10 @@ describe("Strategy", function () {
     });
 
     it("revenue fee value should be distracted when withdraw his stake", async function () {
-      const { deposit, tier1, reserveStrategy, alice, vaultManager, strategyManager } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, tier1 } = hyperStaking;
+      const { alice, vaultManager, strategyManager } = signers;
+
       const gasCosts = new TxCostTracker();
 
       const revenueFee = parseEther("0.1"); // 10%
@@ -327,7 +333,8 @@ describe("Strategy", function () {
     });
 
     it("there should be a possibility of emergency withdraw", async function () {
-      const { owner, alice, strategyManager, reserveStrategy } = await loadFixture(deployHyperStaking);
+      const { reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+      const { owner, alice, strategyManager } = signers;
 
       // send eth to the strategy
       const accidentAmount = parseEther("4.0");
@@ -348,7 +355,8 @@ describe("Strategy", function () {
 
     describe("Errors", function () {
       it("NotLumiaDimaond", async function () {
-        const { reserveStrategy, alice } = await loadFixture(deployHyperStaking);
+        const { reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+        const { alice } = signers;
 
         await expect(reserveStrategy.allocate(parseEther("1"), alice))
           .to.be.revertedWithCustomError(reserveStrategy, "NotLumiaDiamond");
@@ -358,14 +366,17 @@ describe("Strategy", function () {
       });
 
       it("NotStrategyManager", async function () {
-        const { reserveStrategy, alice } = await loadFixture(deployHyperStaking);
+        const { reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+        const { alice } = signers;
 
         await expect(reserveStrategy.connect(alice).setAssetPrice(parseEther("10")))
           .to.be.revertedWithCustomError(reserveStrategy, "NotStrategyManager");
       });
 
       it("OnlyVaultManager", async function () {
-        const { hyperFactory, reserveStrategy, rwaETH, alice, defaultRevenueFee } = await loadFixture(deployHyperStaking);
+        const { hyperStaking, reserveStrategy, defaultRevenueFee, signers } = await loadFixture(deployHyperStaking);
+        const { hyperFactory, rwaETH } = hyperStaking;
+        const { alice } = signers;
 
         await expect(hyperFactory.addStrategy(
           reserveStrategy,
@@ -389,7 +400,9 @@ describe("Strategy", function () {
       });
 
       it("VaultDoesNotExist", async function () {
-        const { deposit, owner } = await loadFixture(deployHyperStaking);
+        const { hyperStaking, signers } = await loadFixture(deployHyperStaking);
+        const { deposit } = hyperStaking;
+        const { owner } = signers;
 
         const badStrategy = "0x36fD7e46150d3C0Be5741b0fc8b0b2af4a0D4Dc5";
 
@@ -399,9 +412,9 @@ describe("Strategy", function () {
       });
 
       it("VaultAlreadyExist", async function () {
-        const {
-          hyperFactory, rwaETH, vaultManager, reserveStrategy, defaultRevenueFee,
-        } = await loadFixture(deployHyperStaking);
+        const { hyperStaking, reserveStrategy, defaultRevenueFee, signers } = await loadFixture(deployHyperStaking);
+        const { hyperFactory, rwaETH } = hyperStaking;
+        const { vaultManager } = signers;
 
         await expect(hyperFactory.connect(vaultManager).addStrategy(
           reserveStrategy,
@@ -414,7 +427,9 @@ describe("Strategy", function () {
       });
 
       it("Vault external functions not be accessible without staking", async function () {
-        const { tier1, reserveStrategy, alice } = await loadFixture(deployHyperStaking);
+        const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+        const { tier1 } = hyperStaking;
+        const { alice } = signers;
 
         await expect(tier1.joinTier1(reserveStrategy, alice, 1000))
           .to.be.reverted;
@@ -427,7 +442,9 @@ describe("Strategy", function () {
 
   describe("Dinero Strategy", function () {
     it("staking deposit to dinero strategy should aquire apxEth", async function () {
-      const { deposit, hyperFactory, tier1, autoPxEth, dineroStrategy, owner } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, autoPxEth, dineroStrategy, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, hyperFactory, tier1 } = hyperStaking;
+      const { owner } = signers;
 
       const stakeAmount = parseEther("8");
       const apxEthPrice = parseEther("1");
@@ -466,7 +483,9 @@ describe("Strategy", function () {
     });
 
     it("unstaking from to dinero strategy should exchange apxEth back to eth", async function () {
-      const { deposit, hyperFactory, tier1, autoPxEth, dineroStrategy, owner } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, autoPxEth, dineroStrategy, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, hyperFactory, tier1 } = hyperStaking;
+      const { owner } = signers;
 
       const stakeAmount = parseEther("3");
       const apxEthPrice = parseEther("1");

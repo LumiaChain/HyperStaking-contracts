@@ -17,26 +17,25 @@ async function deployHyperStaking() {
 
   // --------------------- Hyperstaking Diamond --------------------
 
-  const { diamond, deposit, lockbox, hyperFactory, hyperlaneHandler, realAssets, rwaUSD } = await shared.deployTestHyperStaking(0n, erc4626Vault);
+  const hyperStaking = await shared.deployTestHyperStaking(0n, erc4626Vault);
 
   // -------------------- Apply Strategies --------------------
 
   const directStakeStrategy = await shared.createDirectStakeStrategy(
-    diamond, await testUSDC.getAddress(),
+    hyperStaking.diamond, await testUSDC.getAddress(),
   );
 
-  await hyperFactory.connect(signers.vaultManager).addDirectStrategy(
+  await hyperStaking.hyperFactory.connect(signers.vaultManager).addDirectStrategy(
     directStakeStrategy,
-    rwaUSD,
+    hyperStaking.rwaUSD,
   );
 
   // ----------------------------------------
 
   /* eslint-disable object-property-newline */
   return {
-    diamond, // diamond
-    deposit, hyperFactory, lockbox, realAssets, rwaUSD, // diamond facets
-    testUSDC, directStakeStrategy, hyperlaneHandler, // test contracts
+    hyperStaking, // HyperStaking deployment
+    testUSDC, directStakeStrategy, // test contracts
     signers, // signers
   };
   /* eslint-enable object-property-newline */
@@ -44,7 +43,8 @@ async function deployHyperStaking() {
 
 describe("Direct Stake", function () {
   it("adding strategy should save proper data", async function () {
-    const { lockbox, hyperlaneHandler, realAssets, rwaUSD, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
+    const { hyperStaking, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
+    const { lockbox, hyperlaneHandler, realAssets, rwaUSD } = hyperStaking;
     const { alice, lumiaFactoryManager } = signers;
 
     // check route info
@@ -77,7 +77,8 @@ describe("Direct Stake", function () {
   });
 
   it("only direct stake strategy should be allowed for direct staking", async function () {
-    const { diamond, deposit, hyperFactory, realAssets, testUSDC, rwaUSD, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
+    const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
+    const { diamond, deposit, hyperFactory, realAssets, rwaUSD } = hyperStaking;
     const { alice, vaultManager } = signers;
 
     // adding new non-direct stake strategy
@@ -106,7 +107,8 @@ describe("Direct Stake", function () {
   });
 
   it("direct stake strategy should mint rwaUSD in 1:1 ratio", async function () {
-    const { deposit, testUSDC, realAssets, rwaUSD, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
+    const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
+    const { deposit, realAssets, rwaUSD } = hyperStaking;
     const { alice } = signers;
 
     const stakeAmount = parseEther("500");
@@ -121,7 +123,8 @@ describe("Direct Stake", function () {
   });
 
   it("rwaUSD could be redeemend back to origin chain in the same 1:1 ratio", async function () {
-    const { deposit, testUSDC, realAssets, rwaUSD, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
+    const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
+    const { deposit, realAssets, rwaUSD } = hyperStaking;
     const { alice, bob } = signers;
 
     const stakeAmount = parseEther("500");
@@ -141,7 +144,8 @@ describe("Direct Stake", function () {
   });
 
   it("it should be possible to use rwa asset like erc20, but only the initial staker can bridge out", async function () {
-    const { deposit, testUSDC, directStakeStrategy, realAssets, rwaUSD, signers } = await loadFixture(deployHyperStaking);
+    const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
+    const { deposit, realAssets, rwaUSD } = hyperStaking;
     const { owner, alice, bob } = signers;
 
     const stakeAmount = parseEther("3");

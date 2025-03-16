@@ -7,55 +7,54 @@ import TestRwaAssetModule from "../ignition/modules/test/TestRwaAsset";
 
 import * as shared from "./shared";
 
+async function deployHyperStaking() {
+  const signers = await shared.getSigners();
+
+  // -------------------- Deploy Tokens --------------------
+
+  const testReserveAsset = await shared.deloyTestERC20("Test Reserve Asset", "tRaETH");
+  const erc4626Vault = await shared.deloyTestERC4626Vault(testReserveAsset);
+
+  // -------------------- Hyperstaking Diamond --------------------
+
+  const hyperStaking = await shared.deployTestHyperStaking(0n, erc4626Vault);
+
+  // -------------------- Apply Strategies --------------------
+
+  const defaultRevenueFee = parseEther("0"); // 0% fee
+
+  // strategy asset price to eth 2:1
+  const reserveAssetPrice = parseEther("2");
+
+  const reserveStrategy = await shared.createReserveStrategy(
+    hyperStaking.diamond, shared.nativeTokenAddress, await testReserveAsset.getAddress(), reserveAssetPrice,
+  );
+
+  const vaultTokenName = "eth vault1";
+  const vaultTokenSymbol = "vETH1";
+
+  await hyperStaking.hyperFactory.connect(signers.vaultManager).addStrategy(
+    reserveStrategy,
+    vaultTokenName,
+    vaultTokenSymbol,
+    defaultRevenueFee,
+    hyperStaking.rwaUSD,
+  );
+
+  const vaultTokenAddress = (await hyperStaking.tier2.tier2Info(reserveStrategy)).vaultToken;
+  const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
+
+  /* eslint-disable object-property-newline */
+  return {
+    hyperStaking, // HyperStaking deployment
+    testReserveAsset, reserveStrategy, vaultToken, // test contracts
+    defaultRevenueFee, reserveAssetPrice, vaultTokenName, vaultTokenSymbol, // values
+    signers, // signers
+  };
+  /* eslint-enable object-property-newline */
+}
+
 describe("VaultToken", function () {
-  async function deployHyperStaking() {
-    const [owner, stakingManager, vaultManager, strategyManager, bob, alice] = await ethers.getSigners();
-
-    // -------------------- Deploy Tokens --------------------
-
-    const testReserveAsset = await shared.deloyTestERC20("Test Reserve Asset", "tRaETH");
-    const erc4626Vault = await shared.deloyTestERC4626Vault(testReserveAsset);
-
-    // -------------------- Hyperstaking Diamond --------------------
-
-    const { hyperlaneHandler, diamond, deposit, hyperFactory, tier1, tier2, rwaUSD, realAssets } = await shared.deployTestHyperStaking(0n, erc4626Vault);
-
-    // -------------------- Apply Strategies --------------------
-
-    const defaultRevenueFee = parseEther("0"); // 0% fee
-
-    // strategy asset price to eth 2:1
-    const reserveAssetPrice = parseEther("2");
-
-    const reserveStrategy = await shared.createReserveStrategy(
-      diamond, shared.nativeTokenAddress, await testReserveAsset.getAddress(), reserveAssetPrice,
-    );
-
-    const vaultTokenName = "eth vault1";
-    const vaultTokenSymbol = "vETH1";
-
-    await hyperFactory.connect(vaultManager).addStrategy(
-      reserveStrategy,
-      vaultTokenName,
-      vaultTokenSymbol,
-      defaultRevenueFee,
-      rwaUSD,
-    );
-
-    const vaultTokenAddress = (await tier2.tier2Info(reserveStrategy)).vaultToken;
-    const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
-
-    /* eslint-disable object-property-newline */
-    return {
-      diamond, // diamond
-      deposit, hyperFactory, tier1, tier2, hyperlaneHandler, realAssets, // diamond facets
-      testReserveAsset, reserveStrategy, vaultToken, rwaUSD, // test contracts
-      defaultRevenueFee, reserveAssetPrice, vaultTokenName, vaultTokenSymbol, // values
-      owner, stakingManager, vaultManager, strategyManager, alice, bob, // addresses
-    };
-    /* eslint-enable object-property-newline */
-  }
-
   describe("InterchainFactory", function () {
     it("vault token name, symbol and decimals", async function () {
       const { testReserveAsset, vaultToken, vaultTokenName, vaultTokenSymbol } = await loadFixture(deployHyperStaking);
@@ -68,10 +67,9 @@ describe("VaultToken", function () {
     });
 
     it("test route and rwaAsset registration", async function () {
-      const {
-        diamond, hyperFactory, hyperlaneHandler, reserveStrategy,
-        vaultManager, realAssets, rwaUSD,
-      } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+      const { diamond, hyperFactory, hyperlaneHandler, realAssets, rwaUSD } = hyperStaking;
+      const { vaultManager } = signers;
 
       const testAsset2 = await shared.deloyTestERC20("Test Asset2", "tRaETH2");
       const testAsset3 = await shared.deloyTestERC20("Test Asset3", "tRaETH3");
@@ -111,7 +109,8 @@ describe("VaultToken", function () {
 
   describe("Tier2", function () {
     it("it shouldn't be possible to mint shares apart from the diamond", async function () {
-      const { vaultToken, alice } = await loadFixture(deployHyperStaking);
+      const { vaultToken, signers } = await loadFixture(deployHyperStaking);
+      const { alice } = signers;
 
       await expect(vaultToken.deposit(100, alice))
         .to.be.revertedWithCustomError(vaultToken, "OwnableUnauthorizedAccount");
@@ -121,7 +120,9 @@ describe("VaultToken", function () {
     });
 
     it("it should be possible to stake deposit to tier2", async function () {
-      const { deposit, reserveStrategy, tier1, vaultToken, rwaUSD, owner, alice } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy, vaultToken, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, tier1, rwaUSD } = hyperStaking;
+      const { owner, alice } = signers;
 
       const stakeAmount = parseEther("6");
 
@@ -147,7 +148,9 @@ describe("VaultToken", function () {
     });
 
     it("shars should be minted equally regardless of the deposit order", async function () {
-      const { deposit, reserveStrategy, vaultToken, owner, alice, bob } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy, vaultToken, signers } = await loadFixture(deployHyperStaking);
+      const { deposit } = hyperStaking;
+      const { owner, alice, bob } = signers;
 
       const stakeAmount = parseEther("7");
 
@@ -170,10 +173,9 @@ describe("VaultToken", function () {
     });
 
     it("it should be possible to redeem and withdraw stake", async function () {
-      const {
-        deposit, testReserveAsset, reserveStrategy, hyperlaneHandler,
-        reserveAssetPrice, vaultToken, realAssets, rwaUSD, alice, bob,
-      } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, testReserveAsset, reserveStrategy, reserveAssetPrice, vaultToken, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, hyperlaneHandler, realAssets, rwaUSD } = hyperStaking;
+      const { alice, bob } = signers;
 
       expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
 
@@ -222,10 +224,9 @@ describe("VaultToken", function () {
     });
 
     it("fee from tier1 should increase tier2 shares value", async function () {
-      const {
-        deposit, tier1, tier2, hyperlaneHandler, reserveStrategy, vaultToken,
-        realAssets, rwaUSD, vaultManager, strategyManager, alice, bob,
-      } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy, vaultToken, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, tier1, tier2, hyperlaneHandler, realAssets, rwaUSD } = hyperStaking;
+      const { alice, bob, vaultManager, strategyManager } = signers;
 
       const price1 = parseEther("2");
       const price2 = parseEther("4");
