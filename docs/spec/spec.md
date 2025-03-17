@@ -2,7 +2,8 @@
 
 ---
 
-This specification describes the architecture and key features of the Lumia Smart Contracts, which manage staking pools, cross-chain asset handling, and contract upgrades. The system uses two Diamond Proxy contracts: one on Ethereum for managing staking and strategies, and another on the Lumia Chain for interchain communication and asset revenue collection.
+This specification describes the architecture and key features of the Lumia Smart Contracts, which manage staking pools, cross-chain asset handling, and contract upgrades.
+The system uses two or more Diamond Proxy contracts: one on the origin chain (such as Ethereum or Arbitrum) to manage deposits and revenue strategies, and another on the Lumia Chain to handle interchain communication, RWA asset generation, and revenue distribution.
 
 <p align="center">
     <img src="img/general_scheme.png" alt="General Scheme">
@@ -10,56 +11,48 @@ This specification describes the architecture and key features of the Lumia Smar
 
 ## 0. Diamond Proxy Architecture
 
-Lumia smart contracts will be developed using the [Diamond Proxy pattern](https://eips.ethereum.org/EIPS/eip-2535):
+Lumia smart contracts is developed using the [Diamond Proxy pattern](https://eips.ethereum.org/EIPS/eip-2535):
 
 - **Modularity and Upgradeability**: The architecture supports adding or replacing functionalities without affecting ongoing operations, ensuring flexible contract modularity.
 
-- **Second Diamond Proxy on Lumia Chain**: The secondary Diamond Proxy operates on the Lumia Chain to manage cross-chain asset handling and revenue collection. It facilitates hyperlane interchain messaging and ensures liquid LP tokens represent assets and revenues collected from other chains.
+- **Second Diamond Proxy on Lumia Chain**: The secondary Diamond Proxy operates on the Lumia Chain to manage cross-chain asset handling, effectively functioning as a bridge. It facilitates Hyperlane interchain messaging and ensures that liquid RWA tokens accurately represent real value.
 
 ### Access Control List (ACL)
 
-The **Access Control List (ACL)** defines roles like `StakingPoolManager`, and `StrategyManager`, each with specific permissions to manage different parts of the protocol. The **DefaultAdmin** role holds the authority to assign and revoke these roles, ensuring controlled access to critical functions. Additionally, the **DefaultAdmin** role is also responsible for managing **proxy upgrades**, allowing it to add, replace and delete specific contracts functionality.
+The **Access Control List (ACL)** defines roles like `StakingManager`, and `VaultManager`, each with specific permissions to manage different parts of the protocol. The **DefaultAdmin** role holds the authority to assign and revoke these roles, ensuring controlled access to critical functions. Additionally, the **DefaultAdmin** role is also responsible for managing **proxy upgrades**, allowing it to add, replace and delete specific contracts functionality.
 
 ### Hyperlane Integration
 
-Hyperlane plays a crucial role in facilitating cross-chain communication and managing `LP tokens` within Hyperstaking. The integration is based on a `two-tier` system that supports both traditional and liquid staking operations:
+**Hyperlane** plays a crucial role in facilitating cross-chain communication and managing `RWA Assets` within **HyperStaking**. The integration is based on a **two-tier** system that supports both traditional and liquid staking operations, as well as **direct staking**, which most closely resembles a bridge operation:
 
-- **Tier 1**: The primary tier, typically deployed on a chain like Ethereum. It maintains the base infrastructure for traditional staking. Users stake assets, and their staking information is stored in the contracts storage, along with the share in associated strategies. While no liquid LP tokens are issued in this tier, a small revenue fee is collected to benefit Tier 2 users, incentivizing cross-chain functionality.
+- **directStaking**: Direct staking allows users to stake assets directly on the Lumia Chain without needing to pass through the revenue strategy. This enables faster processing and more flexible staking options, while still maintaining cross-chain compatibility through Hyperlane's messaging infrastructure.
 
-- **Tier 2**: Deployed on the Lumia Chain, this tier manages liquid staking. When users stake assets, an interchain message is sent to mint a liquid LP token on the Lumia Chain, representing the revenue-generating assets linked to the strategy. These tokens are fully transferable, tradeable, and can be redeemed back to the originating chain. This architecture enables the Lumia Chain to collect revenue from assets on other chains. Simultaneously, it maintains liquid LP tokens that represent these assets locally. The Tier 2 system ensures efficient interchain messaging, leveraging Hyperlane's robust bridging capabilities.
+- **Tier 1**: The primary tier, typically deployed on a chain like Ethereum, maintains the base infrastructure for traditional staking. Users stake assets, and their staking information is stored in contract storage along with their share in associated strategies. While no liquid tokens are issued in this tier, a small revenue fee is collected to benefit Tier 2 operations, incentivizing cross-chain functionality.
+
+- **Tier 2**: Deployed on the Lumia Chain, this tier manages liquid staking. When users stake assets, an interchain message is sent to mint a liquid RWA Asset on the Lumia Chain, representing the revenue-generating assets linked to the strategy. These tokens are fully transferable, tradeable, and can be redeemed back to the originating chain. This architecture enables the Lumia Chain to collect revenue from assets on origin chains. The Tier 2 system ensures efficient interchain messaging, leveraging Hyperlane's robust bridging capabilities.
 
 Through this setup, users benefit from multi-chain revenue streams without the complexity of interacting with multiple protocols and bridges directly.
 
-<div style="page-break-after: always;"></div>
+## 1. Handling Multiple Deposit Currencies
 
-## 1. Staking Pools
+The Lumia protocol supports staking with both native assets (e.g., ETH) and ERC-20 tokens. In some cases, even NFTs are indirectly supported through certain strategies (e.g., **Superform**). This allows for flexible staking operations across different asset types.
 
-The Lumia protocol features multiple staking pools, allowing tokens like ETH to be staked across different pools. Each pool operates independently, even for the same asset.
+- **Native and ERC-20 Tokens:** The protocol distinguishes between native chain coins (such as ETH) and ERC-20 tokens using the `Currency` struct:
 
-- **Staking Pools**: Both native assets (e.g., ETH) and tokens can be staked in multiple pools, each operating independently and linked to different strategies. This setup allows for greater flexibility in managing staking operations across a variety of assets.
-
-- **Pool Identification**: Each staking pool is assigned a unique `poolId`, generated using the following Solidity function:
-
-<div class="avoid-break">
 ```solidity
-function generatePoolId(address stakeToken, uint96 idx) public pure returns (uint256) {
-  return uint256(keccak256(
-      abi.encodePacked(
-          stakeToken,
-          idx
-      )
-  ));
+/**
+ * The Currency struct represents a token
+ * If `token` is address(0), it represents native coins (e.g. ETH)
+ * @param token Address of the token, address(0) means native chain coin (e.g. ETH)
+ */
+struct Currency {
+    address token;
 }
 ```
-</div>
 
-  The `poolId` is based on the token's address and an index (`idx`), which represents the pool number for that asset. This ensures unique identification for each pool and provides an efficient way to manage contract storage. The `generatePoolId` function is publicly available for external systems to calculate the `poolId` as needed.
+- **Strategy Flexibility:** Each strategy can support different types of assets, including both native and tokenized assets. Strategies like **Superform** can even support NFTs indirectly by wrapping them in a compatible format.
 
-- **Strategy Assignment:** Each staking pool is assigned a strategy at creation. Only one instance of a strategy is connected to a pool, and the system validates that a strategy is not already assigned to another pool, preventing contract storage collisions
-
-- **Staking Operations:** Since multiple pools can exist for the same token, users are required to choose which pool and strategy to use when staking. Users interact with the staking pools through the `stakeDeposit` and `stakeWithdraw` functions.
-
-- **Adding New Pools:** New staking pools are added using the `AddStakingPool` function, which is restricted to the `StakingPoolManager` ACL role, ensuring that only authorized entities can create and configure new pools.
+- **Unified Management:** Despite supporting various asset types, the system maintains a unified interface for deposits, ensuring consistent behavior across different strategies and asset classes.
 
 ## 2. Revenue Strategies
 
@@ -120,3 +113,17 @@ When users unstake, the Dinero Protocol is used to redeem pxETH from apxETH (an 
 
 In the future, the fee could be reduced by implementing a delayed unstake option, creating an unstake buffer for ongoing operations, similar to the model used in the Dinero Protocol.
 
+<div style="page-break-after: always;"></div>
+
+## 3. Migrations
+
+The Lumia protocol supports seamless strategy migrations to enable upgrades and rebalancing without disrupting staking operations. Underlaying assets can be migrated between strategies while preserving user positions and ensuring that the staked currency remains consistent.
+
+### **Migration Process**
+- **Direct and Yield Strategy Migration:** The protocol supports migrating both direct-staking and yield-bearing strategies. Direct strategy migration transfers assets without minting new RWA tokens, while yield strategy migration withdraws assets from the source strategy and deposits them into the target strategy.
+
+- **Currency Consistency:** Both the source and target strategies must use the same stake currency. If the currencies do not match, the migration is rejected.
+
+- **Cross-Chain Synchronization:** Migration data is forwarded across chains, ensuring that cross-chain state remains consistent and that assets are correctly accounted for.
+
+- **Governance and Access Control:** Migrations are restricted to the **Migration Manager** role, which can be transferred to a DAO through governance. This ensures that migrations remain secure and transparent under decentralized control.
