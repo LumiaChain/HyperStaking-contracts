@@ -13,7 +13,7 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
   // --- accounts
 
   const owner = m.getAccount(0);
-  const lumiaFactoryManager = m.getAccount(4);
+  const lumiaFactoryManager = m.getAccount(5);
 
   // --- facets
 

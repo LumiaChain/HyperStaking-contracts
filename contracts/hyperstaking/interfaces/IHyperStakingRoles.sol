@@ -15,6 +15,7 @@ interface IHyperStakingRoles {
     error OnlyStakingManager();
     error OnlyVaultManager();
     error OnlyStrategyManager();
+    error OnlyMigrationManager();
 
     //============================================================================================//
     //                                           View                                             //
@@ -26,4 +27,5 @@ interface IHyperStakingRoles {
     function STAKING_MANAGER_ROLE() external view returns (bytes32);
     function VAULT_MANAGER_ROLE() external view returns (bytes32);
     function STRATEGY_MANAGER_ROLE() external view returns (bytes32);
+    function MIGRATION_MANAGER_ROLE() external view returns (bytes32);
 }

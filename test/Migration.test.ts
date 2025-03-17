@@ -106,7 +106,7 @@ describe("Migration", function () {
   it("strict checks should be performed before running the migration", async function () {
     const { hyperStaking, testUSDC, directUSDStrategy, reserveUSDStrategy, reserveUSD2Strategy, ethStrategy, usdEthStrategy, signers } = await loadFixture(deployHyperStaking);
     const { deposit, migration, hyperlaneHandler } = hyperStaking;
-    const { vaultManager, alice, bob } = signers;
+    const { migrationManager, alice, bob } = signers;
 
     const migrationAmount = parseEther("1000");
 
@@ -114,46 +114,46 @@ describe("Migration", function () {
     await expect(migration.migrateStrategy(directUSDStrategy, reserveUSDStrategy, migrationAmount))
       .to.be.reverted;
 
-    await expect(migration.connect(vaultManager).migrateStrategy(directUSDStrategy, reserveUSDStrategy, 0))
+    await expect(migration.connect(migrationManager).migrateStrategy(directUSDStrategy, reserveUSDStrategy, 0))
       .to.be.revertedWithCustomError(migration, "ZeroAmount");
 
-    await expect(migration.connect(vaultManager).migrateStrategy(directUSDStrategy, directUSDStrategy, migrationAmount))
+    await expect(migration.connect(migrationManager).migrateStrategy(directUSDStrategy, directUSDStrategy, migrationAmount))
       .to.be.revertedWithCustomError(migration, "SameStrategy");
 
-    await expect(migration.connect(vaultManager).migrateStrategy(alice, directUSDStrategy, migrationAmount))
+    await expect(migration.connect(migrationManager).migrateStrategy(alice, directUSDStrategy, migrationAmount))
       .to.be.revertedWithCustomError(migration, "InvalidStrategy")
       .withArgs(alice);
 
-    await expect(migration.connect(vaultManager).migrateStrategy(directUSDStrategy, bob, migrationAmount))
+    await expect(migration.connect(migrationManager).migrateStrategy(directUSDStrategy, bob, migrationAmount))
       .to.be.revertedWithCustomError(migration, "InvalidStrategy")
       .withArgs(bob);
 
-    await expect(migration.connect(vaultManager).migrateStrategy(directUSDStrategy, ethStrategy, migrationAmount))
+    await expect(migration.connect(migrationManager).migrateStrategy(directUSDStrategy, ethStrategy, migrationAmount))
       .to.be.revertedWithCustomError(migration, "InvalidCurrency");
 
-    await expect(migration.connect(vaultManager).migrateStrategy(reserveUSDStrategy, directUSDStrategy, migrationAmount))
+    await expect(migration.connect(migrationManager).migrateStrategy(reserveUSDStrategy, directUSDStrategy, migrationAmount))
       .to.be.revertedWithCustomError(migration, "DirectStrategy");
 
     // --- insufficient amount
 
-    await expect(migration.connect(vaultManager).migrateStrategy(directUSDStrategy, reserveUSDStrategy, migrationAmount))
+    await expect(migration.connect(migrationManager).migrateStrategy(directUSDStrategy, reserveUSDStrategy, migrationAmount))
       .to.be.revertedWithCustomError(migration, "InsufficientAmount");
 
-    await expect(migration.connect(vaultManager).migrateStrategy(reserveUSDStrategy, reserveUSD2Strategy, migrationAmount))
+    await expect(migration.connect(migrationManager).migrateStrategy(reserveUSDStrategy, reserveUSD2Strategy, migrationAmount))
       .to.be.revertedWithCustomError(migration, "InsufficientAmount");
 
     // --- incompatible migration (different rwa token on the lumia side)
 
     await testUSDC.approve(deposit, migrationAmount);
     await deposit.directStakeDeposit(directUSDStrategy, migrationAmount, alice);
-    await expect(migration.connect(vaultManager).migrateStrategy(directUSDStrategy, usdEthStrategy, migrationAmount))
+    await expect(migration.connect(migrationManager).migrateStrategy(directUSDStrategy, usdEthStrategy, migrationAmount))
       .to.be.revertedWithCustomError(hyperlaneHandler, "IncompatibleMigration");
   });
 
   it("migration from direct staking to yield generationg strategy", async function () {
     const { hyperStaking, testUSDC, directUSDStrategy, reserveUSDStrategy, signers } = await loadFixture(deployHyperStaking);
     const { deposit, migration, realAssets, hyperlaneHandler, rwaUSD } = hyperStaking;
-    const { vaultManager, alice } = signers;
+    const { migrationManager, alice } = signers;
 
     const stakeAmount = parseEther("20");
 
@@ -161,9 +161,9 @@ describe("Migration", function () {
     await deposit.directStakeDeposit(directUSDStrategy, stakeAmount, alice);
 
     const migrationAmount = parseEther("10");
-    await expect(migration.connect(vaultManager).migrateStrategy(directUSDStrategy, reserveUSDStrategy, migrationAmount))
+    await expect(migration.connect(migrationManager).migrateStrategy(directUSDStrategy, reserveUSDStrategy, migrationAmount))
       .to.emit(migration, "StrategyMigrated")
-      .withArgs(vaultManager, directUSDStrategy, reserveUSDStrategy, migrationAmount);
+      .withArgs(migrationManager, directUSDStrategy, reserveUSDStrategy, migrationAmount);
 
     expect(await rwaUSD.balanceOf(alice)).to.equal(stakeAmount);
     expect(await realAssets.getUserBridgedState(directUSDStrategy, alice)).to.equal(stakeAmount);
@@ -191,7 +191,7 @@ describe("Migration", function () {
   it("migration from one yield staking strategy to another one", async function () {
     const { hyperStaking, testUSDC, reserveUSDStrategy, reserveUSD2Strategy, signers } = await loadFixture(deployHyperStaking);
     const { deposit, migration, realAssets, hyperlaneHandler, rwaUSD } = hyperStaking;
-    const { vaultManager, alice } = signers;
+    const { migrationManager, alice } = signers;
 
     const stakeAmount = parseEther("14");
 
@@ -199,9 +199,9 @@ describe("Migration", function () {
     await deposit.stakeDepositTier2(reserveUSDStrategy, stakeAmount, alice);
 
     const migrationAmount = parseEther("10");
-    await expect(migration.connect(vaultManager).migrateStrategy(reserveUSDStrategy, reserveUSD2Strategy, migrationAmount))
+    await expect(migration.connect(migrationManager).migrateStrategy(reserveUSDStrategy, reserveUSD2Strategy, migrationAmount))
       .to.emit(migration, "StrategyMigrated")
-      .withArgs(vaultManager, reserveUSDStrategy, reserveUSD2Strategy, migrationAmount);
+      .withArgs(migrationManager, reserveUSDStrategy, reserveUSD2Strategy, migrationAmount);
 
     expect(await rwaUSD.balanceOf(alice)).to.equal(stakeAmount);
     expect(await realAssets.getUserBridgedState(reserveUSDStrategy, alice)).to.equal(stakeAmount);
@@ -230,7 +230,7 @@ describe("Migration", function () {
   it("migration from one yield staking strategy to another one with increasing vault value", async function () {
     const { hyperStaking, testUSDC, testReserveAsset, reserveUSDStrategy, reserveUSD2Strategy, signers } = await loadFixture(deployHyperStaking);
     const { deposit, tier2, migration, realAssets, hyperlaneHandler, rwaUSD } = hyperStaking;
-    const { vaultManager, alice } = signers;
+    const { migrationManager, alice } = signers;
 
     const stakeAmount = parseEther("18");
 
@@ -243,9 +243,9 @@ describe("Migration", function () {
     await testReserveAsset.mint(vaultToken1.target, parseEther("200"));
 
     const migrationAmount = parseEther("10");
-    await expect(migration.connect(vaultManager).migrateStrategy(reserveUSDStrategy, reserveUSD2Strategy, migrationAmount))
+    await expect(migration.connect(migrationManager).migrateStrategy(reserveUSDStrategy, reserveUSD2Strategy, migrationAmount))
       .to.emit(migration, "StrategyMigrated")
-      .withArgs(vaultManager, reserveUSDStrategy, reserveUSD2Strategy, migrationAmount);
+      .withArgs(migrationManager, reserveUSDStrategy, reserveUSD2Strategy, migrationAmount);
 
     // ---
     const vaultToken2Address = (await tier2.tier2Info(reserveUSD2Strategy)).vaultToken;

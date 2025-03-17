@@ -18,9 +18,9 @@ import { IERC20 } from "../typechain-types";
 // -------------------- Accounts --------------------
 
 export async function getSigners() {
-  const [owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, bob, alice] = await ethers.getSigners();
+  const [owner, stakingManager, vaultManager, strategyManager, migrationManager, lumiaFactoryManager, bob, alice] = await ethers.getSigners();
 
-  return { owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, bob, alice };
+  return { owner, stakingManager, vaultManager, strategyManager, migrationManager, lumiaFactoryManager, bob, alice };
 }
 
 // -------------------- Currency --------------------

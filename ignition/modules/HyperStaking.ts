@@ -20,6 +20,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const stakingManager = m.getAccount(1);
   const vaultManager = m.getAccount(2);
   const strategyManager = m.getAccount(3);
+  const migrationManager = m.getAccount(4);
 
   // --- facets
 
@@ -98,6 +99,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       stakingManager,
       vaultManager,
       strategyManager,
+      migrationManager,
       mailbox,
       destination,
       superformFactory,

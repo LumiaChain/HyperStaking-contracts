@@ -29,7 +29,7 @@ contract MigrationFacet is IMigration, HyperStakingAcl {
         address fromStrategy,
         address toStrategy,
         uint256 amount
-    ) external payable onlyVaultManager {
+    ) external payable onlyMigrationManager {
         HyperStakingStorage storage hs = LibHyperStaking.diamondStorage();
         VaultInfo storage fromVault = hs.vaultInfo[fromStrategy];
         VaultInfo storage toVault = hs.vaultInfo[toStrategy];
