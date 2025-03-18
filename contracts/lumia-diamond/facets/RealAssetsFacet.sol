@@ -31,22 +31,28 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
     // ========= Diamond Internal ========= //
 
     /// @inheritdoc IRealAssets
-    function handleRwaMint(bytes calldata data) external diamondInternal {
+    function handleRwaMint(
+        address originLockbox,
+        bytes calldata data
+    ) external diamondInternal {
         address strategy = data.strategy();
         address sender = data.sender();
         uint256 stakeAmount = data.stakeAmount();
 
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        RouteInfo storage r = ifs.routes[strategy];
-
         LibInterchainFactory.checkRoute(ifs, strategy);
 
-        // store information about bridged stake
-        ifs.userBridgedState[strategy][sender] += stakeAmount;
+        RouteInfo storage r = ifs.routes[strategy];
+        address rwaAsset = address(r.rwaAsset); // shortcut for visibility
+
+
+        // store information about bridged state/stake
+        ifs.userBridgedState[originLockbox][rwaAsset][sender] += stakeAmount;
+        ifs.generalBridgedState[strategy] += stakeAmount;
 
         r.rwaAssetOwner.mint(sender, stakeAmount);
 
-        emit RwaMint(strategy, address(r.rwaAsset), sender, stakeAmount);
+        emit RwaMint(strategy, rwaAsset, sender, stakeAmount);
     }
 
     /// @inheritdoc IRealAssets
@@ -57,13 +63,21 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
         uint256 assetAmount
     ) external payable {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        address rwaAsset = address(ifs.routes[strategy].rwaAsset);
-
         LibInterchainFactory.checkRoute(ifs, strategy);
 
-        // decrease bridged stake
-        require(ifs.userBridgedState[strategy][from] >= assetAmount, InsufficientBridgedState());
-        ifs.userBridgedState[strategy][from] -= assetAmount;
+        RouteInfo storage r = ifs.routes[strategy];
+        address rwaAsset = address(r.rwaAsset); // shortcut for visibility
+
+        // require both user and general state
+        require(
+            ifs.userBridgedState[r.originLockbox][rwaAsset][from] >= assetAmount,
+            InsufficientUserState()
+        );
+        require(ifs.generalBridgedState[strategy] >= assetAmount, InsufficientGeneralState());
+
+        // decrease bridged state/stake
+        ifs.userBridgedState[r.originLockbox][rwaAsset][from] -= assetAmount;
+        ifs.generalBridgedState[strategy] -= assetAmount;
 
         IERC20(rwaAsset).safeTransferFrom(from, address(this), assetAmount);
 
@@ -75,44 +89,6 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
         );
 
         emit RwaRedeem(strategy, rwaAsset, from, to, assetAmount);
-    }
-
-    /// @inheritdoc IRealAssets
-    function handleMigratedRwaRedeem(
-        address fromStrategy,
-        address toStrategy,
-        address from,
-        address to,
-        uint256 assetAmount
-    ) external payable {
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-
-        // rwaAsset is the same in both strategies
-        address rwaAsset = address(ifs.routes[fromStrategy].rwaAsset);
-
-        LibInterchainFactory.checkRoute(ifs, fromStrategy);
-        LibInterchainFactory.checkRoute(ifs, toStrategy);
-
-        // still require user to have a sufficient balance in the 'from' strategy
-        require(ifs.userBridgedState[fromStrategy][from] >= assetAmount, InsufficientBridgedState());
-
-        // and that the migration state should also be sufficient
-        require(ifs.migrationsState[fromStrategy][toStrategy] >= assetAmount, InsufficientMigrationState());
-
-        // decrease both values
-        ifs.userBridgedState[fromStrategy][from] -= assetAmount;
-        ifs.migrationsState[fromStrategy][toStrategy] -= assetAmount;
-
-        IERC20(rwaAsset).safeTransferFrom(from, address(this), assetAmount);
-
-        // dispatching rwaAsset using "toStrategy"
-        IHyperlaneHandler(address(this)).stakeRedeemDispatch{value: msg.value}(
-            toStrategy,
-            to,
-            assetAmount
-        );
-
-        emit MigratedRwaRedeem(fromStrategy, toStrategy, rwaAsset, from, to, assetAmount);
     }
 
     // ========= Restricted ========= //
@@ -139,7 +115,17 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
     }
 
     /// @inheritdoc IRealAssets
-    function getUserBridgedState(address strategy, address user) external view returns (uint256) {
-        return LibInterchainFactory.diamondStorage().userBridgedState[strategy][user];
+    function getUserBridgedState(
+        address originLockbox,
+        address rwaAsset,
+        address user
+    ) external view returns (uint256) {
+        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+        return ifs.userBridgedState[originLockbox][rwaAsset][user];
+    }
+
+    /// @inheritdoc IRealAssets
+    function getGeneralBridgedState(address strategy) external view returns (uint256) {
+        return LibInterchainFactory.diamondStorage().generalBridgedState[strategy];
     }
 }

@@ -25,15 +25,6 @@ interface IRealAssets {
         uint256 assetAmount
     );
 
-    event MigratedRwaRedeem(
-        address indexed fromStrategy,
-        address indexed toStrategy,
-        address indexed rwaAsset,
-        address from,
-        address to,
-        uint256 assetAmount
-    );
-
     event RwaAssetSet(
         address indexed strategy,
         address newRwaAssetOwner,
@@ -44,30 +35,19 @@ interface IRealAssets {
     //                                          Errors                                            //
     //============================================================================================//
 
-    error InsufficientBridgedState();
-    error InsufficientMigrationState();
+    error InsufficientUserState();
+    error InsufficientGeneralState();
 
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
 
     /// @notice Handles the minting of RWA tokens based on the provided data
-    function handleRwaMint(bytes calldata data) external;
+    function handleRwaMint(address originLockbox, bytes calldata data) external;
 
     /// @notice Handles the redemption of bridged RWA tokens for a user
     function handleRwaRedeem(
         address strategy,
-        address from,
-        address to,
-        uint256 assetAmount
-    ) external payable;
-
-    /// @notice Handles the redemption using the migrationsState
-    /// @dev Require that the migration path is determined off-chain
-    ///      and that the user has bridged the value in the 'from' strategy
-    function handleMigratedRwaRedeem(
-        address fromStrategy,
-        address toStrategy,
         address from,
         address to,
         uint256 assetAmount
@@ -84,5 +64,12 @@ interface IRealAssets {
     function getRwaAsset(address strategy) external view returns (address);
 
     /// @notice Returns the amount of assets a user has bridged for a given strategy
-    function getUserBridgedState(address strategy, address user) external view returns (uint256);
+    function getUserBridgedState(
+        address originLockbox,
+        address rwaAsset,
+        address user
+    ) external view returns (uint256);
+
+    /// @notice Returns the total amount of assets bridged for a given strategy
+    function getGeneralBridgedState(address strategy) external view returns (uint256);
 }

@@ -135,11 +135,4 @@ interface IHyperlaneHandler {
 
     /// @notice Returns detailed route information for a given strategy
     function getRouteInfo(address strategy) external view returns (RouteInfo memory);
-
-    /// @notice Returns the current state of migrated amount between two strategies
-    /// @dev may decrease when RWA Asset is redeemed
-    function getMigrationsState(
-        address fromStrategy,
-        address toStrategy
-    ) external view returns (uint256 migrationAmount);
 }

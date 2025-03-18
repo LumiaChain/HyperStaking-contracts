@@ -53,13 +53,17 @@ struct InterchainFactoryStorage {
     /// @notice Mapping of strategy to its detailed route information
     mapping (address strategy => RouteInfo) routes;
 
-    /// @notice Tracks the amount of assets a user has bridged for a given strategy,
-    ///         reflecting both deposits and redemptions
-    mapping (address strategy => mapping(address user => uint256)) userBridgedState;
+    /// @notice Tracks the amount of a specific RWA asset minted for a user,
+    ///         coming from an origin asset locked in a specific chain
+    /// @dev Value is not assigned to a specific strategy due to the possibility of dynamic
+    ///      migration on the origin chain
+    mapping (address originLockbox =>
+             mapping(address rwaAsset =>
+                     mapping(address user => uint256))) userBridgedState;
 
-    /// @notice Tracks the migration status between strategies, maps the source strategy (`from`)
-    ///         to the destination strategy (`to`), and stores the amount being migrated
-    mapping (address from => mapping(address to => uint256 amount)) migrationsState;
+    /// @notice Tracks the total state of value reflecting assets locked under a specific strategy
+    ///         on the origin chain, showing the total collateral possible to bridge out
+    mapping (address strategy => uint256 amount) generalBridgedState;
 }
 
 library LibInterchainFactory {

@@ -68,7 +68,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         }
 
         if (msgType == MessageType.StakeInfo) {
-            IRealAssets(address(this)).handleRwaMint(data);
+            IRealAssets(address(this)).handleRwaMint(originLockbox, data);
             return;
         }
 
@@ -193,15 +193,6 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         return LibInterchainFactory.diamondStorage().routes[strategy];
     }
 
-    /// @inheritdoc IHyperlaneHandler
-    function getMigrationsState(
-        address fromStrategy,
-        address toStrategy
-    ) external view returns (uint256 migrationAmount) {
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        migrationAmount = ifs.migrationsState[fromStrategy][toStrategy];
-    }
-
     //============================================================================================//
     //                                     Internal Functions                                     //
     //============================================================================================//
@@ -254,6 +245,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         uint256 migrationAmount = data.migrationAmount();
 
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+
         // both strategies and their routes should exist
         LibInterchainFactory.checkRoute(ifs, fromStrategy);
         LibInterchainFactory.checkRoute(ifs, toStrategy);
@@ -264,7 +256,8 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         );
 
         // actual storage change
-        ifs.migrationsState[fromStrategy][toStrategy] += migrationAmount;
+        ifs.generalBridgedState[fromStrategy] -= migrationAmount;
+        ifs.generalBridgedState[toStrategy] += migrationAmount;
 
         emit MigrationAdded(
             fromStrategy,

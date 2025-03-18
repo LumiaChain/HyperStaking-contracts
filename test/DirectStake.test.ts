@@ -108,7 +108,7 @@ describe("Direct Stake", function () {
 
   it("direct stake strategy should mint rwaUSD in 1:1 ratio", async function () {
     const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
-    const { deposit, realAssets, rwaUSD } = hyperStaking;
+    const { deposit, lockbox, realAssets, rwaUSD } = hyperStaking;
     const { alice } = signers;
 
     const stakeAmount = parseEther("500");
@@ -119,12 +119,13 @@ describe("Direct Stake", function () {
     expect((await deposit.directStakeInfo(directStakeStrategy)).totalStake).to.equal(stakeAmount);
 
     expect(await rwaUSD.balanceOf(alice)).to.equal(stakeAmount);
-    expect(await realAssets.getUserBridgedState(directStakeStrategy, alice)).to.equal(stakeAmount);
+    expect(await realAssets.getUserBridgedState(lockbox, rwaUSD, alice)).to.equal(stakeAmount);
+    expect(await realAssets.getGeneralBridgedState(directStakeStrategy)).to.equal(stakeAmount);
   });
 
   it("rwaUSD could be redeemend back to origin chain in the same 1:1 ratio", async function () {
     const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
-    const { deposit, realAssets, rwaUSD } = hyperStaking;
+    const { deposit, realAssets, lockbox, rwaUSD } = hyperStaking;
     const { alice, bob } = signers;
 
     const stakeAmount = parseEther("500");
@@ -140,7 +141,8 @@ describe("Direct Stake", function () {
     expect((await deposit.directStakeInfo(directStakeStrategy)).totalStake).to.equal(0);
 
     expect(await rwaUSD.balanceOf(alice)).to.equal(0);
-    expect(await realAssets.getUserBridgedState(directStakeStrategy, alice)).to.equal(0);
+    expect(await realAssets.getUserBridgedState(lockbox, rwaUSD, alice)).to.equal(0);
+    expect(await realAssets.getGeneralBridgedState(directStakeStrategy)).to.equal(0);
   });
 
   it("it should be possible to use rwa asset like erc20, but only the initial staker can bridge out", async function () {
@@ -169,7 +171,7 @@ describe("Direct Stake", function () {
 
     await rwaUSD.approve(realAssets, initBalance);
     await expect(realAssets.handleRwaRedeem(directStakeStrategy, owner, owner, stakeAmount))
-      .to.be.revertedWithCustomError(realAssets, "InsufficientBridgedState");
+      .to.be.revertedWithCustomError(realAssets, "InsufficientUserState");
 
     await rwaUSD.transfer(alice, initBalance);
 

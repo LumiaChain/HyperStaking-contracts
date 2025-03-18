@@ -152,7 +152,7 @@ describe("Migration", function () {
 
   it("migration from direct staking to yield generationg strategy", async function () {
     const { hyperStaking, testUSDC, directUSDStrategy, reserveUSDStrategy, signers } = await loadFixture(deployHyperStaking);
-    const { deposit, migration, realAssets, hyperlaneHandler, rwaUSD } = hyperStaking;
+    const { deposit, lockbox, migration, realAssets, rwaUSD } = hyperStaking;
     const { migrationManager, alice } = signers;
 
     const stakeAmount = parseEther("20");
@@ -166,17 +166,20 @@ describe("Migration", function () {
       .withArgs(migrationManager, directUSDStrategy, reserveUSDStrategy, migrationAmount);
 
     expect(await rwaUSD.balanceOf(alice)).to.equal(stakeAmount);
-    expect(await realAssets.getUserBridgedState(directUSDStrategy, alice)).to.equal(stakeAmount);
-    expect(await hyperlaneHandler.getMigrationsState(directUSDStrategy, reserveUSDStrategy)).to.equal(migrationAmount);
+    expect(await realAssets.getUserBridgedState(lockbox, rwaUSD, alice)).to.equal(stakeAmount);
+
+    // moved value to the new strategy
+    expect(await realAssets.getGeneralBridgedState(directUSDStrategy)).to.equal(stakeAmount - migrationAmount);
+    expect(await realAssets.getGeneralBridgedState(reserveUSDStrategy)).to.equal(migrationAmount);
 
     // ---
 
     await rwaUSD.connect(alice).approve(realAssets, migrationAmount);
-    const redeemTx = realAssets.handleMigratedRwaRedeem(directUSDStrategy, reserveUSDStrategy, alice, alice, migrationAmount);
+    const redeemTx = realAssets.handleRwaRedeem(reserveUSDStrategy, alice, alice, migrationAmount);
 
     await expect(redeemTx)
-      .to.emit(realAssets, "MigratedRwaRedeem")
-      .withArgs(directUSDStrategy, reserveUSDStrategy, rwaUSD, alice, alice, migrationAmount);
+      .to.emit(realAssets, "RwaRedeem")
+      .withArgs(reserveUSDStrategy, rwaUSD, alice, alice, migrationAmount);
 
     await expect(redeemTx)
       .to.changeTokenBalances(rwaUSD, [alice], [-migrationAmount]);
@@ -184,13 +187,13 @@ describe("Migration", function () {
     await expect(redeemTx)
       .to.changeTokenBalances(testUSDC, [alice], [migrationAmount]);
 
-    expect(await hyperlaneHandler.getMigrationsState(directUSDStrategy, reserveUSDStrategy)).to.equal(0);
-    expect(await realAssets.getUserBridgedState(directUSDStrategy, alice)).to.equal(stakeAmount - migrationAmount);
+    expect(await realAssets.getGeneralBridgedState(reserveUSDStrategy)).to.equal(0);
+    expect(await realAssets.getUserBridgedState(lockbox, rwaUSD, alice)).to.equal(stakeAmount - migrationAmount);
   });
 
   it("migration from one yield staking strategy to another one", async function () {
     const { hyperStaking, testUSDC, reserveUSDStrategy, reserveUSD2Strategy, signers } = await loadFixture(deployHyperStaking);
-    const { deposit, migration, realAssets, hyperlaneHandler, rwaUSD } = hyperStaking;
+    const { deposit, migration, lockbox, realAssets, rwaUSD } = hyperStaking;
     const { migrationManager, alice } = signers;
 
     const stakeAmount = parseEther("14");
@@ -203,19 +206,22 @@ describe("Migration", function () {
       .to.emit(migration, "StrategyMigrated")
       .withArgs(migrationManager, reserveUSDStrategy, reserveUSD2Strategy, migrationAmount);
 
+    // moved to the new strategy
+    expect(await realAssets.getGeneralBridgedState(reserveUSDStrategy)).to.equal(stakeAmount - migrationAmount);
+    expect(await realAssets.getGeneralBridgedState(reserveUSD2Strategy)).to.equal(migrationAmount);
+
     expect(await rwaUSD.balanceOf(alice)).to.equal(stakeAmount);
-    expect(await realAssets.getUserBridgedState(reserveUSDStrategy, alice)).to.equal(stakeAmount);
-    expect(await hyperlaneHandler.getMigrationsState(reserveUSDStrategy, reserveUSD2Strategy)).to.equal(migrationAmount);
+    expect(await realAssets.getUserBridgedState(lockbox, rwaUSD, alice)).to.equal(stakeAmount);
 
     // ---
 
     const redeemAmount = parseEther("6");
     await rwaUSD.connect(alice).approve(realAssets, redeemAmount);
-    const redeemTx = realAssets.handleMigratedRwaRedeem(reserveUSDStrategy, reserveUSD2Strategy, alice, alice, redeemAmount);
+    const redeemTx = realAssets.handleRwaRedeem(reserveUSD2Strategy, alice, alice, redeemAmount);
 
     await expect(redeemTx)
-      .to.emit(realAssets, "MigratedRwaRedeem")
-      .withArgs(reserveUSDStrategy, reserveUSD2Strategy, rwaUSD, alice, alice, redeemAmount);
+      .to.emit(realAssets, "RwaRedeem")
+      .withArgs(reserveUSD2Strategy, rwaUSD, alice, alice, redeemAmount);
 
     await expect(redeemTx)
       .to.changeTokenBalances(rwaUSD, [alice], [-redeemAmount]);
@@ -223,13 +229,13 @@ describe("Migration", function () {
     await expect(redeemTx)
       .to.changeTokenBalances(testUSDC, [alice], [redeemAmount]);
 
-    expect(await hyperlaneHandler.getMigrationsState(reserveUSDStrategy, reserveUSD2Strategy)).to.equal(migrationAmount - redeemAmount);
-    expect(await realAssets.getUserBridgedState(reserveUSDStrategy, alice)).to.equal(stakeAmount - redeemAmount);
+    expect(await realAssets.getGeneralBridgedState(reserveUSD2Strategy)).to.equal(migrationAmount - redeemAmount);
+    expect(await realAssets.getUserBridgedState(lockbox, rwaUSD, alice)).to.equal(stakeAmount - redeemAmount);
   });
 
   it("migration from one yield staking strategy to another one with increasing vault value", async function () {
     const { hyperStaking, testUSDC, testReserveAsset, reserveUSDStrategy, reserveUSD2Strategy, signers } = await loadFixture(deployHyperStaking);
-    const { deposit, tier2, migration, realAssets, hyperlaneHandler, rwaUSD } = hyperStaking;
+    const { deposit, tier2, lockbox, migration, realAssets, rwaUSD } = hyperStaking;
     const { migrationManager, alice } = signers;
 
     const stakeAmount = parseEther("18");
@@ -254,11 +260,11 @@ describe("Migration", function () {
 
     const redeemAmount = parseEther("6");
     await rwaUSD.connect(alice).approve(realAssets, redeemAmount);
-    const redeemTx = realAssets.handleMigratedRwaRedeem(reserveUSDStrategy, reserveUSD2Strategy, alice, alice, redeemAmount);
+    const redeemTx = realAssets.handleRwaRedeem(reserveUSD2Strategy, alice, alice, redeemAmount);
 
     await expect(redeemTx)
-      .to.emit(realAssets, "MigratedRwaRedeem")
-      .withArgs(reserveUSDStrategy, reserveUSD2Strategy, rwaUSD, alice, alice, redeemAmount);
+      .to.emit(realAssets, "RwaRedeem")
+      .withArgs(reserveUSD2Strategy, rwaUSD, alice, alice, redeemAmount);
 
     await expect(redeemTx)
       .to.changeTokenBalances(rwaUSD, [alice], [-redeemAmount]);
@@ -266,7 +272,8 @@ describe("Migration", function () {
     await expect(redeemTx)
       .to.changeTokenBalances(testUSDC, [alice], [redeemAmount]);
 
-    expect(await hyperlaneHandler.getMigrationsState(reserveUSDStrategy, reserveUSD2Strategy)).to.equal(migrationAmount - redeemAmount);
-    expect(await realAssets.getUserBridgedState(reserveUSDStrategy, alice)).to.equal(stakeAmount - redeemAmount);
+    expect(await realAssets.getUserBridgedState(lockbox, rwaUSD, alice)).to.equal(stakeAmount - redeemAmount);
+
+    expect(await realAssets.getGeneralBridgedState(reserveUSD2Strategy)).to.equal(migrationAmount - redeemAmount);
   });
 });
