@@ -1,5 +1,6 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { ethers, ignition, network } from "hardhat";
 import { Signer, Contract, parseEther, parseUnits, ZeroAddress } from "ethers";
 
@@ -412,7 +413,7 @@ describe("Superform", function () {
     it("revenue from superform strategy", async function () {
       const { hyperStaking, superformStrategy, testUSDC, erc4626Vault, signers } = await loadFixture(deployHyperStaking);
       const { deposit, tier2, rwaUSD, realAssets } = hyperStaking;
-      const { alice } = signers;
+      const { vaultManager, alice } = signers;
 
       const amount = parseUnits("100", 6);
 
@@ -438,6 +439,15 @@ describe("Superform", function () {
       // so the revenue is the same as the amount
       const expectedRevenue = amount;
       expect(await tier2.checkTier2Revenue(superformStrategy)).to.be.eq(expectedRevenue);
+
+      const revenueTx = tier2.connect(vaultManager).collectTier2Revenue(superformStrategy, vaultManager, expectedRevenue);
+
+      // events
+      await expect(revenueTx).to.emit(tier2, "Tier2Leave").withArgs(superformStrategy, vaultManager, expectedRevenue, anyValue);
+      await expect(revenueTx).to.emit(tier2, "Tier2RevenueCollected").withArgs(superformStrategy, vaultManager, expectedRevenue);
+
+      // balance
+      await expect(revenueTx).to.changeTokenBalances(testUSDC, [vaultManager, erc4626Vault], [expectedRevenue, -expectedRevenue]);
 
       expect(await rwaUSD.balanceOf(alice)).to.be.eq(0);
     });

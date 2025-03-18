@@ -117,12 +117,13 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         onlyVaultManager
     {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        VaultInfo storage vault = v.vaultInfo[strategy];
+        Tier2Info storage tier2 = v.tier2Info[strategy];
 
         uint256 revenue = checkTier2Revenue(strategy);
         require(amount <= revenue, InsufficientRevenue());
 
-        vault.stakeCurrency.transfer(to, amount);
+        uint256 allocation = IStrategy(strategy).previewAllocation(amount);
+        tier2.vaultToken.withdraw(allocation, to, address(this));
 
         emit Tier2RevenueCollected(strategy, to, amount);
     }
