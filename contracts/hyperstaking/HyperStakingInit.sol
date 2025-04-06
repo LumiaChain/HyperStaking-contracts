@@ -32,8 +32,7 @@ contract HyperStakingInit is AccessControlEnumerableUpgradeable, ReentrancyGuard
 
     /**
      * @notice Setup OpenZeppelin upgradeable libraries
-     * @dev Grants `DEFAULT_ADMIN_ROLE` to the deployer and registers
-     *      the `IAccessControlEnumerable` interface.
+     * @dev Grants roles, registers openzeppelin upgradeable contracts, sets hyperlane mailbox
      */
     function init(
         address initStakingManager,
@@ -64,7 +63,6 @@ contract HyperStakingInit is AccessControlEnumerableUpgradeable, ReentrancyGuard
         ds.supportedInterfaces[type(IAccessControlEnumerable).interfaceId] = true;
 
         // initialize Lockbox
-
         require(lockboxMailbox != address(0), ZeroAddress());
         LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
 

@@ -71,5 +71,7 @@ interface IRealAssets {
     ) external view returns (uint256);
 
     /// @notice Returns the total amount of assets bridged for a given strategy
-    function getGeneralBridgedState(address strategy) external view returns (uint256);
+    function getGeneralBridgedState(
+        address strategy
+    ) external view returns (uint256);
 }
