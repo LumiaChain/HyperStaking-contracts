@@ -14,6 +14,7 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
 
   const owner = m.getAccount(0);
   const lumiaFactoryManager = m.getAccount(5);
+  const lumiaRewardManager = m.getAccount(6);
 
   // --- facets
 
@@ -22,6 +23,9 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
 
   const realAssetFacet = m.contract("RealAssetsFacet");
   const realAssetInterface = getContractInterface("IRealAssets");
+
+  const masterChefFacet = m.contract("MasterChefFacet");
+  const masterChefInterface = getContractInterface("IMasterChef");
 
   const aclInterface = getContractInterface("LumiaDiamondAcl");
   const aclInterfaceSelectors = getSelectors(aclInterface).remove(["supportsInterface(bytes4)"]);
@@ -39,6 +43,11 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
       facetAddress: realAssetFacet,
       action: FacetCutAction.Add,
       functionSelectors: getSelectors(realAssetInterface),
+    },
+    {
+      facetAddress: masterChefFacet,
+      action: FacetCutAction.Add,
+      functionSelectors: getSelectors(masterChefInterface),
     },
   ];
 
@@ -61,6 +70,7 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
 
   const acl = m.contractAt("LumiaDiamondAcl", diamond);
   const LUMIA_FACTORY_MANAGER_ROLE = m.staticCall(acl, "LUMIA_FACTORY_MANAGER_ROLE", [], 0);
+  const LUMIA_REWARD_MANAGER_ROLE = m.staticCall(acl, "LUMIA_REWARD_MANAGER_ROLE", [], 0);
 
   m.call(
     acl,
@@ -69,14 +79,22 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
     { id: "grantRoleFactoryManager", after: [diamondCutFuture] },
   );
 
+  m.call(
+    acl,
+    "grantRole",
+    [LUMIA_REWARD_MANAGER_ROLE, lumiaRewardManager],
+    { id: "grantRoleRewardManager", after: [diamondCutFuture] },
+  );
+
   // --- init facets
 
   const hyperlaneHandler = m.contractAt("IHyperlaneHandler", diamond);
   const realAssets = m.contractAt("IRealAssets", diamond);
+  const masterChef = m.contractAt("IMasterChef", diamond);
 
   // --- return
 
-  return { lumiaDiamond: diamond, hyperlaneHandler, realAssets };
+  return { lumiaDiamond: diamond, hyperlaneHandler, realAssets, masterChef };
 });
 
 export default LumiaDiamondModule;

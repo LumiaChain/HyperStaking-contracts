@@ -11,12 +11,10 @@ import {ITokensRewarder} from "../interfaces/ITokensRewarder.sol";
 
 /**
  * @notice Info of each MasterChef user
- * stakeAmount last updated user stake amount
  * rewardPerTokenPaid The amount of reward tokens not available to claim
  * rewardUnclaimed The amount of reward unclaimed tokens, waiting to be claimed by user
  */
 struct UserRewardInfo {
-    uint256 stakeAmount; // TODO update this
     uint256 rewardPerTokenPaid;
     uint256 rewardUnclaimed;
 }

@@ -64,7 +64,7 @@ contract TokensRewarder is ITokensRewarder, LumiaDiamondAcl, ReentrancyGuardUpgr
 
     /// @notice Use LumiaDiamondAcl Helper to check to Lumia Reward Manager
     modifier onlyLumiaManager() {
-        require( // TODO test
+        require(
             LumiaDiamondAcl(DIAMOND).hasLumiaRewardManagerRole(msg.sender),
             NotLumiaRewardManager()
         );
@@ -98,6 +98,8 @@ contract TokensRewarder is ITokensRewarder, LumiaDiamondAcl, ReentrancyGuardUpgr
 
         DIAMOND = diamond_;
         stakeToken = stakeToken_;
+
+        emit TokensRewarderSetup(diamond_, stakeToken_);
     }
 
     //============================================================================================//
@@ -125,18 +127,7 @@ contract TokensRewarder is ITokensRewarder, LumiaDiamondAcl, ReentrancyGuardUpgr
 
     /// @inheritdoc ITokensRewarder
     function updateActivePools(address user) public nonReentrant {
-        uint256[] memory idxList = activeRewardList;
-
-        // loops are limited with REWARDS_PER_STAKING_LIMIT
-        for (uint256 i = 0; i < idxList.length; i++) {
-            _updatePool(idxList[i]);
-        }
-
-        if (user != address(0)) {
-            for (uint256 i = 0; i < idxList.length; i++) {
-                _updateUser(idxList[i], user);
-            }
-        }
+        _updateActivePools(user);
     }
 
     /// @inheritdoc ITokensRewarder
@@ -207,7 +198,7 @@ contract TokensRewarder is ITokensRewarder, LumiaDiamondAcl, ReentrancyGuardUpgr
         uint256 amount = balance(idx);
         if(amount > 0) {
             reward.rewardToken.safeTransfer(receiver, amount);
-            emit WithdrawRemaining(msg.sender, stakeToken, idx, receiver, amount);
+            emit WithdrawRemaining(msg.sender, address(reward.rewardToken), idx, receiver, amount);
         }
     }
 
@@ -285,8 +276,11 @@ contract TokensRewarder is ITokensRewarder, LumiaDiamondAcl, ReentrancyGuardUpgr
         RewardDistribution storage reward = _getRewardDistribution(idx);
         UserRewardInfo storage userInfo = reward.users[user];
 
+        // Use MasterChef (Lumia Diamond facet) to get current stake vaule
+        uint256 userStakeAmount = IMasterChef(DIAMOND).getUserStake(stakeToken, user);
+
         return
-            userInfo.stakeAmount
+            userStakeAmount
             * (_rewardPerToken(idx) - userInfo.rewardPerTokenPaid)
             / REWARD_PRECISION
             + userInfo.rewardUnclaimed;
@@ -326,7 +320,23 @@ contract TokensRewarder is ITokensRewarder, LumiaDiamondAcl, ReentrancyGuardUpgr
         if(pending > 0) {
             userInfo.rewardUnclaimed = 0;
             reward.rewardToken.safeTransfer(user, pending);
-            emit RewardClaim(stakeToken, idx, user, pending);
+            emit RewardClaim(address(reward.rewardToken), idx, user, pending);
+        }
+    }
+
+    /// @notice Internal logic for updating user and pool data, called by other functions
+    function _updateActivePools(address user) internal {
+        uint256[] memory idxList = activeRewardList;
+
+        // loops are limited with REWARDS_PER_STAKING_LIMIT
+        for (uint256 i = 0; i < idxList.length; i++) {
+            _updatePool(idxList[i]);
+        }
+
+        if (user != address(0)) {
+            for (uint256 i = 0; i < idxList.length; i++) {
+                _updateUser(idxList[i], user);
+            }
         }
     }
 
@@ -334,9 +344,6 @@ contract TokensRewarder is ITokensRewarder, LumiaDiamondAcl, ReentrancyGuardUpgr
     function _updateUser(uint256 idx, address user) internal {
         RewardDistribution storage reward = _getRewardDistribution(idx);
         UserRewardInfo storage userInfo = reward.users[user];
-
-        // Use MasterChef (Lumia Diamond facet) to get current stake vaule
-        userInfo.stakeAmount = IMasterChef(DIAMOND).getUserStake(stakeToken, user);
 
         userInfo.rewardUnclaimed = pendingReward(idx, user);
         userInfo.rewardPerTokenPaid = reward.pool.rewardPerToken;
@@ -361,7 +368,7 @@ contract TokensRewarder is ITokensRewarder, LumiaDiamondAcl, ReentrancyGuardUpgr
         require(startTimestamp == 0 || startTimestamp >= block.timestamp, StartTimestampPassed());
         require(distributionEnd > startTimestamp, InvalidDistributionRange());
 
-        updateActivePools(address(0));
+        _updateActivePools(address(0));
 
         RewardDistribution storage reward = _getRewardDistribution(idx);
 
@@ -394,7 +401,7 @@ contract TokensRewarder is ITokensRewarder, LumiaDiamondAcl, ReentrancyGuardUpgr
 
         emit RewardNotify(
             msg.sender,
-            stakeToken,
+            address(reward.rewardToken),
             idx,
             rewardAmount,
             leftover,
@@ -423,7 +430,7 @@ contract TokensRewarder is ITokensRewarder, LumiaDiamondAcl, ReentrancyGuardUpgr
         _deactivateReward(idx);
         reward.finalizeTimestamp = finalizeTimestamp;
 
-        emit Finalize(msg.sender, stakeToken, idx, finalizeTimestamp);
+        emit Finalize(msg.sender, address(reward.rewardToken), idx, finalizeTimestamp);
     }
 
     /// @notice Removes a reward distribution from the active list and deactivates it

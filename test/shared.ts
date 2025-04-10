@@ -18,9 +18,11 @@ import { IERC20 } from "../typechain-types";
 // -------------------- Accounts --------------------
 
 export async function getSigners() {
-  const [owner, stakingManager, vaultManager, strategyManager, migrationManager, lumiaFactoryManager, bob, alice] = await ethers.getSigners();
+  const [
+    owner, stakingManager, vaultManager, strategyManager, migrationManager, lumiaFactoryManager, lumiaRewardManager, bob, alice,
+  ] = await ethers.getSigners();
 
-  return { owner, stakingManager, vaultManager, strategyManager, migrationManager, lumiaFactoryManager, bob, alice };
+  return { owner, stakingManager, vaultManager, strategyManager, migrationManager, lumiaFactoryManager, lumiaRewardManager, bob, alice };
 }
 
 // -------------------- Currency --------------------
@@ -86,7 +88,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   const rwaETH = rwa2.rwaAsset;
   const rwaETHOwner = rwa2.rwaAssetOwner;
 
-  const { lumiaDiamond, hyperlaneHandler, realAssets } = await ignition.deploy(LumiaDiamondModule, {
+  const { lumiaDiamond, hyperlaneHandler, realAssets, masterChef } = await ignition.deploy(LumiaDiamondModule, {
     parameters: {
       LumiaDiamondModule: {
         lumiaMailbox: mailboxAddress,
@@ -112,7 +114,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   await rwaETHOwner.addMinter(lumiaDiamond);
 
   return {
-    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, tier1, tier2, lockbox, superVault, migration, superformIntegration, realAssets, rwaUSD, rwaUSDOwner, rwaETH, rwaETHOwner,
+    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, tier1, tier2, lockbox, superVault, migration, superformIntegration, lumiaDiamond, realAssets, masterChef, rwaUSD, rwaUSDOwner, rwaETH, rwaETHOwner,
   };
 }
 
@@ -153,7 +155,7 @@ export async function createReserveStrategy(
     },
   });
 
-  const [owner, , , strategyManager] = await ethers.getSigners();
+  const { owner, strategyManager } = await getSigners();
 
   const reserveStrategySupply = parseEther("50");
 
@@ -217,4 +219,10 @@ export async function getDerivedTokens(tier2: Contract, routeFactory: Contract, 
   const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
 
   return { vaultToken, lpToken };
+}
+
+export async function getCurrentBlockTimestamp() {
+  const blockNumber = await ethers.provider.getBlockNumber();
+  const block = await ethers.provider.getBlock(blockNumber);
+  return block.timestamp;
 }

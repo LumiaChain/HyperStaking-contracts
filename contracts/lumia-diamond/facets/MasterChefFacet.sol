@@ -25,11 +25,28 @@ contract MasterChefFacet is IMasterChef, LumiaDiamondAcl, ReentrancyGuardUpgrade
     using SafeERC20 for IERC20;
 
     //============================================================================================//
+    //                                         Modifiers                                          //
+    //============================================================================================//
+
+    /**
+     * @dev Must be called before updating stake values, as TokensRewarder depends on them
+     * for accurate reward calculations
+     */
+    modifier updateRewards(address token) {
+        RewardsStorage storage r = LibRewards.diamondStorage();
+
+        if (address(r.tokenRewarders[token]) != address(0)) {
+            r.tokenRewarders[token].updateActivePools(msg.sender);
+        }
+        _;
+    }
+
+    //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
 
     /// @inheritdoc IMasterChef
-    function stake(address token, uint256 amount) external nonReentrant {
+    function stake(address token, uint256 amount) external nonReentrant updateRewards(token) {
         RewardsStorage storage r = LibRewards.diamondStorage();
 
         require(address(r.tokenRewarders[token]) != address(0), BadRewarder());
@@ -38,15 +55,13 @@ contract MasterChefFacet is IMasterChef, LumiaDiamondAcl, ReentrancyGuardUpgrade
         r.usersTokenStake[token][msg.sender] += amount;
         r.tokenTotalStake[token] += amount;
 
-        r.tokenRewarders[token].updateActivePools(msg.sender);
-
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
 
         emit Deposit(msg.sender, token, amount);
     }
 
     /// @inheritdoc IMasterChef
-    function withdraw(address token, uint256 amount) external nonReentrant {
+    function withdraw(address token, uint256 amount) external nonReentrant updateRewards(token) {
         RewardsStorage storage r = LibRewards.diamondStorage();
 
         require(amount > 0, ZeroWithdrawAmount());
@@ -54,10 +69,6 @@ contract MasterChefFacet is IMasterChef, LumiaDiamondAcl, ReentrancyGuardUpgrade
 
         r.usersTokenStake[token][msg.sender] -= amount;
         r.tokenTotalStake[token] -= amount;
-
-        if (address(r.tokenRewarders[token]) != address(0)) {
-            r.tokenRewarders[token].updateActivePools(msg.sender);
-        }
 
         IERC20(token).safeTransfer(msg.sender, amount);
 

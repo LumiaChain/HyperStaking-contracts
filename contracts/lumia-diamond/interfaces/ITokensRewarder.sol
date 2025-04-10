@@ -13,9 +13,14 @@ interface ITokensRewarder {
     //                                          Events                                            //
     //============================================================================================//
 
+    event TokensRewarderSetup(
+        address diamond,
+        address stakeToken
+    );
+
     event RewardNotify(
         address indexed sender,
-        address indexed stakeToken,
+        address indexed rewardToken,
         uint256 indexed idx,
         uint256 rewardAmount,
         uint256 leftover,
@@ -24,16 +29,16 @@ interface ITokensRewarder {
         bool newReward
     );
 
-    event RewardClaim(address indexed stakeToken, uint256 idx, address indexed user, uint256 amount);
+    event RewardClaim(address indexed rewardToken, uint256 idx, address indexed user, uint256 amount);
 
     event WithdrawRemaining(
-        address sender,
-        address stakeToken,
+        address indexed sender,
+        address indexed rewardToken,
         uint256 idx,
         address receiver,
         uint256 amount
     );
-    event Finalize(address sender, address stakeToken, uint256 idx, uint64 finalizeTimestamp);
+    event Finalize(address sender, address rewardToken, uint256 idx, uint64 finalizeTimestamp);
 
     //============================================================================================//
     //                                          Errors                                            //
