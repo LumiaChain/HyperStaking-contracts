@@ -29,6 +29,24 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
     using SafeERC20 for IERC20;
     using DataLib for uint256;
 
+    /**
+     * @dev Internal struct combining data needed to generate Superform route request
+     * @param superformId ID of the Superform entity involved in the operation
+     * @param amount Amount involved in the operation
+     * @param outputAmount Expected output from the operation
+     * @param asset Address of the asset used
+     * @param receiver Address receiving the operation result
+     * @param receiverSP Address for SuperPositions, if applicable
+     */
+    struct RequestData {
+        uint256 superformId;
+        uint256 amount;
+        uint256 outputAmount;
+        address asset;
+        address receiver;
+        address receiverSP;
+    }
+
     //============================================================================================//
     //                                         Modifiers                                          //
     //============================================================================================//
@@ -61,26 +79,28 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         require(receiverSP != address(0), ZeroAddress());
         require(assetAmount > 0, ZeroAmount());
 
-        (address superformAddress,,) = superformId.getSuperform();
-        IBaseForm superform = IBaseForm(superformAddress);
+        uint256 superPositionsBefore = s.superPositions.balanceOf(receiverSP, superformId);
+
+        IBaseForm superform = _getSuperform(superformId);
 
         address asset = superform.getVaultAsset();
 
         // use superform function similar to ERC4626, to determine output amount
         uint256 outputAmount = superform.previewDepositTo(assetAmount);
 
-        uint256 superPositionsBefore = s.superPositions.balanceOf(receiverSP, superformId);
-
         IERC20(asset).safeIncreaseAllowance(address(s.superformRouter), assetAmount);
+
+        RequestData memory reqData = RequestData({
+            superformId: superformId,
+            amount: assetAmount,
+            outputAmount: outputAmount,
+            asset: asset,
+            receiver: receiver,
+            receiverSP: receiverSP
+        });
+
         s.superformRouter.singleDirectSingleVaultDeposit(
-            _generateReq(
-                superformId,
-                assetAmount,
-                outputAmount,
-                asset,
-                receiver,
-                receiverSP
-            )
+            _generateReq(reqData)
         );
 
         superPositionReceived =
@@ -112,8 +132,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         require(receiverSP != address(0), ZeroAddress());
         require(superPositionAmount > 0, ZeroAmount());
 
-        (address superformAddress,,) = superformId.getSuperform();
-        IBaseForm superform = IBaseForm(superformAddress);
+        IBaseForm superform = _getSuperform(superformId);
 
         address asset = superform.getVaultAsset();
 
@@ -128,15 +147,18 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
             superformId,
             superPositionAmount
         );
+
+        RequestData memory reqData = RequestData({
+            superformId: superformId,
+            amount: superPositionAmount,
+            outputAmount: outputAmount,
+            asset: asset,
+            receiver: receiver,
+            receiverSP: receiverSP
+        });
+
         s.superformRouter.singleDirectSingleVaultWithdraw(
-            _generateReq(
-                superformId,
-                superPositionAmount,
-                outputAmount,
-                asset,
-                receiver,
-                receiverSP
-            )
+            _generateReq(reqData)
         );
 
         assetReceived = IERC20(asset).balanceOf(receiverSP) - assetBefore;
@@ -234,9 +256,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         uint256 superformId,
         uint256 assetAmount
     ) external view returns (uint256) {
-        (address superformAddress,,) = superformId.getSuperform();
-        IBaseForm superform = IBaseForm(superformAddress);
-
+        IBaseForm superform = _getSuperform(superformId);
         return superform.previewDepositTo(assetAmount);
     }
 
@@ -245,9 +265,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         uint256 superformId,
         uint256 superPositionAmount
     ) external view returns (uint256) {
-        (address superformAddress,,) = superformId.getSuperform();
-        IBaseForm superform = IBaseForm(superformAddress);
-
+        IBaseForm superform = _getSuperform(superformId);
         return superform.previewRedeemFrom(superPositionAmount);
     }
 
@@ -298,34 +316,22 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
     /**
      * @dev Constructs a request for single vault operations,
      *      a `SingleDirectSingleVaultStateReq` struct
-     *
-     * @param superformId ID of the Superform entity involved in the operation
-     * @param amount Amount involved in the operation
-     * @param outputAmount Expected output from the operation
-     * @param asset Address of the asset used
-     * @param receiver Address receiving the operation result
-     * @param receiverSP Address for SuperPositions, if applicable
-     * @return req Struct with operation details
+     * @param reqData Internal struct used to generate Superform request
      */
     function _generateReq(
-        uint256 superformId,
-        uint256 amount,
-        uint256 outputAmount,
-        address asset,
-        address receiver,
-        address receiverSP
+        RequestData memory reqData
     ) internal view returns (SingleDirectSingleVaultStateReq memory req) {
         SuperformStorage storage s = LibSuperform.diamondStorage();
 
         req = SingleDirectSingleVaultStateReq ({
             superformData: SingleVaultSFData({
-                superformId: superformId,
-                amount: amount,
-                outputAmount: outputAmount,
+                superformId: reqData.superformId,
+                amount: reqData.amount,
+                outputAmount: reqData.outputAmount,
                 maxSlippage: s.maxSlippage,
                 liqRequest: LiqRequest({
                     txData: bytes(""),
-                    token: asset,
+                    token: reqData.asset,
                     interimToken: address(0),
                     bridgeId: 1,
                     liqDstChainId: 0,
@@ -334,10 +340,16 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
                 permit2data: bytes(""),
                 hasDstSwap: false,
                 retain4626: false,
-                receiverAddress: receiver,
-                receiverAddressSP: receiverSP,
+                receiverAddress: reqData.receiver,
+                receiverAddressSP: reqData.receiverSP,
                 extraFormData: bytes("")
             })
         });
+    }
+
+    /// @dev Extracts the IBaseForm instance from a superformId
+    function _getSuperform(uint256 superformId) internal pure returns (IBaseForm) {
+        (address superformAddress,,) = superformId.getSuperform();
+        return IBaseForm(superformAddress);
     }
 }
