@@ -222,8 +222,6 @@ contract SuperVault is BaseStrategy, ISuperVault {
     /// @inheritdoc ISuperVault
     function rebalance(RebalanceArgs calldata rebalanceArgs_) external payable override onlySuperVaultsStrategist {
 
-        /* TEST CONTRACT (downsize)
-
         uint256 lenRebalanceFrom = rebalanceArgs_.superformIdsRebalanceFrom.length;
         uint256 lenAmountsRebalanceFrom = rebalanceArgs_.amountsRebalanceFrom.length;
         uint256 lenFinal = rebalanceArgs_.finalSuperformIds.length;
@@ -288,8 +286,6 @@ contract SuperVault is BaseStrategy, ISuperVault {
         /// @notice no issue about reentrancy as the external contracts are trusted
         /// @notice updateSV emits rebalance event
         _updateSVData(_SUPER_POSITIONS, rebalanceArgs_.finalSuperformIds);
-
-        */
     }
 
     /// @inheritdoc ISuperVault
@@ -880,7 +876,6 @@ contract SuperVault is BaseStrategy, ISuperVault {
         if (totalWeight != TOTAL_WEIGHT) revert INVALID_WEIGHTS();
     }
 
-    /* TEST CONTRACT (downsize)
     /// @notice Updates the SuperVault data after rebalancing
     /// @param superPositions_ Address of the SuperPositions contract
     /// @param finalSuperformIds_ Array of Superform IDs to rebalance to
@@ -971,7 +966,6 @@ contract SuperVault is BaseStrategy, ISuperVault {
 
         emit RebalanceComplete(finalSuperformIds_, newWeights);
     }
-    */
 
     /// @notice Changes the whitelist for a Superform ID
     /// @param superformId_ The Superform ID to change

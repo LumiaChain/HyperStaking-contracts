@@ -56,26 +56,47 @@ const SuperformMockModule = buildModule("SuperformMockModule", (m) => {
     [stateRegistryId], [superRegistry],
   ]);
 
+  // ------- Form Implementations
+
+  const formImplementationId = 1;
   const erc4626Form = m.contract("ERC4626Form", [superRegistry], { after: [setStateRegistryFuture] });
 
-  const formImplementationId = 3;
-  const addFormFuture = m.call(superformFactory, "addFormImplementation", [
+  const addForm4626 = m.call(superformFactory, "addFormImplementation", [
     erc4626Form, formImplementationId, stateRegistryId,
-  ]);
-  const createSuperformFuture = m.call(
+  ], { id: "addForm4626" });
+
+  const formImplementationId5115 = 2;
+
+  const erc5115Form = m.contract("ERC5115Form", [superRegistry], {
+    id: "erc5115Form",
+    after: [setStateRegistryFuture],
+  });
+
+  const addForm5115 = m.call(superformFactory, "addFormImplementation", [
+    erc5115Form,
+    formImplementationId5115,
+    stateRegistryId,
+  ], {
+    id: "addForm5115",
+    after: [erc5115Form],
+  });
+
+  // ------- Create Sub Superform (to put inside SuperVault)
+
+  const createSubSuperformFuture = m.call(
     superformFactory,
     "createSuperform",
-    [formImplementationId, erc4626Vault], { after: [addFormFuture] },
+    [formImplementationId, erc4626Vault], { id: "superform1", after: [addForm4626] },
   );
 
-  const superformId = m.staticCall(superformFactory, "vaultToSuperforms", [erc4626Vault, 0], 0, { after: [createSuperformFuture] });
+  const subSuperformId = m.staticCall(superformFactory, "vaultToSuperforms", [erc4626Vault, 0], 0, { after: [createSubSuperformFuture] });
+
+  // ------- Create SuperVault
 
   const testVaultName = "Test Super Vault " + symbol;
   const depositLimit = parseEther("256");
-  const superformIds = [superformId];
+  const superformIds = [subSuperformId];
   const startingWeights = [10_000];
-
-  // -------
 
   const createSuperVault = m.call(superVaultFactory, "createSuperVault", [
     assetAddress,
@@ -85,14 +106,38 @@ const SuperformMockModule = buildModule("SuperformMockModule", (m) => {
     depositLimit,
     superformIds,
     startingWeights,
-    formImplementationId,
-  ], { from: superManager, after: [createSuperformFuture] });
+    formImplementationId5115,
+  ], {
+    from: superManager,
+    id: "createSuperVault",
+    after: [createSubSuperformFuture, addForm5115],
+  });
 
-  // -------
+  const superVaultAddress = m.readEventArgument(
+    createSuperVault,
+    "SuperVaultCreated",
+    "superVault",
+    {
+      emitter: superVaultFactory,
+    });
 
-  const index = 0;
-  const testSuperVaultAddress = m.staticCall(superVaultFactory, "superVaults", [index], 0, { after: [createSuperVault] });
-  const superVault = m.contractAt("SuperVault", testSuperVaultAddress);
+  // take over the management over supervault
+  const tokenizedStrategy = m.contractAt("ITokenizedStrategy", superVaultAddress);
+  m.call(tokenizedStrategy, "acceptManagement", [], {
+    from: superManager, id: "acceptManagement", after: [createSuperVault],
+  });
+
+  const superVault = m.contractAt("SuperVault", superVaultAddress);
+
+  // ------- Create Main Superform (representing SuperVault)
+
+  m.call(
+    superformFactory,
+    "createSuperform",
+    [formImplementationId, superVault], { id: "superformMain", after: [createSuperVault] },
+  );
+
+  // ---
 
   return { superformFactory, superformRouter, superVault, superPositions };
 });

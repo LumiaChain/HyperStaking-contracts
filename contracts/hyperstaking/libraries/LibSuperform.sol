@@ -18,7 +18,7 @@ error ZeroAddress();
 
 struct SuperformStorage {
     EnumerableSet.AddressSet superformStrategies;
-    uint256 maxSlippage; // 10000 = 100%
+    uint256 maxSlippage; // where 10000 = 100%
 
     ISuperformFactory superformFactory;
     IBaseRouterImplementation superformRouter;
@@ -51,7 +51,7 @@ library LibSuperform {
         s.superformFactory = ISuperformFactory(superformFactory);
         s.superformRouter = IBaseRouterImplementation(superformRouter);
         s.superPositions = ISuperPositions(superPositions);
-        s.maxSlippage = 50; // 0.5%
+        s.maxSlippage = 50; // default value: 0.5%
 
         // add IERC1155Receiver to supportedInterfaces
         LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();

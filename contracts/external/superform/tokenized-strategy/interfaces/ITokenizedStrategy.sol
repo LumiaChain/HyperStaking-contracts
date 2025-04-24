@@ -101,6 +101,13 @@ interface ITokenizedStrategy is IERC4626, IERC20Permit {
     function report() external returns (uint256 _profit, uint256 _loss);
 
     /*//////////////////////////////////////////////////////////////
+                        TEST MOCK FUNCTION
+                DO NOT USE THIS STRATEGY OUTSIDE TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    function simulateYieldGeneration(address singleVault, uint256 yieldAmount) external;
+
+    /*//////////////////////////////////////////////////////////////
                         CONSTANTS
     //////////////////////////////////////////////////////////////*/
 

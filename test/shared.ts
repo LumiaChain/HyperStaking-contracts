@@ -1,4 +1,4 @@
-import { ignition, ethers } from "hardhat";
+import { ignition, ethers, network } from "hardhat";
 import { Contract, ZeroAddress, parseEther } from "ethers";
 
 import HyperStakingModule from "../ignition/modules/HyperStaking";
@@ -14,6 +14,9 @@ import DirectStakeStrategyModule from "../ignition/modules/DirectStakeStrategy";
 
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IHyperFactory";
 import { IERC20 } from "../typechain-types";
+
+// full - because there are two differnet vesions of IERC20 used in the project
+const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";
 
 // -------------------- Accounts --------------------
 
@@ -40,6 +43,32 @@ export function erc20Currency(token: string): CurrencyStruct {
 
 // -------------------- Deployment Helpers --------------------
 
+export async function deploySuperformMock(erc4626Vault: Contract) {
+  const testUSDC = await ethers.getContractAt(fullyQualifiedIERC20, await erc4626Vault.asset());
+
+  // --- set TokenizedStrategy code on a given address ---
+
+  const factory = await ethers.getContractFactory("TokenizedStrategy");
+  const instance = await factory.deploy(testUSDC);
+
+  const deployedBytecode = await ethers.provider.getCode(await instance.getAddress());
+
+  await network.provider.send("hardhat_setCode", [
+    "0xBB51273D6c746910C7C06fe718f30c936170feD0",
+    deployedBytecode,
+  ]);
+
+  // -------------------- Superform Mock --------------------
+
+  return ignition.deploy(SuperformMockModule, {
+    parameters: {
+      SuperformMockModule: {
+        erc4626VaultAddress: await erc4626Vault.getAddress(),
+      },
+    },
+  });
+}
+
 export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: Contract) {
   const testDestination = 31337; // the same for both sides of the test "oneChain" bridge
 
@@ -53,13 +82,9 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   });
   const mailboxAddress = await mailbox.getAddress();
 
-  const { superformFactory, superformRouter, superVault, superPositions } = await ignition.deploy(SuperformMockModule, {
-    parameters: {
-      SuperformMockModule: {
-        erc4626VaultAddress: await erc4626Vault.getAddress(),
-      },
-    },
-  });
+  const {
+    superformFactory, superformRouter, superVault, superPositions,
+  } = await deploySuperformMock(erc4626Vault);
 
   const { diamond, deposit, hyperFactory, tier1, tier2, lockbox, migration, superformIntegration } = await ignition.deploy(HyperStakingModule, {
     parameters: {
@@ -114,7 +139,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   await rwaETHOwner.addMinter(lumiaDiamond);
 
   return {
-    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, tier1, tier2, lockbox, superVault, migration, superformIntegration, lumiaDiamond, realAssets, masterChef, rwaUSD, rwaUSDOwner, rwaETH, rwaETHOwner,
+    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, tier1, tier2, lockbox, superformFactory, superVault, migration, superformIntegration, lumiaDiamond, realAssets, masterChef, rwaUSD, rwaUSDOwner, rwaETH, rwaETHOwner,
   };
 }
 
@@ -159,8 +184,6 @@ export async function createReserveStrategy(
 
   const reserveStrategySupply = parseEther("50");
 
-  // full - because there are two differnet vesions of IERC20 used in the project
-  const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";
   const asset = (await ethers.getContractAt(fullyQualifiedIERC20, assetAddress)) as unknown as IERC20;
 
   await asset.transfer(strategyManager, reserveStrategySupply); // owner -> strategyManager

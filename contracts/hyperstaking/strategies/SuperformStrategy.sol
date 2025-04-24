@@ -6,7 +6,9 @@ import {AbstractStrategy} from "./AbstractStrategy.sol";
 
 import {ISuperformIntegration} from "../interfaces/ISuperformIntegration.sol";
 import {ISuperPositions} from "../../external/superform/core/interfaces/ISuperPositions.sol";
+import {SuperformFactory} from "../../external/superform/core/SuperformFactory.sol";
 
+import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC165, IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 
@@ -18,6 +20,9 @@ import {Currency} from "../libraries/CurrencyHandler.sol";
  */
 contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     using SafeERC20 for IERC20;
+
+    /// Address of the designated SuperVault
+    address public immutable SUPER_VAULT;
 
     /// Specific superform used by this strategy
     uint256 public immutable SUPERFORM_ID;
@@ -32,18 +37,48 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     ISuperPositions public superPositions;
 
     //============================================================================================//
+    //                                          Errors                                            //
+    //============================================================================================//
+
+    error InvalidSuperformCount();
+    error InvalidSuperformId();
+    error InvalidStakeToken(address expected, address provided);
+
+    //============================================================================================//
     //                                        Constructor                                         //
     //============================================================================================//
+
     constructor(
         address diamond_,
-        uint256 superformId_,
+        address superVault_,
         address stakeToken_
     ) AbstractStrategy(diamond_) {
-        SUPERFORM_ID = superformId_;
-        STAKE_TOKEN = IERC20(stakeToken_);
-
         superformIntegration = ISuperformIntegration(diamond_);
+        SUPER_VAULT = superVault_;
+
+        SuperformFactory factory = SuperformFactory(
+            address(superformIntegration.superformFactory())
+        );
+
+        try factory.vaultToSuperforms(superVault_, 1) returns (uint256) {
+            // Only a single Superform ID should exist; multiple forms are not supported
+            revert InvalidSuperformCount();
+        } catch {
+            /// Superform ID used with this SuperVault, used for routing operations
+            SUPERFORM_ID = factory.vaultToSuperforms(superVault_, 0);
+        }
+
+        require(factory.isSuperform(SUPERFORM_ID), InvalidSuperformId());
+
         superPositions = superformIntegration.superPositions();
+
+        /// Ensure stake token matches the underlying asset of the Superform
+        require(
+            IERC4626(superVault_).asset() == stakeToken_,
+            InvalidStakeToken(IERC4626(superVault_).asset(), stakeToken_)
+        );
+
+        STAKE_TOKEN = IERC20(stakeToken_);
     }
 
     //============================================================================================//

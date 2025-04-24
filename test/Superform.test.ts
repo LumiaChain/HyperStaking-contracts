@@ -4,7 +4,6 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { ethers, ignition, network } from "hardhat";
 import { Signer, Contract, parseEther, parseUnits, ZeroAddress } from "ethers";
 
-import SuperformMockModule from "../ignition/modules/test/SuperformMock";
 import SuperformStrategyModule from "../ignition/modules/SuperformStrategy";
 
 import * as shared from "./shared";
@@ -14,20 +13,21 @@ import { IERC20 } from "../typechain-types/@openzeppelin/contracts/token/ERC20";
 
 async function getMockedSuperform() {
   const [superManager, alice] = await ethers.getSigners();
+
   const testUSDC = await shared.deloyTestERC20("Test USD Coin", "tUSDC", 6);
   const erc4626Vault = await shared.deloyTestERC4626Vault(testUSDC);
-
   await testUSDC.mint(alice.address, parseUnits("1000000", 6));
 
-  const { superformFactory, superformRouter, superVault, superPositions } = await ignition.deploy(SuperformMockModule, {
-    parameters: {
-      SuperformMockModule: {
-        erc4626VaultAddress: await erc4626Vault.getAddress(),
-      },
-    },
-  });
+  // --------------------
 
-  const superformId = await superVault.superformIds(0);
+  const {
+    superformFactory, superformRouter, superVault, superPositions,
+  } = await shared.deploySuperformMock(erc4626Vault);
+
+  // --------------------
+
+  const superformId = await superformFactory.vaultToSuperforms(superVault, 0);
+  const subSuperformId = await superVault.superformIds(0);
 
   const [superformAddress,,] = await superformFactory.getSuperform(superformId);
   const superform = await ethers.getContractAt("BaseForm", superformAddress);
@@ -35,7 +35,7 @@ async function getMockedSuperform() {
   // --------------------
 
   return {
-    superformFactory, superformRouter, superVault, superPositions, superformId, superform, superManager, testUSDC, erc4626Vault, alice,
+    superformFactory, superformRouter, superVault, superPositions, superformId, subSuperformId, superform, superManager, testUSDC, erc4626Vault, alice,
   };
 }
 
@@ -105,23 +105,25 @@ async function deployHyperStaking() {
   // -------------------- Apply Strategies --------------------
 
   const defaultRevenueFee = parseEther("0"); // 0% fee
-  const superformId = await hyperStaking.superVault.superformIds(0);
 
   const { superformStrategy } = await ignition.deploy(SuperformStrategyModule, {
     parameters: {
       SuperformStrategyModule: {
         diamond: await hyperStaking.diamond.getAddress(),
+        superVault: await hyperStaking.superVault.getAddress(),
         stakeToken: await testUSDC.getAddress(),
-        superformId,
       },
     },
   });
+
+  const superformId = await hyperStaking.superformFactory.vaultToSuperforms(hyperStaking.superVault, 0);
 
   // -------
 
   const superformFactory = await ethers.getContractAt("SuperformFactory", await hyperStaking.superformIntegration.superformFactory());
   const superformRouter = await ethers.getContractAt("SuperformRouter", await hyperStaking.superformIntegration.superformRouter());
   const superPositions = await ethers.getContractAt("SuperPositions", await hyperStaking.superformIntegration.superPositions());
+  const superVault = hyperStaking.superVault;
 
   const [superformAddress,,] = await superformFactory.getSuperform(superformId);
   const superform = await ethers.getContractAt("BaseForm", superformAddress);
@@ -157,7 +159,7 @@ async function deployHyperStaking() {
   return {
     hyperStaking, // HyperStaking deployment
     vault, testUSDC, superformStrategy, erc4626Vault, aerc20, // test contracts
-    superform, superformFactory, superPositions, superformRouter, superformId, // superform
+    superform, superVault, superformFactory, superPositions, superformRouter, superformId, // superform
     defaultRevenueFee, vaultTokenName, vaultTokenSymbol, // values
     signers, // signers
   };
@@ -218,7 +220,7 @@ describe("Superform", function () {
 
       const [superformAddress, formId, chainId] = await superformFactory.getSuperform(superformId);
 
-      expect(formId).to.equal(3);
+      expect(formId).to.equal(1);
       expect(chainId).to.equal(network.config.chainId);
 
       const superform = await ethers.getContractAt("ERC4626Form", superformAddress);
@@ -411,9 +413,12 @@ describe("Superform", function () {
     });
 
     it("revenue from superform strategy", async function () {
-      const { hyperStaking, superformStrategy, testUSDC, erc4626Vault, signers } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, superVault, superformStrategy, superform, erc4626Vault, testUSDC, signers } = await loadFixture(deployHyperStaking);
       const { deposit, tier2, rwaUSD, realAssets } = hyperStaking;
       const { vaultManager, alice } = signers;
+
+      // needed for simulate yield generation
+      const tokenizedStrategy = await ethers.getContractAt("ITokenizedStrategy", superVault.target);
 
       const amount = parseUnits("100", 6);
 
@@ -425,8 +430,9 @@ describe("Superform", function () {
       expect(rwaBalance).to.be.eq(amount);
 
       // change the ratio of the vault, increase the revenue
-      const currentVaultAssets = await erc4626Vault.totalAssets();
-      await testUSDC.transfer(erc4626Vault, currentVaultAssets); // double the assets
+      const currentVaultAssets = await superform.getTotalAssets();
+      await testUSDC.approve(tokenizedStrategy, currentVaultAssets); // double the assets
+      await tokenizedStrategy.simulateYieldGeneration(erc4626Vault, currentVaultAssets);
 
       const precisionError = 1n;
 
@@ -453,9 +459,12 @@ describe("Superform", function () {
     });
 
     it("revenue should also depend on bridge safety margin", async function () {
-      const { hyperStaking, superformStrategy, testUSDC, erc4626Vault, signers } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, superformStrategy, superVault, testUSDC, erc4626Vault, signers } = await loadFixture(deployHyperStaking);
       const { deposit, tier2, rwaUSD, realAssets } = hyperStaking;
       const { alice, vaultManager } = signers;
+
+      // needed for simulate yield generation
+      const tokenizedStrategy = await ethers.getContractAt("ITokenizedStrategy", superVault.target);
 
       const amount = parseUnits("50", 6);
 
@@ -464,7 +473,8 @@ describe("Superform", function () {
 
       // increase the revenue
       const additionlAssets = parseUnits("100", 6);
-      await testUSDC.transfer(erc4626Vault, additionlAssets);
+      await testUSDC.approve(superVault, additionlAssets);
+      await tokenizedStrategy.simulateYieldGeneration(erc4626Vault, additionlAssets);
 
       // withdraw half of the assets
       await rwaUSD.connect(alice).approve(realAssets, amount / 2n);
