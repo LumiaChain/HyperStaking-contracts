@@ -1,58 +1,51 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
+import {StakeInfoData} from "../libraries/HyperlaneMailboxMessages.sol";
+
 /**
- * @title IRealAssets
- * @dev Interface for RealAssetsFacet
+ * @title IStakeInfoRoute
+ * @dev Interface for StakeInfoRoute
  */
-interface IRealAssets {
+interface IStakeInfoRoute {
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
 
-    event RwaMint(
+    event StakeInfoDispatched(
+        address indexed mailbox,
+        address lumiaFactory,
         address indexed strategy,
-        address sender,
-        uint256 stakeAmount
-        // TODO sharesAmount?
-    );
-
-    event RwaRedeem(
-        address indexed strategy,
-        address from,
-        address to,
-        uint256 assetAmount
-        // TODO shares?
+        address indexed user,
+        uint256 stakeAmount,
+        uint256 sharesAmount
     );
 
     //===========================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
 
-    error InsufficientUserState();
-    error InsufficientGeneralState();
+    error RecipientUnset();
 
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
 
-    /// @notice Handles the minting of RWA tokens based on the provided data
-    function handleRwaMint(address originLockbox, bytes calldata data) external;
-
-    /// @notice Handles the redemption of bridged RWA tokens for a user
-    function handleRwaRedeem(
-        address strategy,
-        address from,
-        address to,
-        uint256 assetAmount
-    ) external payable;
+    /**
+     * @notice Dispatches a cross-chain message informing about stake
+     * @dev This function sends a message to trigger e.g. representing vault asset mint
+     */
+    function stakeInfoDispatch(StakeInfoData memory data) external payable;
 
     //============================================================================================//
     //                                           View                                             //
     //============================================================================================//
 
-    /// @notice Returns the total amount of assets bridged for a given strategy
-    function getGeneralBridgedState(
-        address strategy
-    ) external view returns (uint256);
+    /// @notice Helper
+    function quoteDispatchStakeInfo(StakeInfoData memory data) external view returns (uint256);
+
+    /// @notice Helper
+    function generateStakeInfoBody(
+        StakeInfoData memory data
+    ) external pure returns (bytes memory body);
 }

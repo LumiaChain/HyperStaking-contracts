@@ -4,11 +4,10 @@ pragma solidity =0.8.27;
 import {IHyperlaneHandler} from "../interfaces/IHyperlaneHandler.sol";
 import {IRealAssets} from "../interfaces/IRealAssets.sol";
 import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
+import {LumiaAssetToken} from "../LumiaAssetToken.sol";
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
-import {IMintableToken} from "../../external/3adao-lumia/interfaces/IMintableToken.sol";
-import {IMintableTokenOwner} from "../../external/3adao-lumia/interfaces/IMintableTokenOwner.sol";
 
 import {
     LibInterchainFactory, InterchainFactoryStorage, RouteInfo, LastMessage, EnumerableSet
@@ -72,6 +71,12 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
             return;
         }
 
+        // TODO
+        // if (msgType == MessageType.RewardInfo) {
+        //     IRealAssets(address(this)).handleRewardDistribution(originLockbox, data);
+        //     return;
+        // }
+
         if (msgType == MessageType.MigrationInfo) {
             _handleNewMigration(data);
             return;
@@ -91,8 +96,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
 
         LibInterchainFactory.checkRoute(ifs, strategy);
 
-        // burn rwaAsset
-        r.rwaAsset.burn(assetAmount);
+        // TODO handle redeem through ERC4626 vault
 
         bytes memory body = generateStakeRedeemBody(strategy, to, assetAmount);
 
@@ -207,33 +211,38 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         bytes calldata data
     ) internal {
         address strategy = data.strategy(); // origin strategy address
-        IMintableToken rwaAsset = IMintableToken(data.rwaAsset()); // rwaAsset
+
+        string memory name = data.name();
+        string memory symbol = data.symbol();
+        uint8 decimals = data.decimals();
 
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
         RouteInfo storage r = ifs.routes[strategy];
         require(r.exists == false, RouteAlreadyExist());
 
-        LibInterchainFactory.checkRwaAsset(address(rwaAsset));
+        LumiaAssetToken assetToken = new LumiaAssetToken(address(this), name, symbol, decimals);
 
-        IMintableTokenOwner rwaAssetOwner = IMintableTokenOwner(rwaAsset.owner());
+        // TODO vault
+
 
         ifs.routes[strategy] = RouteInfo({
             exists: true,
             originDestination: originDestination,
             originLockbox: originLockbox,
-            rwaAssetOwner: rwaAssetOwner,
-            rwaAsset: rwaAsset
+            assetToken: assetToken
+            // sharesVault: 
         });
 
         emit RouteRegistered(
             originLockbox,
             originDestination,
             strategy,
-            address(rwaAssetOwner),
-            address(rwaAsset)
+            address(assetToken)
+            // sharesVault 
         );
     }
 
+    // TODO remove migrations?
     /// @notice Handle migration which happened on the origin chain
     /// @dev Adds opportunity to bridge out to a different strategy
     /// @param data Encoded route-specific data
@@ -250,10 +259,10 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         LibInterchainFactory.checkRoute(ifs, fromStrategy);
         LibInterchainFactory.checkRoute(ifs, toStrategy);
 
-        require(
-            ifs.routes[fromStrategy].rwaAsset == ifs.routes[toStrategy].rwaAsset,
-            IncompatibleMigration()
-        );
+        // require(
+        //     ifs.routes[fromStrategy].rwaAsset == ifs.routes[toStrategy].rwaAsset,
+        //     IncompatibleMigration()
+        // );
 
         // actual storage change
         ifs.generalBridgedState[fromStrategy] -= migrationAmount;

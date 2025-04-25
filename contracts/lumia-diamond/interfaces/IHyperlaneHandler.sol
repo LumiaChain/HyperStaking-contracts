@@ -40,8 +40,8 @@ interface IHyperlaneHandler {
         address indexed originLockbox,
         uint32 indexed originDestination,
         address strategy,
-        address rwaAssetOwner,
-        address indexed rwaAsset
+        address assetToken
+        // address indexed sharesVault
     );
 
     event MigrationAdded(

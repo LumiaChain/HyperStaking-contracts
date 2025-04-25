@@ -12,21 +12,6 @@ interface ILockbox {
     //                                          Events                                            //
     //============================================================================================//
 
-    event RouteRegistryDispatched(
-        address indexed mailbox,
-        address lumiaFactory,
-        address indexed strategy,
-        address rwaAsset
-    );
-
-    event StakeInfoDispatched(
-        address indexed mailbox,
-        address lumiaFactory,
-        address indexed strategy,
-        address indexed user,
-        uint256 stake
-    );
-
     event MigrationInfoDispatched(
         address indexed mailbox,
         address lumiaFactory,
@@ -54,7 +39,7 @@ interface ILockbox {
     error InvalidMailbox(address badMailbox);
     error InvalidLumiaFactory(address badLumiaFactory);
 
-    error RecipientUnset();
+    // error RecipientUnset();
 
     error NotFromMailbox(address from);
     error NotFromLumiaFactory(address sender);
@@ -64,25 +49,6 @@ interface ILockbox {
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
-
-    /**
-     * @notice Dispatches a cross-chain message informing about new strategy to register
-     * @dev This function sends a message to trigger new route registration
-     */
-    function routeRegistryDispatch(
-        address strategy,
-        address rwaAsset
-    ) external payable;
-
-    /**
-     * @notice Dispatches a cross-chain message informing about stake
-     * @dev This function sends a message to trigger lumia rwa asset mint
-     */
-    function stakeInfoDispatch(
-        address strategy,
-        address user,
-        uint256 stake
-    ) external payable;
 
     /**
      * @notice Dispatches a cross-chain message informing about migration
@@ -129,37 +95,11 @@ interface ILockbox {
     function lockboxData() external view returns (LockboxData memory);
 
     /// @notice Helper
-    function quoteDispatchRouteRegistry(
-        address strategy,
-        address rwaAsset
-    ) external view returns (uint256);
-
-    /// @notice Helper
-    function quoteDispatchStakeInfo(
-        address strategy,
-        address sender,
-        uint256 stake
-    ) external view returns (uint256);
-
-    /// @notice Helper
     function quoteDispatchMigrationInfo(
         address fromStrategy,
         address toStrategy,
         uint256 migrationAmount
     ) external view returns (uint256);
-
-    /// @notice Helper: separated function for generating hyperlane message body
-    function generateRouteRegistryBody(
-        address strategy,
-        address rwaAsset
-    ) external pure returns (bytes memory body);
-
-    /// @notice Helper
-    function generateStakeInfoBody(
-        address strategy,
-        address sender,
-        uint256 stake
-    ) external pure returns (bytes memory body);
 
     /// @notice Helper
     function generateMigrationInfoBody(

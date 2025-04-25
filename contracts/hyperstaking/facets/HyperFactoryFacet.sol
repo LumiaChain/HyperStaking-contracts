@@ -4,6 +4,7 @@ pragma solidity =0.8.27;
 import {IHyperFactory} from "../interfaces/IHyperFactory.sol";
 import {ILockbox} from "../interfaces/ILockbox.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
+import {IRouteRegistry} from "../interfaces/IRouteRegistry.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -14,6 +15,8 @@ import {
     ReentrancyGuardUpgradeable
 } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+
+import {RouteRegistryData} from "../libraries/HyperlaneMailboxMessages.sol";
 
 import {Currency} from "../libraries/CurrencyHandler.sol";
 import {
@@ -43,44 +46,50 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         address strategy,
         string memory vaultTokenName,
         string memory vaultTokenSymbol,
-        uint256 tier1RevenueFee,
-        address lumiaRwaAsset
+        uint256 tier1RevenueFee
     ) external payable onlyVaultManager nonReentrant {
         // The ERC20-compliant asset associated with the strategy
         address asset = IStrategy(strategy).revenueAsset();
+        uint8 assetDecimals = IERC20Metadata(asset).decimals();
 
         IERC4626 vaultToken = _deployVaultToken(asset, strategy, vaultTokenName, vaultTokenSymbol);
         _storeVaultTiers(strategy, tier1RevenueFee, vaultToken);
         _storeVaultInfo(strategy, asset);
 
-        // register new route on lumia
-        _dispatchRouteRegistry(strategy, lumiaRwaAsset);
+        // register new route on lumia, deploy token representing it on lumia
+        _dispatchRouteRegistry(strategy, vaultTokenName, vaultTokenSymbol, assetDecimals);
 
         emit VaultCreate(
             msg.sender,
             strategy,
             address(asset),
-            address(vaultToken),
-            lumiaRwaAsset
+            vaultTokenName,
+            vaultTokenSymbol
         );
     }
 
     /// @inheritdoc IHyperFactory
     function addDirectStrategy(
         address strategy,
-        address lumiaRwaAsset
+        string memory vaultTokenName,
+        string memory vaultTokenSymbol
     ) external payable onlyVaultManager nonReentrant {
         require(IStrategy(strategy).isDirectStakeStrategy(), NotDirectStrategy(strategy));
 
+        address asset = IStrategy(strategy).revenueAsset();
+        uint8 assetDecimals = IERC20Metadata(asset).decimals();
+
         _storeVaultInfo(strategy, address(0));
 
-        // register new route on lumia
-        _dispatchRouteRegistry(strategy, lumiaRwaAsset);
+        // register new route on lumia, deploy token representing it on lumia
+        _dispatchRouteRegistry(strategy, vaultTokenName, vaultTokenSymbol, assetDecimals);
 
         emit DirectVaultCreate(
             msg.sender,
             strategy,
-            lumiaRwaAsset
+            address(asset),
+            vaultTokenName,
+            vaultTokenSymbol
         );
     }
 
@@ -111,24 +120,28 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
 
     /**
      * @notice Dispatches an interchain message to instruct the registration of new strategy
-     * @dev Uses the Lockbox Facet to send a message containing required details
+     * @dev Uses the RouteRegistry to send a message containing required details
      * @param strategy The address of the strategy which will be registered
-     * @param lumiaRwaAsset The RWA token address representing the bridged asset on the lumia chain
      */
     function _dispatchRouteRegistry(
         address strategy,
-        address lumiaRwaAsset
+        string memory name,
+        string memory symbol,
+        uint8 decimals
     ) internal {
-        // quote message fee for forwarding a RouteRegistry message across chains
-        uint256 fee = ILockbox(address(this)).quoteDispatchRouteRegistry(
-            strategy,
-            lumiaRwaAsset
-        );
+        RouteRegistryData memory data = RouteRegistryData({
+            strategy: strategy,
+            name: name,
+            symbol: symbol,
+            decimals: decimals,
+            metadata: bytes("")
+        });
 
-        ILockbox(address(this)).routeRegistryDispatch{value: fee}(
-            strategy,
-            lumiaRwaAsset
-        );
+        // quote message fee for forwarding a RouteRegistry message across chains
+        uint256 fee = IRouteRegistry(address(this)).quoteDispatchRouteRegistry(data);
+
+        // actual route dispatch
+        IRouteRegistry(address(this)).routeRegistryDispatch{value: fee}(data);
     }
 
     /**

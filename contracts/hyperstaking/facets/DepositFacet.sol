@@ -6,7 +6,10 @@ import {IStrategy} from "../interfaces/IStrategy.sol";
 import {ILockbox} from "../interfaces/ILockbox.sol";
 import {ITier1Vault} from "../interfaces/ITier1Vault.sol";
 import {ITier2Vault} from "../interfaces/ITier2Vault.sol";
+import {IStakeInfoRoute} from "../interfaces/IStakeInfoRoute.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
+
+import {StakeInfoData} from "../libraries/HyperlaneMailboxMessages.sol";
 
 import {
     ReentrancyGuardUpgradeable
@@ -67,19 +70,18 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             stake
         );
 
+        StakeInfoData memory stakeData = StakeInfoData({
+            strategy: strategy,
+            sender: to,
+            stakeAmount: stake,
+            sharesAmount: 0
+        });
+
         // quote bridge message fee
-        uint256 fee = ILockbox(address(this)).quoteDispatchStakeInfo(
-            strategy,
-            to,
-            stake
-        );
+        uint256 fee = IStakeInfoRoute(address(this)).quoteDispatchStakeInfo(stakeData);
 
         // direct forwarding a StakeInfo message across chains
-        ILockbox(address(this)).stakeInfoDispatch{value: fee}(
-            strategy,
-            to,
-            stake
-        );
+        IStakeInfoRoute(address(this)).stakeInfoDispatch{value: fee}(stakeData);
 
         emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Direct);
     }

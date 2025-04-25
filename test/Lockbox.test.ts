@@ -5,6 +5,9 @@ import { parseEther, ZeroAddress } from "ethers";
 
 import * as shared from "./shared";
 
+import { RouteRegistryDataStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IRouteRegistry";
+import { StakeInfoDataStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IStakeInfoRoute";
+
 async function deployHyperStaking() {
   const signers = await shared.getSigners();
 
@@ -220,6 +223,11 @@ describe("Lockbox", function () {
   });
 
   describe("Hyperlane Mailbox Messages", function () {
+    // remove null bytes from (solidity bytes32) the end of a string (right padding)
+    const decodeString = (s: string) => {
+      return s.replace(/\0+$/, "");
+    };
+
     async function deployTestWrapper() {
       return await ethers.deployContract("TestHyperlaneMessages", []);
     }
@@ -229,41 +237,38 @@ describe("Lockbox", function () {
 
       // RouteRegister
 
-      const messageRR = {
+      const messageRR: RouteRegistryDataStruct = {
         strategy: ZeroAddress,
-        rwaAsset: "0x0146109EC55EA184e0f8e6Ea06Ef6e5F45E2e804",
-        metadata: "0x434a",
+        name: "Test Token",
+        symbol: "TT",
+        decimals: 2,
+        metadata: "0x1234",
       };
 
-      const bytesRR = await testWrapper.serializeRouteRegistry(
-        messageRR.strategy,
-        messageRR.rwaAsset,
-        messageRR.metadata,
-      );
+      const bytesRR = await testWrapper.serializeRouteRegistry(messageRR);
 
       expect(await testWrapper.messageType(bytesRR)).to.equal(0);
       expect(await testWrapper.strategy(bytesRR)).to.equal(messageRR.strategy);
-      expect(await testWrapper.rwaAsset(bytesRR)).to.equal(messageRR.rwaAsset);
+      expect(decodeString(await testWrapper.name(bytesRR))).to.equal(messageRR.name);
+      expect(decodeString(await testWrapper.symbol(bytesRR))).to.equal(messageRR.symbol);
       expect(await testWrapper.routeRegistryMetadata(bytesRR)).to.equal(messageRR.metadata);
 
       // StakeInfo
 
-      const messageSI = {
+      const messageSI: StakeInfoDataStruct = {
         strategy: "0x7846C5d815300D27c4975C93Fdbe19b9D352F0d3",
         sender: "0xE5326B17594A697B27F9807832A0CF7CB025B4bb",
-        stake: parseEther("4.04"),
+        stakeAmount: parseEther("4.04"),
+        sharesAmount: parseEther("3.56"),
       };
 
-      const bytesSI = await testWrapper.serializeStakeInfo(
-        messageSI.strategy,
-        messageSI.sender,
-        messageSI.stake,
-      );
+      const bytesSI = await testWrapper.serializeStakeInfo(messageSI);
 
       expect(await testWrapper.messageType(bytesSI)).to.equal(1);
       expect(await testWrapper.strategy(bytesSI)).to.equal(messageSI.strategy);
       expect(await testWrapper.sender(bytesSI)).to.equal(messageSI.sender);
-      expect(await testWrapper.stakeAmount(bytesSI)).to.equal(messageSI.stake);
+      expect(await testWrapper.stakeAmount(bytesSI)).to.equal(messageSI.stakeAmount);
+      expect(await testWrapper.sharesAmount(bytesSI)).to.equal(messageSI.sharesAmount);
 
       // MigrationInfo
 

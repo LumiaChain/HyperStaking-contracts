@@ -4,8 +4,11 @@ pragma solidity =0.8.27;
 import {ITier2Vault} from "../interfaces/ITier2Vault.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 import {ILockbox} from "../interfaces/ILockbox.sol";
+import {IStakeInfoRoute} from "../interfaces/IStakeInfoRoute.sol";
 
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
+
+import {StakeInfoData} from "../libraries/HyperlaneMailboxMessages.sol";
 
 import {
     ReentrancyGuardUpgradeable
@@ -84,7 +87,7 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
 
         // mint and shares and bridge stakeInfo
         if (bridge) {
-            _bridgeStakeInfo(strategy, user, stake);
+            _bridgeStakeInfo(strategy, user, stake, shares);
         }
 
         emit Tier2Join(strategy, user, allocation, bridge);
@@ -186,19 +189,20 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     function _bridgeStakeInfo(
         address strategy,
         address user,
-        uint256 stake
+        uint256 stake,
+        uint256 shares
     ) internal {
-        // quote message fee for forwarding a TokenBridge message across chains
-        uint256 fee = ILockbox(address(this)).quoteDispatchStakeInfo(
-            strategy,
-            user,
-            stake
-        );
+        StakeInfoData memory data = StakeInfoData({
+            strategy: strategy,
+            sender: user,
+            stakeAmount: stake,
+            sharesAmount: shares
+        });
 
-        ILockbox(address(this)).stakeInfoDispatch{value: fee}(
-            strategy,
-            user,
-            stake
-        );
+        // quote message fee for forwarding a TokenBridge message across chains
+        uint256 fee = IStakeInfoRoute(address(this)).quoteDispatchStakeInfo(data);
+
+        // actual dispatch
+        IStakeInfoRoute(address(this)).stakeInfoDispatch{value: fee}(data);
     }
 }

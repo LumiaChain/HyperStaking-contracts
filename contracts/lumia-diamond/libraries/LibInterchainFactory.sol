@@ -2,9 +2,8 @@
 pragma solidity =0.8.27;
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
-import {IMintableToken} from "../../external/3adao-lumia/interfaces/IMintableToken.sol";
-import {IMintableTokenOwner} from "../../external/3adao-lumia/interfaces/IMintableTokenOwner.sol";
-import {MintableTokenOwner} from "../../external/3adao-lumia/gobernance/MintableTokenOwner.sol";
+
+import {IERC20, IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
@@ -17,15 +16,15 @@ import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet
  * @param exists Helper boolean for easy determination if the route exists
  * @param originDestination The Chain id of the origin
  * @param originLockbox The address of the origin Lockbox
- * @param rwaAssetOwner The MintableTokenOwner contract, owner contract of rwaAsset
- * @param rwaAsset The MintableToken contract representing the Real-World Asset
+ * @param assetToken The LumiaAssetToken representing stake in a specific strategy
+ * @param sharesVault The ERC4626 vault used to mint user shares and handle reward distribution
  */
 struct RouteInfo {
     bool exists;
     uint32 originDestination;
     address originLockbox;
-    IMintableTokenOwner rwaAssetOwner;
-    IMintableToken rwaAsset;
+    IERC20 assetToken;
+    // IERC4626 sharesVault;
 }
 
 struct LastMessage {
@@ -53,14 +52,6 @@ struct InterchainFactoryStorage {
     /// @notice Mapping of strategy to its detailed route information
     mapping (address strategy => RouteInfo) routes;
 
-    /// @notice Tracks the amount of a specific RWA asset minted for a user,
-    ///         coming from an origin asset locked in a specific chain
-    /// @dev Value is not assigned to a specific strategy due to the possibility of dynamic
-    ///      migration on the origin chain
-    mapping (address originLockbox =>
-             mapping(address rwaAsset =>
-                     mapping(address user => uint256))) userBridgedState;
-
     /// @notice Tracks the total state of value reflecting assets locked under a specific strategy
     ///         on the origin chain, showing the total collateral possible to bridge out
     mapping (address strategy => uint256 amount) generalBridgedState;
@@ -70,10 +61,6 @@ library LibInterchainFactory {
     // -------------------- Errors
 
     error RouteDoesNotExist(address strategy);
-
-    error InvalidRwaAsset(address badRwaAsset);
-    error NotOwnableRwaAsset(address badRwaAsset);
-    error NotMintableRwaAsset(address badRwaAsset);
 
     // -------------------- Constants
 
@@ -92,24 +79,6 @@ library LibInterchainFactory {
         address strategy
     ) internal view {
         require(ifs.routes[strategy].exists, RouteDoesNotExist(strategy));
-    }
-
-    /// @notice Verifies properties of the RWA asset
-    /// @dev reverts if invalid
-    function checkRwaAsset(address rwaAsset) internal view {
-        require(
-            rwaAsset != address(0) && rwaAsset.code.length > 0,
-            InvalidRwaAsset(rwaAsset)
-        );
-
-        // additional check if the token has an owner (MintableTokenOwner)
-        (bool success, ) = rwaAsset.staticcall(abi.encodeWithSignature("owner()"));
-        require(success, NotOwnableRwaAsset(rwaAsset));
-
-
-        // expect this contract to have the right to mint
-        MintableTokenOwner rwaAssetOwner = MintableTokenOwner(IMintableToken(rwaAsset).owner());
-        require(rwaAssetOwner.minters(address(this)), NotMintableRwaAsset(rwaAsset));
     }
 
     // -------------------- Storage Access

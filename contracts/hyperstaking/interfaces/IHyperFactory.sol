@@ -14,15 +14,17 @@ interface IHyperFactory {
     event VaultCreate(
         address indexed from,
         address strategy,
-        address asset,
-        address vaultToken,
-        address indexed lumiaRwaAsset
+        address indexed asset,
+        string vaultTokenName,
+        string vaultTokenSymbol
     );
 
     event DirectVaultCreate(
         address indexed from,
         address strategy,
-        address indexed lumiaRwaAsset
+        address indexed asset,
+        string vaultTokenName,
+        string vaultTokenSymbol
     );
 
     event VaultEnabledSet(address indexed strategy, bool enabled);
@@ -55,14 +57,12 @@ interface IHyperFactory {
      * @param vaultTokenName The name of the vault token to be deployed
      * @param vaultTokenSymbol The symbol of the vault token to be deployed
      * @param tier1RevenueFee The revenue fee for Tier 1 users, specified as an 18-decimal fraction
-     * @param lumiaRwaAsset The RWA token address representing the bridged asset on the lumia chain
      */
     function addStrategy(
         address strategy,
         string memory vaultTokenName,
         string memory vaultTokenSymbol,
-        uint256 tier1RevenueFee,
-        address lumiaRwaAsset
+        uint256 tier1RevenueFee
     ) external payable;
 
     /**
@@ -70,11 +70,13 @@ interface IHyperFactory {
      * @dev Sets up the direct strategy which requires only strategy address
      *      payable for dispatching interchain "RouteRegistry" messages to other chain
      * @param strategy The existing strategy (IStrategy) for which a new vault will be created
-     * @param lumiaRwaAsset The RWA token address representing the bridged asset on the lumia chain
+     * @param vaultTokenName The name of the vault token to be deployed
+     * @param vaultTokenSymbol The symbol of the vault token to be deployed
      */
     function addDirectStrategy(
         address strategy,
-        address lumiaRwaAsset
+        string memory vaultTokenName,
+        string memory vaultTokenSymbol
     ) external payable;
 
     /**

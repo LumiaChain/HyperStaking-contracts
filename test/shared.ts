@@ -86,7 +86,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     superformFactory, superformRouter, superVault, superPositions,
   } = await deploySuperformMock(erc4626Vault);
 
-  const { diamond, deposit, hyperFactory, tier1, tier2, lockbox, migration, superformIntegration } = await ignition.deploy(HyperStakingModule, {
+  const { diamond, deposit, hyperFactory, tier1, tier2, lockbox, routeRegistry, stakeInfoRoute, migration, superformIntegration } = await ignition.deploy(HyperStakingModule, {
     parameters: {
       HyperStakingModule: {
         lockboxMailbox: mailboxAddress,
@@ -139,7 +139,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   await rwaETHOwner.addMinter(lumiaDiamond);
 
   return {
-    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, tier1, tier2, lockbox, superformFactory, superVault, migration, superformIntegration, lumiaDiamond, realAssets, masterChef, rwaUSD, rwaUSDOwner, rwaETH, rwaETHOwner,
+    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, tier1, tier2, lockbox, routeRegistry, stakeInfoRoute, superformFactory, superVault, migration, superformIntegration, lumiaDiamond, realAssets, masterChef, rwaUSD, rwaUSDOwner, rwaETH, rwaETHOwner,
   };
 }
 

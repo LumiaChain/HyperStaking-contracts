@@ -1,58 +1,52 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
+import {RouteRegistryData} from "../libraries/HyperlaneMailboxMessages.sol";
+
 /**
- * @title IRealAssets
- * @dev Interface for RealAssetsFacet
+ * @title IRouteRegistry
+ * @dev Interface for RouteRegistry
  */
-interface IRealAssets {
+interface IRouteRegistry {
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
 
-    event RwaMint(
+    event RouteRegistryDispatched(
+        address indexed mailbox,
+        address lumiaFactory,
         address indexed strategy,
-        address sender,
-        uint256 stakeAmount
-        // TODO sharesAmount?
-    );
-
-    event RwaRedeem(
-        address indexed strategy,
-        address from,
-        address to,
-        uint256 assetAmount
-        // TODO shares?
+        string name,
+        string symbol,
+        uint8 decimals
     );
 
     //===========================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
 
-    error InsufficientUserState();
-    error InsufficientGeneralState();
+    error RecipientUnset();
 
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
 
-    /// @notice Handles the minting of RWA tokens based on the provided data
-    function handleRwaMint(address originLockbox, bytes calldata data) external;
-
-    /// @notice Handles the redemption of bridged RWA tokens for a user
-    function handleRwaRedeem(
-        address strategy,
-        address from,
-        address to,
-        uint256 assetAmount
-    ) external payable;
+    /**
+     * @notice Dispatches a cross-chain message informing about new strategy to register
+     * @dev This function sends a message to trigger new route registration
+     */
+    function routeRegistryDispatch(RouteRegistryData memory data) external payable;
 
     //============================================================================================//
     //                                           View                                             //
     //============================================================================================//
 
-    /// @notice Returns the total amount of assets bridged for a given strategy
-    function getGeneralBridgedState(
-        address strategy
-    ) external view returns (uint256);
+    /// @notice Helper
+    function quoteDispatchRouteRegistry(RouteRegistryData memory data) external view returns (uint256);
+
+    /// @notice Helper: separated function for generating hyperlane message body
+    function generateRouteRegistryBody(
+        RouteRegistryData memory data
+    ) external pure returns (bytes memory body);
+
 }

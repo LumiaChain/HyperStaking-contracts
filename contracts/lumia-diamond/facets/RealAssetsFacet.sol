@@ -43,16 +43,15 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
         LibInterchainFactory.checkRoute(ifs, strategy);
 
         RouteInfo storage r = ifs.routes[strategy];
-        address rwaAsset = address(r.rwaAsset); // shortcut for visibility
-
 
         // store information about bridged state/stake
-        ifs.userBridgedState[originLockbox][rwaAsset][sender] += stakeAmount;
         ifs.generalBridgedState[strategy] += stakeAmount;
+        // TODO add minted shares?
 
-        r.rwaAssetOwner.mint(sender, stakeAmount);
+        // TODO handle vault shares
+        // r.rwaAssetOwner.mint(sender, stakeAmount);
 
-        emit RwaMint(strategy, rwaAsset, sender, stakeAmount);
+        emit RwaMint(strategy, sender, stakeAmount);
     }
 
     /// @inheritdoc IRealAssets
@@ -66,20 +65,20 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
         LibInterchainFactory.checkRoute(ifs, strategy);
 
         RouteInfo storage r = ifs.routes[strategy];
-        address rwaAsset = address(r.rwaAsset); // shortcut for visibility
 
+        // TODO check rather balance of shares
         // require both user and general state
-        require(
-            ifs.userBridgedState[r.originLockbox][rwaAsset][from] >= assetAmount,
-            InsufficientUserState()
-        );
+        // require(
+        //     ifs.userBridgedState[r.originLockbox][rwaAsset][from] >= assetAmount,
+        //     InsufficientUserState()
+        // );
         require(ifs.generalBridgedState[strategy] >= assetAmount, InsufficientGeneralState());
 
         // decrease bridged state/stake
-        ifs.userBridgedState[r.originLockbox][rwaAsset][from] -= assetAmount;
         ifs.generalBridgedState[strategy] -= assetAmount;
 
-        IERC20(rwaAsset).safeTransferFrom(from, address(this), assetAmount);
+        // TODO transfer rather vault shares
+        // IERC20(rwaAsset).safeTransferFrom(from, address(this), assetAmount);
 
         // use hyperlane handler function for dispatching rwaAsset
         IHyperlaneHandler(address(this)).stakeRedeemDispatch{value: msg.value}(
@@ -88,41 +87,10 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
             assetAmount
         );
 
-        emit RwaRedeem(strategy, rwaAsset, from, to, assetAmount);
-    }
-
-    // ========= Restricted ========= //
-
-    /// @inheritdoc IRealAssets
-    function setRwaAsset(address strategy, address rwaAsset) external onlyLumiaFactoryManager {
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        RouteInfo storage r = ifs.routes[strategy];
-
-        LibInterchainFactory.checkRoute(ifs, strategy);
-        LibInterchainFactory.checkRwaAsset(rwaAsset);
-
-        r.rwaAsset = IMintableToken(rwaAsset);
-        r.rwaAssetOwner = IMintableTokenOwner(r.rwaAsset.owner());
-
-        emit RwaAssetSet(strategy, address(r.rwaAssetOwner), rwaAsset);
+        emit RwaRedeem(strategy, from, to, assetAmount);
     }
 
     // ========= View ========= //
-
-    /// @inheritdoc IRealAssets
-    function getRwaAsset(address strategy) external view returns (address) {
-        return address(LibInterchainFactory.diamondStorage().routes[strategy].rwaAsset);
-    }
-
-    /// @inheritdoc IRealAssets
-    function getUserBridgedState(
-        address originLockbox,
-        address rwaAsset,
-        address user
-    ) external view returns (uint256) {
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        return ifs.userBridgedState[originLockbox][rwaAsset][user];
-    }
 
     /// @inheritdoc IRealAssets
     function getGeneralBridgedState(address strategy) external view returns (uint256) {

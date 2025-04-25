@@ -40,63 +40,13 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     //============================================================================================//
 
     /// @inheritdoc ILockbox
-    function routeRegistryDispatch(
-        address strategy,
-        address rwaAsset
-    ) external payable diamondInternal {
-        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
-        require(box.lumiaFactory != address(0), RecipientUnset());
-
-        bytes memory body = generateRouteRegistryBody(strategy, rwaAsset);
-
-        // address left-padded to bytes32 for compatibility with hyperlane
-        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.lumiaFactory);
-
-        // msg.value should already include fee calculated
-        box.mailbox.dispatch{value: msg.value}(box.destination, recipientBytes32, body);
-
-        emit RouteRegistryDispatched(
-            address(box.mailbox),
-            box.lumiaFactory,
-            strategy,
-            rwaAsset
-        );
-    }
-
-    /// @inheritdoc ILockbox
-    function stakeInfoDispatch(
-        address strategy,
-        address user,
-        uint256 stake
-    ) external payable diamondInternal {
-        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
-        require(box.lumiaFactory != address(0), RecipientUnset());
-
-        bytes memory body = generateStakeInfoBody(strategy, user, stake);
-
-        // address left-padded to bytes32 for compatibility with hyperlane
-        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(box.lumiaFactory);
-
-        // msg.value should already include fee calculated
-        box.mailbox.dispatch{value: msg.value}(box.destination, recipientBytes32, body);
-
-        emit StakeInfoDispatched(
-            address(box.mailbox),
-            box.lumiaFactory,
-            strategy,
-            user,
-            stake
-        );
-    }
-
-    /// @inheritdoc ILockbox
     function migrationInfoDispatch(
         address fromStrategy,
         address toStrategy,
         uint256 migrationAmount
     ) external payable diamondInternal {
         LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
-        require(box.lumiaFactory != address(0), RecipientUnset());
+        // require(box.lumiaFactory != address(0), RecipientUnset());
 
         bytes memory body = generateMigrationInfoBody(fromStrategy, toStrategy, migrationAmount);
 
@@ -184,33 +134,6 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     }
 
     /// @inheritdoc ILockbox
-    function quoteDispatchRouteRegistry(
-        address strategy,
-        address rwaAsset
-    ) external view returns (uint256) {
-        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
-        return box.mailbox.quoteDispatch(
-            box.destination,
-            TypeCasts.addressToBytes32(box.lumiaFactory),
-            generateRouteRegistryBody(strategy, rwaAsset)
-        );
-    }
-
-    /// @inheritdoc ILockbox
-    function quoteDispatchStakeInfo(
-        address strategy,
-        address sender,
-        uint256 stake
-    ) external view returns (uint256) {
-        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
-        return box.mailbox.quoteDispatch(
-            box.destination,
-            TypeCasts.addressToBytes32(box.lumiaFactory),
-            generateStakeInfoBody(strategy, sender, stake)
-        );
-    }
-
-    /// @inheritdoc ILockbox
     function quoteDispatchMigrationInfo(
         address fromStrategy,
         address toStrategy,
@@ -221,31 +144,6 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
             box.destination,
             TypeCasts.addressToBytes32(box.lumiaFactory),
             generateMigrationInfoBody(fromStrategy, toStrategy, migrationAmount)
-        );
-    }
-
-    /// @inheritdoc ILockbox
-    function generateRouteRegistryBody(
-        address strategy,
-        address rwaAsset
-    ) public pure returns (bytes memory body) {
-        body = HyperlaneMailboxMessages.serializeRouteRegistry(
-            strategy,
-            rwaAsset,
-            bytes("") // no metadata
-        );
-    }
-
-    /// @inheritdoc ILockbox
-    function generateStakeInfoBody(
-        address strategy,
-        address sender,
-        uint256 stake
-    ) public pure returns (bytes memory body) {
-        body = HyperlaneMailboxMessages.serializeStakeInfo(
-            strategy,
-            sender,
-            stake
         );
     }
 
