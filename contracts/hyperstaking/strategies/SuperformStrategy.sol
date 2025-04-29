@@ -16,7 +16,7 @@ import {Currency} from "../libraries/CurrencyHandler.sol";
 
 /**
  * @title SuperformStrategy
- * @notice This strategy contract uses Superform integration for yield generation.
+ * @notice This strategy contract uses Superform integration for yield generation
  */
 contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     using SafeERC20 for IERC20;

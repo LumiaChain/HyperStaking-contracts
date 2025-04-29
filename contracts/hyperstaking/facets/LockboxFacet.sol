@@ -15,8 +15,8 @@ import {LibHyperStaking, LockboxData} from "../libraries/LibHyperStaking.sol";
 /**
  * @title LockboxFacet
  * @notice A customized version of XERC20Lockbox and Factory for handling interchain communication
- *         via Hyperlane Mailbox. Locks DirectStake or VaultTokens minted in Tier2 and mints tokens
- *         on the Lumia chain. Handles incoming messages to initiate the redeem/unstaking process
+ *         via Hyperlane Mailbox. Locks DirectStake assets or VaultTokens shares
+ *         Handles incoming messages to initiate the redeem/unstaking process
  */
 contract LockboxFacet is ILockbox, HyperStakingAcl {
     using HyperlaneMailboxMessages for bytes;
@@ -120,7 +120,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         if (IStrategy(strategy).isDirectStakeStrategy()) {
             IDeposit(address(this)).directStakeWithdraw(strategy, stake, user);
         } else {
-            IDeposit(address(this)).stakeWithdrawTier2(strategy, stake, user);
+            IDeposit(address(this)).stakeWithdraw(strategy, stake, user);
         }
     }
 }

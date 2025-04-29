@@ -13,7 +13,7 @@ import {PirexIntegration} from "./PirexIntegration.sol";
 
 /**
  * @title DineroStrategy
- * @notice This contract manages liquidity staking the base (ETH) asset in Pirex protocol.
+ * @notice This contract manages liquidity staking the base (ETH) asset in Pirex protocol
  */
 contract DineroStrategy is AbstractStrategy, PirexIntegration {
     using SafeERC20 for IERC20;

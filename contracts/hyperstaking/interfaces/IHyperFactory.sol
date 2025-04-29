@@ -50,19 +50,17 @@ interface IHyperFactory {
 
     /**
      * @notice Adds a new strategy and links it to a specific staking currency and vault
-     * @dev Sets up the strategy with an associated asset and a revenue fee for Tier 1 users
+     * @dev Sets up the strategy with an associated asset,
      *      payable for dispatching interchain "RouteRegistry" messages to other chain
      * @param strategy The address of the strategy being added
      * @param strategy The existing strategy (IStrategy) for which a new vault will be created
      * @param vaultTokenName The name of the vault token to be deployed
      * @param vaultTokenSymbol The symbol of the vault token to be deployed
-     * @param tier1RevenueFee The revenue fee for Tier 1 users, specified as an 18-decimal fraction
      */
     function addStrategy(
         address strategy,
         string memory vaultTokenName,
-        string memory vaultTokenSymbol,
-        uint256 tier1RevenueFee
+        string memory vaultTokenSymbol
     ) external payable;
 
     /**

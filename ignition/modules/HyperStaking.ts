@@ -32,11 +32,8 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const hyperFactoryFacet = m.contract("HyperFactoryFacet");
   const hyperFactoryFacetInterface = getContractInterface("IHyperFactory");
 
-  const tier1Facet = m.contract("Tier1VaultFacet");
-  const tier1FacetInterface = getContractInterface("ITier1Vault");
-
-  const tier2Facet = m.contract("Tier2VaultFacet");
-  const tier2FacetInterface = getContractInterface("ITier2Vault");
+  const stakeVaultFacet = m.contract("StakeVaultFacet");
+  const stakeVaultInterface = getContractInterface("IStakeVault");
 
   const lockboxFacet = m.contract("LockboxFacet");
   const lockboxFacetInterface = getContractInterface("ILockbox");
@@ -67,14 +64,9 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       functionSelectors: getSelectors(hyperFactoryFacetInterface),
     },
     {
-      facetAddress: tier1Facet,
+      facetAddress: stakeVaultFacet,
       action: FacetCutAction.Add,
-      functionSelectors: getSelectors(tier1FacetInterface),
-    },
-    {
-      facetAddress: tier2Facet,
-      action: FacetCutAction.Add,
-      functionSelectors: getSelectors(tier2FacetInterface),
+      functionSelectors: getSelectors(stakeVaultInterface),
     },
     {
       facetAddress: lockboxFacet,
@@ -124,8 +116,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const acl = m.contractAt("HyperStakingAcl", diamond);
   const deposit = m.contractAt("IDeposit", diamond);
   const hyperFactory = m.contractAt("IHyperFactory", diamond);
-  const tier1 = m.contractAt("ITier1Vault", diamond);
-  const tier2 = m.contractAt("ITier2Vault", diamond);
+  const stakeVault = m.contractAt("IStakeVault", diamond);
   const lockbox = m.contractAt("ILockbox", diamond);
   const routeRegistry = m.contractAt("IRouteRegistry", diamond);
   const stakeInfoRoute = m.contractAt("IStakeInfoRoute", diamond);
@@ -134,7 +125,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   // --- return
 
   return {
-    diamond, acl, deposit, hyperFactory, tier1, tier2, lockbox, routeRegistry, stakeInfoRoute, superformIntegration,
+    diamond, acl, deposit, hyperFactory, stakeVault, lockbox, routeRegistry, stakeInfoRoute, superformIntegration,
   };
 });
 

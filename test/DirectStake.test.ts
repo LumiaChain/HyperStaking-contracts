@@ -1,9 +1,7 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
-import { ignition } from "hardhat";
+import { ethers } from "hardhat";
 import { expect } from "chai";
 import { parseEther } from "ethers";
-
-import TestRwaAssetModule from "../ignition/modules/test/TestRwaAsset";
 
 import * as shared from "./shared";
 
@@ -25,17 +23,23 @@ async function deployHyperStaking() {
     hyperStaking.diamond, await testUSDC.getAddress(),
   );
 
+  const vaultTokenName = "Direct USD";
+  const vaultTokenSymbol = "dUSD";
   await hyperStaking.hyperFactory.connect(signers.vaultManager).addDirectStrategy(
     directStakeStrategy,
-    hyperStaking.rwaUSD,
+    vaultTokenName,
+    vaultTokenSymbol,
   );
+
+  const lumiaAssetTokenAddress = (await hyperStaking.hyperlaneHandler.getRouteInfo(directStakeStrategy)).assetToken;
+  const lumiaAssetToken = await ethers.getContractAt("TestERC20", lumiaAssetTokenAddress);
 
   // ----------------------------------------
 
   /* eslint-disable object-property-newline */
   return {
     hyperStaking, // HyperStaking deployment
-    testUSDC, directStakeStrategy, // test contracts
+    testUSDC, directStakeStrategy, lumiaAssetToken, // test contracts
     signers, // signers
   };
   /* eslint-enable object-property-newline */
@@ -43,42 +47,19 @@ async function deployHyperStaking() {
 
 describe("Direct Stake", function () {
   it("adding strategy should save proper data", async function () {
-    const { hyperStaking, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
-    const { lockbox, hyperlaneHandler, realAssets, rwaUSD } = hyperStaking;
-    const { alice, lumiaFactoryManager } = signers;
+    const { hyperStaking, directStakeStrategy, lumiaAssetToken } = await loadFixture(deployHyperStaking);
+    const { lockbox, hyperlaneHandler } = hyperStaking;
 
     // check route info
     expect((await hyperlaneHandler.getRouteInfo(directStakeStrategy)).exists).to.equal(true);
     expect((await hyperlaneHandler.getRouteInfo(directStakeStrategy)).originDestination).to.equal(31337);
     expect((await hyperlaneHandler.getRouteInfo(directStakeStrategy)).originLockbox).to.equal(lockbox);
-    expect((await hyperlaneHandler.getRouteInfo(directStakeStrategy)).rwaAssetOwner).to.equal(await rwaUSD.owner());
-    expect((await hyperlaneHandler.getRouteInfo(directStakeStrategy)).rwaAsset).to.equal(rwaUSD);
-
-    expect(await realAssets.getRwaAsset(directStakeStrategy)).to.equal(rwaUSD);
-
-    // set new asset
-    await expect(realAssets.connect(lumiaFactoryManager).setRwaAsset(directStakeStrategy, alice))
-      // custom error from LibInterchainFactory (unfortunetaly hardhat doesn't support it)
-      .to.be.reverted;
-
-    const { rwaAsset, rwaAssetOwner } = await ignition.deploy(TestRwaAssetModule);
-    await expect(realAssets.connect(lumiaFactoryManager).setRwaAsset(directStakeStrategy, rwaAsset))
-      // minter not set
-      // custom error from LibInterchainFactory (unfortunetaly hardhat doesn't support it)
-      .to.be.reverted;
-
-    // ok
-    await rwaAssetOwner.addMinter(realAssets);
-    await realAssets.connect(lumiaFactoryManager).setRwaAsset(directStakeStrategy, rwaAsset);
-
-    expect(await realAssets.getRwaAsset(directStakeStrategy)).to.equal(rwaAsset);
-    expect((await hyperlaneHandler.getRouteInfo(directStakeStrategy)).rwaAssetOwner).to.equal(rwaAssetOwner);
-    expect((await hyperlaneHandler.getRouteInfo(directStakeStrategy)).rwaAsset).to.equal(rwaAsset);
+    expect((await hyperlaneHandler.getRouteInfo(directStakeStrategy)).assetToken).to.equal(lumiaAssetToken);
   });
 
   it("only direct stake strategy should be allowed for direct staking", async function () {
     const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
-    const { diamond, deposit, hyperFactory, realAssets, rwaUSD } = hyperStaking;
+    const { diamond, deposit, hyperFactory, realAssets } = hyperStaking;
     const { alice, vaultManager } = signers;
 
     // adding new non-direct stake strategy
@@ -91,8 +72,6 @@ describe("Direct Stake", function () {
       reserveStrategy,
       "eth reserve vault1",
       "rUSD",
-      parseEther("0"),
-      rwaUSD,
     );
 
     const stakeAmount = parseEther("1000");
@@ -103,12 +82,12 @@ describe("Direct Stake", function () {
     await testUSDC.approve(deposit, stakeAmount);
     await expect(deposit.directStakeDeposit(directStakeStrategy, stakeAmount, alice))
       .to.emit(realAssets, "RwaMint")
-      .withArgs(directStakeStrategy.target, rwaUSD, alice, stakeAmount);
+      .withArgs(directStakeStrategy.target, alice, stakeAmount);
   });
 
-  it("direct stake strategy should mint rwaUSD in 1:1 ratio", async function () {
-    const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
-    const { deposit, lockbox, realAssets, rwaUSD } = hyperStaking;
+  it("direct stake strategy should mint lumia asset in 1:1 ratio", async function () {
+    const { hyperStaking, testUSDC, directStakeStrategy, lumiaAssetToken, signers } = await loadFixture(deployHyperStaking);
+    const { deposit, realAssets } = hyperStaking;
     const { alice } = signers;
 
     const stakeAmount = parseEther("500");
@@ -118,65 +97,66 @@ describe("Direct Stake", function () {
 
     expect((await deposit.directStakeInfo(directStakeStrategy)).totalStake).to.equal(stakeAmount);
 
-    expect(await rwaUSD.balanceOf(alice)).to.equal(stakeAmount);
-    expect(await realAssets.getUserBridgedState(lockbox, rwaUSD, alice)).to.equal(stakeAmount);
+    expect(await lumiaAssetToken.balanceOf(alice)).to.equal(stakeAmount);
     expect(await realAssets.getGeneralBridgedState(directStakeStrategy)).to.equal(stakeAmount);
   });
 
-  it("rwaUSD could be redeemend back to origin chain in the same 1:1 ratio", async function () {
-    const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
-    const { deposit, realAssets, lockbox, rwaUSD } = hyperStaking;
-    const { alice, bob } = signers;
+  // TODO: lumia shared redeem
+  // it("lumia rwa shares could be redeemend back to origin chain in the same 1:1 ratio", async function () {
+  //   const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
+  //   const { deposit, realAssets, lockbox, rwaUSD } = hyperStaking;
+  //   const { alice, bob } = signers;
+  //
+  //   const stakeAmount = parseEther("500");
+  //
+  //   await testUSDC.approve(deposit, stakeAmount);
+  //   await deposit.directStakeDeposit(directStakeStrategy, stakeAmount, alice);
+  //
+  //   await rwaUSD.connect(alice).approve(realAssets, stakeAmount);
+  //   await expect(realAssets.handleRwaRedeem(directStakeStrategy, alice, bob, stakeAmount))
+  //     .to.emit(realAssets, "RwaRedeem")
+  //     .withArgs(directStakeStrategy.target, rwaUSD, alice, bob, stakeAmount);
+  //
+  //   expect((await deposit.directStakeInfo(directStakeStrategy)).totalStake).to.equal(0);
+  //
+  //   expect(await rwaUSD.balanceOf(alice)).to.equal(0);
+  //   expect(await realAssets.getUserBridgedState(lockbox, rwaUSD, alice)).to.equal(0);
+  //   expect(await realAssets.getGeneralBridgedState(directStakeStrategy)).to.equal(0);
+  // });
 
-    const stakeAmount = parseEther("500");
-
-    await testUSDC.approve(deposit, stakeAmount);
-    await deposit.directStakeDeposit(directStakeStrategy, stakeAmount, alice);
-
-    await rwaUSD.connect(alice).approve(realAssets, stakeAmount);
-    await expect(realAssets.handleRwaRedeem(directStakeStrategy, alice, bob, stakeAmount))
-      .to.emit(realAssets, "RwaRedeem")
-      .withArgs(directStakeStrategy.target, rwaUSD, alice, bob, stakeAmount);
-
-    expect((await deposit.directStakeInfo(directStakeStrategy)).totalStake).to.equal(0);
-
-    expect(await rwaUSD.balanceOf(alice)).to.equal(0);
-    expect(await realAssets.getUserBridgedState(lockbox, rwaUSD, alice)).to.equal(0);
-    expect(await realAssets.getGeneralBridgedState(directStakeStrategy)).to.equal(0);
-  });
-
-  it("it should be possible to use rwa asset like erc20, but only the initial staker can bridge out", async function () {
-    const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
-    const { deposit, realAssets, rwaUSD } = hyperStaking;
-    const { owner, alice, bob } = signers;
-
-    const stakeAmount = parseEther("3");
-
-    await testUSDC.approve(deposit, stakeAmount);
-    await deposit.directStakeDeposit(directStakeStrategy, stakeAmount, alice);
-    const initBalance = await rwaUSD.balanceOf(alice);
-
-    await rwaUSD.connect(alice).approve(bob, initBalance);
-    await rwaUSD.connect(bob).transferFrom(alice, bob, initBalance);
-
-    expect(await rwaUSD.balanceOf(alice)).to.be.eq(0);
-    expect(await rwaUSD.balanceOf(bob)).to.be.eq(initBalance);
-    expect(await rwaUSD.balanceOf(owner)).to.be.eq(0);
-
-    await rwaUSD.connect(bob).transfer(owner, initBalance);
-
-    expect(await rwaUSD.balanceOf(alice)).to.be.eq(0);
-    expect(await rwaUSD.balanceOf(bob)).to.be.eq(0);
-    expect(await rwaUSD.balanceOf(owner)).to.be.eq(initBalance);
-
-    await rwaUSD.approve(realAssets, initBalance);
-    await expect(realAssets.handleRwaRedeem(directStakeStrategy, owner, owner, stakeAmount))
-      .to.be.revertedWithCustomError(realAssets, "InsufficientUserState");
-
-    await rwaUSD.transfer(alice, initBalance);
-
-    // OK
-    await rwaUSD.connect(alice).approve(realAssets, initBalance);
-    await realAssets.handleRwaRedeem(directStakeStrategy, alice, alice, stakeAmount);
-  });
+  // TODO: lumia shared redeem 2
+  // it("rwa shares should behave like ERC-20s and be redeemable by other users", async function () {
+  //   const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
+  //   const { deposit, realAssets, rwaUSD } = hyperStaking;
+  //   const { owner, alice, bob } = signers;
+  //
+  //   const stakeAmount = parseEther("3");
+  //
+  //   await testUSDC.approve(deposit, stakeAmount);
+  //   await deposit.directStakeDeposit(directStakeStrategy, stakeAmount, alice);
+  //   const initBalance = await rwaUSD.balanceOf(alice);
+  //
+  //   await rwaUSD.connect(alice).approve(bob, initBalance);
+  //   await rwaUSD.connect(bob).transferFrom(alice, bob, initBalance);
+  //
+  //   expect(await rwaUSD.balanceOf(alice)).to.be.eq(0);
+  //   expect(await rwaUSD.balanceOf(bob)).to.be.eq(initBalance);
+  //   expect(await rwaUSD.balanceOf(owner)).to.be.eq(0);
+  //
+  //   await rwaUSD.connect(bob).transfer(owner, initBalance);
+  //
+  //   expect(await rwaUSD.balanceOf(alice)).to.be.eq(0);
+  //   expect(await rwaUSD.balanceOf(bob)).to.be.eq(0);
+  //   expect(await rwaUSD.balanceOf(owner)).to.be.eq(initBalance);
+  //
+  //   await rwaUSD.approve(realAssets, initBalance);
+  //   await expect(realAssets.handleRwaRedeem(directStakeStrategy, owner, owner, stakeAmount))
+  //     .to.be.revertedWithCustomError(realAssets, "InsufficientUserState");
+  //
+  //   await rwaUSD.transfer(alice, initBalance);
+  //
+  //   // OK
+  //   await rwaUSD.connect(alice).approve(realAssets, initBalance);
+  //   await realAssets.handleRwaRedeem(directStakeStrategy, alice, alice, stakeAmount);
+  // });
 });

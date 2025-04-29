@@ -76,8 +76,8 @@ library CurrencyHandler {
     }
 
     /**
-     * @dev Transfers tokens or native coins from one address to another.
-     * For ERC20 tokens, it uses `transferFrom`.
+     * @dev Transfers tokens or native coins from one address to another
+     * For ERC20 tokens, it uses `transferFrom`
      * For native chain coins, it checks if `msg.value` is sufficient
      * @param currency The Currency struct (token address or native coin)
      * @param from The address from which the tokens/coins will be transferred

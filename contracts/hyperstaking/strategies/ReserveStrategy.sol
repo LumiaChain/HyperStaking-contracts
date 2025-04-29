@@ -11,7 +11,7 @@ import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 
 /**
  * @title ReserveStrategy
- * @notice This contract generate yield by managing liquidity of a single asset.
+ * @notice This contract generate yield by managing liquidity of a single asset
  *
  * @dev Contract used mainly in tests
  */

@@ -53,8 +53,8 @@ interface IStrategy {
     //============================================================================================//
 
     /**
-     * @notice Indicates whether the strategy is a DirectStakeStrategy.
-     * @return Always returns `false` in non-direct stake strategies.
+     * @notice Indicates whether the strategy is a DirectStakeStrategy
+     * @return Always returns `false` in non-direct stake strategies
      */
     function isDirectStakeStrategy() external view returns (bool);
 

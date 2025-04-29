@@ -2,8 +2,10 @@
 pragma solidity =0.8.27;
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
+import {LumiaAssetToken} from "../LumiaAssetToken.sol";
 
-import {IERC20, IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+/// TODO: IERC4626
+// import {IERC20 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
@@ -23,7 +25,7 @@ struct RouteInfo {
     bool exists;
     uint32 originDestination;
     address originLockbox;
-    IERC20 assetToken;
+    LumiaAssetToken assetToken;
     // IERC4626 sharesVault;
 }
 

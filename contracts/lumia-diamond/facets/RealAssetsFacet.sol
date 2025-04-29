@@ -10,8 +10,6 @@ import {
 
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {IMintableToken} from "../../external/3adao-lumia/interfaces/IMintableToken.sol";
-import {IMintableTokenOwner} from "../../external/3adao-lumia/interfaces/IMintableTokenOwner.sol";
 import {
     HyperlaneMailboxMessages
 } from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
@@ -39,18 +37,22 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
         address sender = data.sender();
         uint256 stakeAmount = data.stakeAmount();
 
+        // TODO remove
+        require(originLockbox != address(0), "unused var");
+
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
         LibInterchainFactory.checkRoute(ifs, strategy);
 
-        // RouteInfo storage r = ifs.routes[strategy];
+        RouteInfo storage r = ifs.routes[strategy];
 
         // store information about bridged state/stake
-        ifs.generalBridgedState[strategy] += stakeAmount;
+        ifs.generalBridgedState[strategy] += stakeAmount; // TODO: is it needed?
         // TODO add minted shares?
 
-        // TODO handle vault shares
-        // r.rwaAssetOwner.mint(sender, stakeAmount);
+        // TODO handle vault shares, insted of simple asset mint
+        r.assetToken.mint(sender, stakeAmount);
 
+        // TODO: do we should have shares mint here?
         emit RwaMint(strategy, sender, stakeAmount);
     }
 

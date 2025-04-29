@@ -22,8 +22,6 @@ async function deployHyperStaking() {
 
   // -------------------- Apply Strategies --------------------
 
-  const defaultRevenueFee = parseEther("0"); // 0% fee
-
   // strategy asset price to eth 2:1
   const reserveAssetPrice = parseEther("2");
 
@@ -35,22 +33,23 @@ async function deployHyperStaking() {
     reserveStrategy,
     "reserve eth vault 1",
     "rETH1",
-    defaultRevenueFee,
-    hyperStaking.rwaETH,
   );
 
   // set fee after strategy is added
   const mailboxFee = parseEther("0.05");
   await hyperStaking.mailbox.connect(signers.owner).setFee(mailboxFee);
 
-  const vaultTokenAddress = (await hyperStaking.tier2.tier2Info(reserveStrategy)).vaultToken;
+  const vaultTokenAddress = (await hyperStaking.stakeVault.stakeInfo(reserveStrategy)).vaultToken;
   const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
+
+  const lumiaAssetTokenAddress = (await hyperStaking.hyperlaneHandler.getRouteInfo(reserveStrategy)).assetToken;
+  const lumiaAssetToken = await ethers.getContractAt("TestERC20", lumiaAssetTokenAddress);
 
   /* eslint-disable object-property-newline */
   return {
     hyperStaking, // HyperStaking deployment
-    testReserveAsset, reserveStrategy, vaultToken, // test contracts
-    defaultRevenueFee, reserveAssetPrice, mailboxFee, // values
+    testReserveAsset, reserveStrategy, vaultToken, lumiaAssetToken, // test contracts
+    reserveAssetPrice, mailboxFee, // values
     signers, // signers
   };
   /* eslint-enable object-property-newline */
@@ -60,7 +59,7 @@ describe("Lockbox", function () {
   describe("Lockbox Facet", function () {
     it("vault token properties should be correct", async function () {
       const { hyperStaking, signers } = await loadFixture(deployHyperStaking);
-      const { diamond, tier2, hyperFactory, mailbox, rwaETH } = hyperStaking;
+      const { diamond, stakeVault, hyperFactory, mailbox } = hyperStaking;
       const { owner, vaultManager } = signers;
 
       const strangeToken = await shared.deloyTestERC20("Test 14 dec Coin", "t14c", 14);
@@ -76,16 +75,21 @@ describe("Lockbox", function () {
         reserveStrategy2,
         vname,
         vsymbol,
-        0n,
-        rwaETH,
       );
 
-      const vault2Address = (await tier2.tier2Info(reserveStrategy2)).vaultToken;
+      const vault2Address = (await stakeVault.stakeInfo(reserveStrategy2)).vaultToken;
       const vault2Token = await ethers.getContractAt("VaultToken", vault2Address);
+
+      const assetToken2Address = (await hyperStaking.hyperlaneHandler.getRouteInfo(reserveStrategy2)).assetToken;
+      const assetToken2 = await ethers.getContractAt("TestERC20", assetToken2Address);
 
       expect(await vault2Token.name()).to.equal(vname);
       expect(await vault2Token.symbol()).to.equal(vsymbol);
       expect(await vault2Token.decimals()).to.equal(14); // 14
+
+      expect(await assetToken2.name()).to.equal(vname);
+      expect(await assetToken2.symbol()).to.equal(vsymbol);
+      expect(await assetToken2.decimals()).to.equal(14); // 14
     });
 
     it("test origin update and acl", async function () {
@@ -112,40 +116,37 @@ describe("Lockbox", function () {
         .withArgs(lumiaFactoryManager, true, 123);
     });
 
-    it("stake deposit to tier2 with non-zero mailbox fee", async function () {
-      const { hyperStaking, reserveStrategy, vaultToken, mailboxFee, signers } = await loadFixture(deployHyperStaking);
-      const { deposit, tier1, rwaETH } = hyperStaking;
-      const { owner, alice } = signers;
-
-      const rwaBefore = await rwaETH.balanceOf(alice);
-
-      const stakeAmount = parseEther("2");
-
-      const tier2 = 2;
-      await expect(deposit.stakeDepositTier2(
-        reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
-      ))
-        .to.emit(deposit, "StakeDeposit")
-        .withArgs(owner, alice, reserveStrategy, stakeAmount, tier2);
-
-      const rwaAfter = await rwaETH.balanceOf(alice);
-      expect(rwaAfter).to.be.gt(rwaBefore);
-      expect(rwaAfter).to.be.eq(stakeAmount);
-
-      // more accurate amount calculation
-      const allocation = await reserveStrategy.previewAllocation(stakeAmount);
-      const vaultShares = await vaultToken.previewDeposit(allocation);
-
-      expect(vaultShares).to.be.eq(await vaultToken.totalSupply());
-
-      // stake values should be 0 in tier1
-      expect((await tier1.userTier1Info(reserveStrategy, alice)).stake).to.equal(0);
-      expect((await tier1.tier1Info(reserveStrategy)).totalStake).to.equal(0);
-    });
+    // TODO: do it with shares
+    // it("stake deposit with non-zero mailbox fee", async function () {
+    //   const { hyperStaking, reserveStrategy, vaultToken, lumiaAssetToken, mailboxFee, signers } = await loadFixture(deployHyperStaking);
+    //   const { deposit } = hyperStaking;
+    //   const { owner, alice } = signers;
+    //
+    //   const rwaBefore = await lumiaAssetToken.balanceOf(alice);
+    //
+    //   const stakeAmount = parseEther("2");
+    //
+    //   const depositType = 1;
+    //   await expect(deposit.stakeDeposit(
+    //     reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
+    //   ))
+    //     .to.emit(deposit, "StakeDeposit")
+    //     .withArgs(owner, alice, reserveStrategy, stakeAmount, depositType);
+    //
+    //   const rwaAfter = await rwaETH.balanceOf(alice);
+    //   expect(rwaAfter).to.be.gt(rwaBefore);
+    //   expect(rwaAfter).to.be.eq(stakeAmount);
+    //
+    //   // more accurate amount calculation
+    //   const allocation = await reserveStrategy.previewAllocation(stakeAmount);
+    //   const vaultShares = await vaultToken.previewDeposit(allocation);
+    //
+    //   expect(vaultShares).to.be.eq(await vaultToken.totalSupply());
+    // });
 
     it("mailbox fee is needed when adding strategy too", async function () {
-      const { hyperStaking, mailboxFee, signers } = await loadFixture(deployHyperStaking);
-      const { diamond, hyperFactory, lockbox, rwaETH } = hyperStaking;
+      const { hyperStaking, reserveStrategy, mailboxFee, signers } = await loadFixture(deployHyperStaking);
+      const { diamond, hyperFactory, routeRegistry } = hyperStaking;
       const { vaultManager } = signers;
 
       // new pool and strategy
@@ -160,66 +161,68 @@ describe("Lockbox", function () {
         strategy2,
         "vault2",
         "v2",
-        0n,
-        rwaETH,
       )).to.be.reverted;
 
       expect( // in a real scenario fee could depend on the token address, correct name and symbol
-        await lockbox.quoteDispatchRouteRegistry(ZeroAddress, rwaETH),
-      ).to.equal(mailboxFee);
+        await routeRegistry.quoteDispatchRouteRegistry({
+          strategy: reserveStrategy,
+          name: "vault3",
+          symbol: "v3",
+          decimals: 18,
+          metadata: "0x",
+        } as RouteRegistryDataStruct)).to.equal(mailboxFee);
 
       await hyperFactory.connect(vaultManager).addStrategy(
         strategy2,
         "vault3",
         "v3",
-        0n,
-        rwaETH,
         { value: mailboxFee },
       );
     });
 
-    it("redeem the should triger tier2 leave on the origin chain - non-zero mailbox fee", async function () {
-      const { hyperStaking, reserveStrategy, vaultToken, testReserveAsset, reserveAssetPrice, mailboxFee, signers } = await loadFixture(deployHyperStaking);
-      const { deposit, hyperlaneHandler, realAssets, mailbox, rwaETH } = hyperStaking;
-      const { alice } = signers;
-
-      const stakeAmount = parseEther("3");
-      const expectedLpAmount = stakeAmount * parseEther("1") / reserveAssetPrice;
-
-      await expect(deposit.stakeDepositTier2(
-        reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
-      ))
-        .to.emit(realAssets, "RwaMint")
-        .withArgs(reserveStrategy, rwaETH, alice.address, stakeAmount);
-
-      const rwaAfter = await rwaETH.balanceOf(alice);
-      expect(rwaAfter).to.eq(stakeAmount);
-
-      await rwaETH.connect(alice).approve(realAssets, rwaAfter);
-
-      await expect(realAssets.connect(alice).handleRwaRedeem(
-        reserveStrategy, alice, alice, rwaAfter,
-      ))
-        .to.be.revertedWithCustomError(mailbox, "DispatchUnderpaid");
-
-      const dispatchFee = await hyperlaneHandler.quoteDispatchStakeRedeem(reserveStrategy, alice, rwaAfter);
-
-      await expect(realAssets.handleRwaRedeem(ZeroAddress, alice, alice, rwaAfter))
-        // custom error from LibInterchainFactory (unfortunetaly hardhat doesn't support it)
-        // .to.be.revertedWithCustomError(realAssets, "RouteDoesNotExist")
-        .to.be.reverted;
-
-      // redeem should return stakeAmount
-      const redeemTx = realAssets.connect(alice).handleRwaRedeem(
-        reserveStrategy, alice, alice, rwaAfter, { value: dispatchFee },
-      );
-
-      // lpToken -> vaultAsset -> strategy allocation -> stake withdraw
-      await expect(redeemTx).to.changeEtherBalance(alice, stakeAmount - dispatchFee);
-      await expect(redeemTx).to.changeTokenBalance(testReserveAsset, vaultToken, -expectedLpAmount);
-
-      expect(await rwaETH.balanceOf(alice)).to.eq(0);
-    });
+    // TODO: when redeem is implemented
+    // it("redeem the should triger leave on the origin chain - non-zero mailbox fee", async function () {
+    //   const { hyperStaking, reserveStrategy, vaultToken, testReserveAsset, reserveAssetPrice, mailboxFee, signers } = await loadFixture(deployHyperStaking);
+    //   const { deposit, hyperlaneHandler, realAssets, mailbox, rwaETH } = hyperStaking;
+    //   const { alice } = signers;
+    //
+    //   const stakeAmount = parseEther("3");
+    //   const expectedLpAmount = stakeAmount * parseEther("1") / reserveAssetPrice;
+    //
+    //   await expect(deposit.stakeDeposit(
+    //     reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
+    //   ))
+    //     .to.emit(realAssets, "RwaMint")
+    //     .withArgs(reserveStrategy, rwaETH, alice.address, stakeAmount);
+    //
+    //   const rwaAfter = await rwaETH.balanceOf(alice);
+    //   expect(rwaAfter).to.eq(stakeAmount);
+    //
+    //   await rwaETH.connect(alice).approve(realAssets, rwaAfter);
+    //
+    //   await expect(realAssets.connect(alice).handleRwaRedeem(
+    //     reserveStrategy, alice, alice, rwaAfter,
+    //   ))
+    //     .to.be.revertedWithCustomError(mailbox, "DispatchUnderpaid");
+    //
+    //   const dispatchFee = await hyperlaneHandler.quoteDispatchStakeRedeem(reserveStrategy, alice, rwaAfter);
+    //
+    //   await expect(realAssets.handleRwaRedeem(ZeroAddress, alice, alice, rwaAfter))
+    //     // custom error from LibInterchainFactory (unfortunetaly hardhat doesn't support it)
+    //     // .to.be.revertedWithCustomError(realAssets, "RouteDoesNotExist")
+    //     .to.be.reverted;
+    //
+    //   // redeem should return stakeAmount
+    //   const redeemTx = realAssets.connect(alice).handleRwaRedeem(
+    //     reserveStrategy, alice, alice, rwaAfter, { value: dispatchFee },
+    //   );
+    //
+    //   // lpToken -> vaultAsset -> strategy allocation -> stake withdraw
+    //   await expect(redeemTx).to.changeEtherBalance(alice, stakeAmount - dispatchFee);
+    //   await expect(redeemTx).to.changeTokenBalance(testReserveAsset, vaultToken, -expectedLpAmount);
+    //
+    //   expect(await rwaETH.balanceOf(alice)).to.eq(0);
+    // });
   });
 
   describe("Hyperlane Mailbox Messages", function () {
@@ -284,7 +287,7 @@ describe("Lockbox", function () {
         messageSR.amount,
       );
 
-      expect(await testWrapper.messageType(bytesSR)).to.equal(3);
+      expect(await testWrapper.messageType(bytesSR)).to.equal(2);
       expect(await testWrapper.strategy(bytesSR)).to.equal(messageSR.strtegy);
       expect(await testWrapper.sender(bytesSR)).to.equal(messageSR.sender);
       expect(await testWrapper.redeemAmount(bytesSR)).to.equal(messageSR.amount);

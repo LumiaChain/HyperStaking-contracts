@@ -2,7 +2,6 @@
 pragma solidity =0.8.27;
 
 import {IHyperFactory} from "../interfaces/IHyperFactory.sol";
-import {ILockbox} from "../interfaces/ILockbox.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 import {IRouteRegistry} from "../interfaces/IRouteRegistry.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
@@ -18,9 +17,9 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {RouteRegistryData} from "../libraries/HyperlaneMailboxMessages.sol";
 
-import {Currency} from "../libraries/CurrencyHandler.sol";
+import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
-    LibHyperStaking, HyperStakingStorage, VaultInfo, Tier1Info, Tier2Info
+    LibHyperStaking, HyperStakingStorage, VaultInfo, DirectStakeInfo, StakeInfo
 } from "../libraries/LibHyperStaking.sol";
 
 import {VaultToken} from "../VaultToken.sol";
@@ -30,10 +29,11 @@ import {VaultToken} from "../VaultToken.sol";
  * @notice Factory contract for creating and managing HyperStaking vaults
  * Deploys new vaults when adding strategies for asset management
  *
- * @dev This contract is a facet of Diamond Proxy.
+ * @dev This contract is a facet of Diamond Proxy
  */
 contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20Metadata;
+    using CurrencyHandler for Currency;
 
     //============================================================================================//
     //                                      Public Functions                                      //
@@ -45,16 +45,14 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
     function addStrategy(
         address strategy,
         string memory vaultTokenName,
-        string memory vaultTokenSymbol,
-        uint256 tier1RevenueFee
+        string memory vaultTokenSymbol
     ) external payable onlyVaultManager nonReentrant {
         // The ERC20-compliant asset associated with the strategy
         address asset = IStrategy(strategy).revenueAsset();
         uint8 assetDecimals = IERC20Metadata(asset).decimals();
 
         IERC4626 vaultToken = _deployVaultToken(asset, strategy, vaultTokenName, vaultTokenSymbol);
-        _storeVaultTiers(strategy, tier1RevenueFee, vaultToken);
-        _storeVaultInfo(strategy, asset);
+        _storeVaultInfo(strategy, asset, vaultToken);
 
         // register new route on lumia, deploy token representing it on lumia
         _dispatchRouteRegistry(strategy, vaultTokenName, vaultTokenSymbol, assetDecimals);
@@ -68,6 +66,8 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         );
     }
 
+    /// TODO: when ERC4626 Vault will be moved to Lumia, try to combine addStrategy functions
+
     /// @inheritdoc IHyperFactory
     function addDirectStrategy(
         address strategy,
@@ -76,10 +76,10 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
     ) external payable onlyVaultManager nonReentrant {
         require(IStrategy(strategy).isDirectStakeStrategy(), NotDirectStrategy(strategy));
 
-        address asset = IStrategy(strategy).revenueAsset();
-        uint8 assetDecimals = IERC20Metadata(asset).decimals();
+        Currency memory asset = IStrategy(strategy).stakeCurrency();
+        uint8 assetDecimals = asset.decimals();
 
-        _storeVaultInfo(strategy, address(0));
+        _storeVaultInfo(strategy, address(0), IERC4626(address(0)));
 
         // register new route on lumia, deploy token representing it on lumia
         _dispatchRouteRegistry(strategy, vaultTokenName, vaultTokenSymbol, assetDecimals);
@@ -87,7 +87,7 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         emit DirectVaultCreate(
             msg.sender,
             strategy,
-            address(asset),
+            asset.token,
             vaultTokenName,
             vaultTokenSymbol
         );
@@ -165,47 +165,16 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
     }
 
     /**
-     * @dev Store information about tiers for a given strategy, vault token and tier 1 revenue fee
-     *
-     * @param strategy The strategy address associated with this vault
-     * @param tier1RevenueFee The revenue fee applied to Tier 1 users in this vault
-     * @param vaultToken ERC4626 which represent shares to this strategy vault
-     */
-    function _storeVaultTiers(
-        address strategy,
-        uint256 tier1RevenueFee,
-        IERC4626 vaultToken
-    ) internal {
-        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        require(v.vaultInfo[strategy].strategy == address(0), VaultAlreadyExist());
-
-        // init tier1
-        v.tier1Info[strategy] = Tier1Info({
-            assetAllocation: 0,
-            totalStake: 0,
-            revenueFee: tier1RevenueFee
-        });
-
-        // init tier2
-        v.tier2Info[strategy] = Tier2Info({
-            vaultToken: vaultToken,
-            bridgeSafetyMargin: 2e16, // 2%
-            sharesMinted: 0,
-            sharesRedeemed: 0,
-            stakeBridged: 0,
-            stakeWithdrawn: 0
-        });
-    }
-
-    /**
-     * @notice Initializes the vault info for a given strategy and asset
+     * @notice Initializes the vault and stake info for a given strategy and asset
      * @dev for direct: asset == address(0) should be used
      * @param strategy The strategy address associated with this vault
-     * @param asset The asset for the vault
+     * @param asset The stake asset for the vault
+     * @param vaultToken ERC4626 which represent shares to this strategy vault
      */
     function _storeVaultInfo(
         address strategy,
-        address asset
+        address asset,
+        IERC4626 vaultToken
     ) internal {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         require(v.vaultInfo[strategy].strategy == address(0), VaultAlreadyExist());
@@ -221,5 +190,25 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
             strategy: strategy,
             asset: IERC20Metadata(asset)
         });
+
+        // init stakeInfo
+        if (IStrategy(strategy).isDirectStakeStrategy()) {
+            // direct staking
+            v.directStakeInfo[strategy] = DirectStakeInfo({
+                totalStake: 0
+            });
+        } else {
+            // active staking
+            v.stakeInfo[strategy] = StakeInfo({
+                vaultToken: vaultToken,
+                totalStake: 0,
+                assetAllocation: 0,
+                bridgeSafetyMargin: 2e16, // 2%
+                sharesMinted: 0,
+                sharesRedeemed: 0,
+                stakeBridged: 0,
+                stakeWithdrawn: 0
+            });
+        }
     }
 }

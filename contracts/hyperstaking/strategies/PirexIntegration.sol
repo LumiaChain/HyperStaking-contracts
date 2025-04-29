@@ -138,14 +138,14 @@ contract PirexIntegration {
 
     /**
      * @notice This function calculates the Pirex post-fee asset amount and fee amount based on the
-               specified fee type and total assets.
+               specified fee type and total assets
      * @dev Source:
      *      https://github.com/dinero-protocol/pirex-eth-contracts/blob/master/src/PirexEth.sol#L545
      *
-     * @param f_ representing the fee type.
-     * @param amount_ Total ETH or pxETH asset amount.
-     * @return postFeeAmount Post-fee asset amount (for mint/burn/claim/etc.).
-     * @return feeAmount Fee amount.
+     * @param f_ representing the fee type
+     * @param amount_ Total ETH or pxETH asset amount
+     * @return postFeeAmount Post-fee asset amount (for mint/burn/claim/etc.)
+     * @return feeAmount Fee amount
      */
     function _computeAssetAmounts(
         DataTypes.Fees f_,

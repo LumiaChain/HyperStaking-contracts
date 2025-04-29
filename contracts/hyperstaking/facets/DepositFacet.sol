@@ -3,9 +3,7 @@ pragma solidity =0.8.27;
 
 import {IDeposit} from "../interfaces/IDeposit.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
-import {ILockbox} from "../interfaces/ILockbox.sol";
-import {ITier1Vault} from "../interfaces/ITier1Vault.sol";
-import {ITier2Vault} from "../interfaces/ITier2Vault.sol";
+import {IStakeVault} from "../interfaces/IStakeVault.sol";
 import {IStakeInfoRoute} from "../interfaces/IStakeInfoRoute.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
@@ -20,15 +18,14 @@ import {
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
-    HyperStakingStorage, LibHyperStaking, VaultInfo, Tier2Info, DirectStakeInfo
+    HyperStakingStorage, LibHyperStaking, VaultInfo, StakeInfo, DirectStakeInfo
 } from "../libraries/LibHyperStaking.sol";
 
 /**
  * @title DepositFacet
- * @notice Entry point for staking operations
- * Handles user deposits and withdrawals (tier1)
+ * @notice Entry point for staking operations. Handles user deposits and withdrawals
  *
- * @dev This contract is a facet of Diamond Proxy.
+ * @dev This contract is a facet of Diamond Proxy
  */
 contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, PausableUpgradeable {
     using CurrencyHandler for Currency;
@@ -46,7 +43,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     //                                      Public Functions                                      //
     //============================================================================================//
 
-    /* ========== Direct Deposit ========== */
+    /* ========== Direct Staking ========== */
 
     /// @notice Direct stake deposit
     /// @inheritdoc IDeposit
@@ -86,11 +83,10 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Direct);
     }
 
-    /// @notice Tier2 withdraw function (internal)
+    /// @notice Withdraw function (internal)
     /// @inheritdoc IDeposit
     function directStakeWithdraw(address strategy, uint256 stake, address to)
         external
-        whenNotPaused
         diamondInternal
         returns (uint256 withdrawAmount)
     {
@@ -109,56 +105,11 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         emit StakeWithdraw(address(this), to, strategy, stake, withdrawAmount, DepositType.Direct);
     }
 
-    /* ========== Tier 1  ========== */
+    /* ========== Active Staking ========== */
 
-    /// @notice Main Tier1 deposit function
+    /// @notice Stake deposit function
     /// @inheritdoc IDeposit
-    function stakeDepositTier1(address strategy, uint256 stake, address to)
-        external
-        payable
-        nonReentrant
-        whenNotPaused
-    {
-        VaultInfo storage vault = LibHyperStaking.diamondStorage().vaultInfo[strategy];
-
-        _checkDeposit(vault, strategy, stake);
-
-        vault.stakeCurrency.transferFrom(
-            msg.sender,
-            address(this),
-            stake
-        );
-        ITier1Vault(address(this)).joinTier1(strategy, to, stake);
-
-        emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Tier1);
-    }
-
-    /// @notice Tier1 withdraw function
-    /// @inheritdoc IDeposit
-    function stakeWithdrawTier1(address strategy, uint256 stake, address to)
-        external
-        nonReentrant
-        whenNotPaused
-        returns (uint256 withdrawAmount)
-    {
-        VaultInfo storage vault = LibHyperStaking.diamondStorage().vaultInfo[strategy];
-        require(vault.strategy != address(0), VaultDoesNotExist(strategy));
-
-        withdrawAmount = ITier1Vault(address(this)).leaveTier1(strategy, msg.sender, stake);
-
-        vault.stakeCurrency.transfer(
-            to,
-            withdrawAmount
-        );
-
-        emit StakeWithdraw(msg.sender, to, strategy, stake, withdrawAmount, DepositType.Tier1);
-    }
-
-    /* ========== Tier 2  ========== */
-
-    /// @notice Tier2 deposit function
-    /// @inheritdoc IDeposit
-    function stakeDepositTier2(address strategy, uint256 stake, address to)
+    function stakeDeposit(address strategy, uint256 stake, address to)
         external
         payable
         nonReentrant
@@ -169,6 +120,8 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
         _checkDeposit(vault, strategy, stake);
 
+        v.stakeInfo[strategy].totalStake += stake;
+
         vault.stakeCurrency.transferFrom(
             msg.sender,
             address(this),
@@ -176,34 +129,35 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         );
 
         // true - bridge info to Lumia chain to mint coresponding rwa asset
-        ITier2Vault(address(this)).joinTier2(strategy, to, stake, true);
+        IStakeVault(address(this)).join(strategy, to, stake);
 
-        emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Tier2);
+        emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Active);
     }
 
-    /// @notice Tier2 withdraw function (internal)
+    /// @notice Withdraw function (internal)
     /// @inheritdoc IDeposit
-    function stakeWithdrawTier2(address strategy, uint256 stake, address to)
+    function stakeWithdraw(address strategy, uint256 stake, address to)
         external
-        whenNotPaused
         diamondInternal
         returns (uint256 withdrawAmount)
     {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        Tier2Info storage tier2 = v.tier2Info[strategy];
+        StakeInfo storage stakeInfo = v.stakeInfo[strategy];
 
         // how many shares must be withdrawn from the vault to withdraw a given amount of stake
         uint256 allocation = IStrategy(strategy).previewAllocation(stake);
 
         // actual withdraw (ERC4626 withdraw)
-        uint256 shares = tier2.vaultToken.withdraw(allocation, to, address(this));
+        uint256 shares = stakeInfo.vaultToken.withdraw(allocation, to, address(this));
         withdrawAmount = IStrategy(strategy).previewExit(allocation);
 
         // save information
-        tier2.sharesRedeemed += shares;
-        tier2.stakeWithdrawn += withdrawAmount;
+        stakeInfo.sharesRedeemed += shares; // TODO: remove?
+        stakeInfo.stakeWithdrawn += withdrawAmount; // TODO: remove?
 
-        emit StakeWithdraw(address(this), to, strategy, shares, withdrawAmount, DepositType.Tier2);
+        stakeInfo.totalStake -= stake;
+
+        emit StakeWithdraw(address(this), to, strategy, shares, withdrawAmount, DepositType.Active);
     }
 
     /* ========== ACL ========== */

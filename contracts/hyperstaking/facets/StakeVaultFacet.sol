@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {ITier2Vault} from "../interfaces/ITier2Vault.sol";
+import {IStakeVault} from "../interfaces/IStakeVault.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
-import {ILockbox} from "../interfaces/ILockbox.sol";
 import {IStakeInfoRoute} from "../interfaces/IStakeInfoRoute.sol";
 
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
@@ -18,15 +17,15 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
-    LibHyperStaking, HyperStakingStorage, VaultInfo, Tier2Info
+    LibHyperStaking, HyperStakingStorage, VaultInfo, StakeInfo
 } from "../libraries/LibHyperStaking.sol";
 
 /**
- * @title Tier2VaultFacet
+ * @title StakeVaultFacet
  *
  * @dev This contract is a facet of Diamond Proxy
  */
-contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgradeable {
+contract StakeVaultFacet is IStakeVault, HyperStakingAcl, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20Metadata;
     using CurrencyHandler for Currency;
 
@@ -42,9 +41,9 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
 
     modifier onlyVaultToken(address strategy) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        Tier2Info storage tier2 = v.tier2Info[strategy];
+        StakeInfo storage si = v.stakeInfo[strategy];
 
-        require(msg.sender == address(tier2.vaultToken), NotVaultToken());
+        require(msg.sender == address(si.vaultToken), NotVaultToken());
         _;
     }
 
@@ -52,16 +51,15 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     //                                      Public Functions                                      //
     //============================================================================================//
 
-    /// @inheritdoc ITier2Vault
-    function joinTier2(
+    /// @inheritdoc IStakeVault
+    function join(
         address strategy,
         address user,
-        uint256 stake,
-        bool bridge
+        uint256 stake
     ) external payable diamondInternal {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
-        Tier2Info storage tier2 = v.tier2Info[strategy];
+        StakeInfo storage si = v.stakeInfo[strategy];
 
         // allocate stake amount in strategy
         // and receive allocation
@@ -76,100 +74,100 @@ contract Tier2VaultFacet is ITier2Vault, HyperStakingAcl, ReentrancyGuardUpgrade
         // fetch allocation to this vault
         vault.asset.safeTransferFrom(strategy, address(this), allocation);
 
-        vault.asset.safeIncreaseAllowance(address(tier2.vaultToken), allocation);
+        vault.asset.safeIncreaseAllowance(address(si.vaultToken), allocation);
 
         // vaultToken - shares are deposited to Lockbox (this diamond)
-        uint256 shares = tier2.vaultToken.deposit(allocation, address(this));
+        uint256 shares = si.vaultToken.deposit(allocation, address(this));
 
         // save information
-        tier2.sharesMinted += shares;
-        tier2.stakeBridged += stake;
+        si.sharesMinted += shares; // TODO: no shares here any more
+        si.stakeBridged += stake; // TODO: remove?
+
+        si.assetAllocation += allocation;
 
         // mint and shares and bridge stakeInfo
-        if (bridge) {
-            _bridgeStakeInfo(strategy, user, stake, shares);
-        }
+        _bridgeStakeInfo(strategy, user, stake, shares);
 
-        emit Tier2Join(strategy, user, allocation, bridge);
+        emit Join(strategy, user, allocation);
     }
 
-    /// @inheritdoc ITier2Vault
-    function leaveTier2(
+    /// @inheritdoc IStakeVault
+    function leave(
         address strategy,
         address user,
         uint256 allocation
     ) external onlyVaultToken(strategy) nonReentrant returns (uint256 withdrawAmount) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
-        Tier2Info storage tier2 = v.tier2Info[strategy];
+        StakeInfo storage si = v.stakeInfo[strategy];
 
         // VaultToken should approved DIAMOND first
-        vault.asset.safeTransferFrom(address(tier2.vaultToken), address(this), allocation);
+        vault.asset.safeTransferFrom(address(si.vaultToken), address(this), allocation);
 
         vault.asset.safeIncreaseAllowance(strategy, allocation);
         withdrawAmount = IStrategy(strategy).exit(allocation, user);
 
         vault.stakeCurrency.transfer(user, withdrawAmount);
 
-        emit Tier2Leave(strategy, user, withdrawAmount, allocation);
+        emit Leave(strategy, user, withdrawAmount, allocation);
     }
 
-    /// @inheritdoc ITier2Vault
-    function collectTier2Revenue(address strategy, address to, uint256 amount)
+    /// @inheritdoc IStakeVault
+    function collectRevenue(address strategy, address to, uint256 amount)
         external
         onlyVaultManager
     {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        Tier2Info storage tier2 = v.tier2Info[strategy];
+        StakeInfo storage si = v.stakeInfo[strategy];
 
-        uint256 revenue = checkTier2Revenue(strategy);
+        uint256 revenue = checkRevenue(strategy);
         require(amount <= revenue, InsufficientRevenue());
 
         uint256 allocation = IStrategy(strategy).previewAllocation(amount);
-        tier2.vaultToken.withdraw(allocation, to, address(this));
+        si.vaultToken.withdraw(allocation, to, address(this));
 
-        emit Tier2RevenueCollected(strategy, to, amount);
+        emit RevenueCollected(strategy, to, amount);
     }
 
-    /// @inheritdoc ITier2Vault
+    /// @inheritdoc IStakeVault
     function setBridgeSafetyMargin(address strategy, uint256 newMargin) external onlyVaultManager {
         require(newMargin >= LibHyperStaking.MIN_BRIDGE_SAFETY_MARGIN, SafetyMarginTooLow());
 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        Tier2Info storage tier2 = v.tier2Info[strategy];
+        StakeInfo storage si = v.stakeInfo[strategy];
 
-        uint256 oldMargin = tier2.bridgeSafetyMargin;
-        tier2.bridgeSafetyMargin = newMargin;
+        uint256 oldMargin = si.bridgeSafetyMargin;
+        si.bridgeSafetyMargin = newMargin;
 
         emit BridgeSafetyMarginUpdated(oldMargin, newMargin);
     }
 
     // ========= View ========= //
 
-    /// @inheritdoc ITier2Vault
-    function tier2Info(address strategy) external view returns (Tier2Info memory) {
+    /// @inheritdoc IStakeVault
+    function stakeInfo(address strategy) external view returns (StakeInfo memory) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        return v.tier2Info[strategy];
+        return v.stakeInfo[strategy];
     }
 
-    /// @inheritdoc ITier2Vault
-    function checkTier2Revenue(address strategy) public view returns (uint256) {
+    /// @inheritdoc IStakeVault
+    function checkRevenue(address strategy) public view returns (uint256) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        Tier2Info storage tier2 = v.tier2Info[strategy];
+        StakeInfo storage si = v.stakeInfo[strategy];
 
         // get the total diffeerence of shares
-        uint256 shares = tier2.sharesMinted - tier2.sharesRedeemed;
+        uint256 shares = si.sharesMinted - si.sharesRedeemed;
 
         // calculate total possible stake withdraw
-        uint256 allocation = tier2.vaultToken.previewRedeem(shares);
+        uint256 allocation = si.vaultToken.previewRedeem(shares);
         uint256 stake = IStrategy(strategy).previewExit(allocation);
 
         // total stake that needs to be preserved for potential user bridge-outs
-        uint256 bridgeCollateral = tier2.stakeBridged - tier2.stakeWithdrawn;
+        uint256 bridgeCollateral = si.stakeBridged - si.stakeWithdrawn;
 
         // add safety margin to protect users from strategy asset volatility
         uint256 marginAmount = (
-            bridgeCollateral * tier2.bridgeSafetyMargin
+            bridgeCollateral * si.bridgeSafetyMargin
         ) / LibHyperStaking.PERCENT_PRECISION;
 
         // check for negative revenue

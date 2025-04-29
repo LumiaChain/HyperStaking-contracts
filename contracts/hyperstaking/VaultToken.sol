@@ -5,11 +5,11 @@ import {IERC20, ERC20, ERC4626} from "@openzeppelin/contracts/token/ERC20/extens
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
-import {ITier2Vault} from "./interfaces/ITier2Vault.sol";
+import {IStakeVault} from "./interfaces/IStakeVault.sol";
 
 /**
  * @title VaultToken
- * @notice Base ERC4626 LP Token used in Tier2
+ * @notice Base ERC4626 LP Token used in active staking
  * @dev Mint carried out by Diamond Vault
  */
 contract VaultToken is ERC4626, Ownable2Step {
@@ -129,8 +129,8 @@ contract VaultToken is ERC4626, Ownable2Step {
             // get underlying asset address and approve for Diamond
             IERC20(asset()).safeIncreaseAllowance(DIAMOND, assets);
 
-            // execute Tier2 leave path
-            ITier2Vault(DIAMOND).leaveTier2(
+            // execute leave path
+            IStakeVault(DIAMOND).leave(
                 STRATEGY,
                 receiver,
                 assets
