@@ -42,7 +42,7 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
         LibInterchainFactory.checkRoute(ifs, strategy);
 
-        RouteInfo storage r = ifs.routes[strategy];
+        // RouteInfo storage r = ifs.routes[strategy];
 
         // store information about bridged state/stake
         ifs.generalBridgedState[strategy] += stakeAmount;
@@ -64,7 +64,7 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
         LibInterchainFactory.checkRoute(ifs, strategy);
 
-        RouteInfo storage r = ifs.routes[strategy];
+        // RouteInfo storage r = ifs.routes[strategy];
 
         // TODO check rather balance of shares
         // require both user and general state

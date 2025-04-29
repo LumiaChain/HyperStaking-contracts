@@ -83,23 +83,3 @@ library LibRewards {
         }
     }
 }
-
-// ---
-
-// library LibRewarder {
-//     bytes32 constant internal REWARDER_STORAGE_POSITION = keccak256("lumia-rewarder.storage");
-//
-//     // Considers edge cases for token reward calculation: preventing overflow with max values
-//     // and avoiding rounding to zero with minimal values. This precision value is a solid compromise
-//     uint256 constant internal REWARD_PRECISION = 1e36;
-//
-//     // Maximum number of concurrent rewards allowed per staking token
-//     uint8 constant internal REWARDS_PER_STAKING_LIMIT = 10;
-//
-//     function diamondStorage() internal pure returns (RewarderStorage storage s) {
-//         bytes32 position = REWARDER_STORAGE_POSITION;
-//         assembly {
-//             s.slot := position
-//         }
-//     }
-// }

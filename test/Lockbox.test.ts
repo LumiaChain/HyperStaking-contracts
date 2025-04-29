@@ -270,25 +270,6 @@ describe("Lockbox", function () {
       expect(await testWrapper.stakeAmount(bytesSI)).to.equal(messageSI.stakeAmount);
       expect(await testWrapper.sharesAmount(bytesSI)).to.equal(messageSI.sharesAmount);
 
-      // MigrationInfo
-
-      const messageMI = {
-        fromStrategy: "0x6df9a4Bf32A9707C9E1D72fD39d4EcFc4D0Da3C7",
-        toStrategy: "0x2edF86433A81797820B986e88E264C3562d5eF20",
-        migrationAmount: parseEther("2.04"),
-      };
-
-      const bytesMI = await testWrapper.serializeMigrationInfo(
-        messageMI.fromStrategy,
-        messageMI.toStrategy,
-        messageMI.migrationAmount,
-      );
-
-      expect(await testWrapper.messageType(bytesMI)).to.equal(2);
-      expect(await testWrapper.fromStrategy(bytesMI)).to.equal(messageMI.fromStrategy);
-      expect(await testWrapper.toStrategy(bytesMI)).to.equal(messageMI.toStrategy);
-      expect(await testWrapper.migrationAmount(bytesMI)).to.equal(messageMI.migrationAmount);
-
       // StakeRedeem
 
       const messageSR = {

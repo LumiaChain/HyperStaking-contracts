@@ -114,16 +114,3 @@ When users unstake, the Dinero Protocol is used to redeem pxETH from apxETH (an 
 In the future, the fee could be reduced by implementing a delayed unstake option, creating an unstake buffer for ongoing operations, similar to the model used in the Dinero Protocol.
 
 <div style="page-break-after: always;"></div>
-
-## 3. Migrations
-
-The Lumia protocol supports seamless strategy migrations to enable upgrades and rebalancing without disrupting staking operations. Underlaying assets can be migrated between strategies while preserving user positions and ensuring that the staked currency remains consistent.
-
-### **Migration Process**
-- **Direct and Yield Strategy Migration:** The protocol supports migrating both direct-staking and yield-bearing strategies. Direct strategy migration transfers assets without minting new RWA tokens, while yield strategy migration withdraws assets from the source strategy and deposits them into the target strategy.
-
-- **Currency Consistency:** Both the source and target strategies must use the same stake currency. If the currencies do not match, the migration is rejected.
-
-- **Cross-Chain Synchronization:** Migration data is forwarded across chains, ensuring that cross-chain state remains consistent and that assets are correctly accounted for.
-
-- **Governance and Access Control:** Migrations are restricted to the **Migration Manager** role, which can be transferred to a DAO through governance. This ensures that migrations remain secure and transparent under decentralized control.

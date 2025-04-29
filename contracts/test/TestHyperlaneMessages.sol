@@ -44,18 +44,6 @@ contract TestHyperlaneMessages {
         );
     }
 
-    function serializeMigrationInfo(
-        address fromStrategy_,
-        address toStrategy_,
-        uint256 migrationAmount_
-    ) external pure returns (bytes memory) {
-        return HyperlaneMailboxMessages.serializeMigrationInfo(
-            fromStrategy_,
-            toStrategy_,
-            migrationAmount_
-        );
-    }
-
     function serializeStakeRedeem(
         address strategy_,
         address sender_,
@@ -94,20 +82,6 @@ contract TestHyperlaneMessages {
 
     function routeRegistryMetadata(bytes calldata message) external pure returns (bytes calldata) {
         return message.routeRegistryMetadata();
-    }
-
-    // ========= MigrationInfo ========= //
-
-    function fromStrategy(bytes calldata message) external pure returns (address) {
-        return message.fromStrategy();
-    }
-
-    function toStrategy(bytes calldata message) external pure returns (address) {
-        return message.toStrategy();
-    }
-
-    function migrationAmount(bytes calldata message) external pure returns (uint256) {
-        return message.migrationAmount();
     }
 
     // ========= StakeInfo & StakeRedeem  ========= //

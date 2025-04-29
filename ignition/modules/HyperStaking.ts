@@ -20,7 +20,6 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const stakingManager = m.getAccount(1);
   const vaultManager = m.getAccount(2);
   const strategyManager = m.getAccount(3);
-  const migrationManager = m.getAccount(4);
 
   // --- facets
 
@@ -47,9 +46,6 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
 
   const stakeInfoRouteFacet = m.contract("StakeInfoRoute");
   const stakeInfoRouteInterface = getContractInterface("IStakeInfoRoute");
-
-  const migrationFacet = m.contract("MigrationFacet");
-  const migrationFacetInterface = getContractInterface("IMigration");
 
   const superformIntegrationFacet = m.contract("SuperformIntegrationFacet");
   const superformIntegrationFacetInterface = getContractInterface("ISuperformIntegration");
@@ -96,11 +92,6 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       functionSelectors: getSelectors(stakeInfoRouteInterface),
     },
     {
-      facetAddress: migrationFacet,
-      action: FacetCutAction.Add,
-      functionSelectors: getSelectors(migrationFacetInterface),
-    },
-    {
       facetAddress: superformIntegrationFacet,
       action: FacetCutAction.Add,
       functionSelectors: superformIntegrationFacetSelectors,
@@ -115,7 +106,6 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       stakingManager,
       vaultManager,
       strategyManager,
-      migrationManager,
       mailbox,
       destination,
       superformFactory,
@@ -139,13 +129,12 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const lockbox = m.contractAt("ILockbox", diamond);
   const routeRegistry = m.contractAt("IRouteRegistry", diamond);
   const stakeInfoRoute = m.contractAt("IStakeInfoRoute", diamond);
-  const migration = m.contractAt("IMigration", diamond);
   const superformIntegration = m.contractAt("ISuperformIntegration", diamond);
 
   // --- return
 
   return {
-    diamond, acl, deposit, hyperFactory, tier1, tier2, lockbox, routeRegistry, stakeInfoRoute, migration, superformIntegration,
+    diamond, acl, deposit, hyperFactory, tier1, tier2, lockbox, routeRegistry, stakeInfoRoute, superformIntegration,
   };
 });
 

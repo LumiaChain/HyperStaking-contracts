@@ -77,11 +77,6 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         //     return;
         // }
 
-        if (msgType == MessageType.MigrationInfo) {
-            _handleNewMigration(data);
-            return;
-        }
-
         revert UnsupportedMessage();
     }
 
@@ -239,39 +234,6 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
             strategy,
             address(assetToken)
             // sharesVault 
-        );
-    }
-
-    // TODO remove migrations?
-    /// @notice Handle migration which happened on the origin chain
-    /// @dev Adds opportunity to bridge out to a different strategy
-    /// @param data Encoded route-specific data
-    function _handleNewMigration(
-        bytes calldata data
-    ) internal {
-        address fromStrategy = data.fromStrategy();
-        address toStrategy = data.toStrategy();
-        uint256 migrationAmount = data.migrationAmount();
-
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-
-        // both strategies and their routes should exist
-        LibInterchainFactory.checkRoute(ifs, fromStrategy);
-        LibInterchainFactory.checkRoute(ifs, toStrategy);
-
-        // require(
-        //     ifs.routes[fromStrategy].rwaAsset == ifs.routes[toStrategy].rwaAsset,
-        //     IncompatibleMigration()
-        // );
-
-        // actual storage change
-        ifs.generalBridgedState[fromStrategy] -= migrationAmount;
-        ifs.generalBridgedState[toStrategy] += migrationAmount;
-
-        emit MigrationAdded(
-            fromStrategy,
-            toStrategy,
-            migrationAmount
         );
     }
 }

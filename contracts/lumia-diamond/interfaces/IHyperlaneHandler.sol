@@ -44,12 +44,6 @@ interface IHyperlaneHandler {
         // address indexed sharesVault
     );
 
-    event MigrationAdded(
-        address fromStrategy,
-        address toStrategy,
-        uint256 migrationAmount
-    );
-
     //===========================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
@@ -63,7 +57,6 @@ interface IHyperlaneHandler {
     error BadOriginDestination(uint32 originDestination);
 
     error RouteAlreadyExist();
-    error IncompatibleMigration();
 
     //============================================================================================//
     //                                          Mutable                                           //

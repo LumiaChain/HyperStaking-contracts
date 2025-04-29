@@ -12,14 +12,6 @@ interface ILockbox {
     //                                          Events                                            //
     //============================================================================================//
 
-    event MigrationInfoDispatched(
-        address indexed mailbox,
-        address lumiaFactory,
-        address indexed fromStrategy,
-        address indexed toStrategy,
-        uint256 migrationAmount
-    );
-
     event ReceivedMessage(
         uint32 indexed origin,
         bytes32 indexed sender,
@@ -49,16 +41,6 @@ interface ILockbox {
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
-
-    /**
-     * @notice Dispatches a cross-chain message informing about migration
-     * @dev This function sends a message to setup migration route
-     */
-    function migrationInfoDispatch(
-        address fromStrategy,
-        address toStrategy,
-        uint256 migrationAmount
-    ) external payable;
 
     /**
      * @notice Function called by the Mailbox contract when a message is received
@@ -93,18 +75,4 @@ interface ILockbox {
 
     /// @notice Returns Lockbox data, including mailbox address, destination, and recipient address
     function lockboxData() external view returns (LockboxData memory);
-
-    /// @notice Helper
-    function quoteDispatchMigrationInfo(
-        address fromStrategy,
-        address toStrategy,
-        uint256 migrationAmount
-    ) external view returns (uint256);
-
-    /// @notice Helper
-    function generateMigrationInfoBody(
-        address fromStrategy,
-        address toStrategy,
-        uint256 migrationAmount
-    ) external pure returns (bytes memory body);
 }

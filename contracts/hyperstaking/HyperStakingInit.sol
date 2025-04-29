@@ -38,7 +38,6 @@ contract HyperStakingInit is AccessControlEnumerableUpgradeable, ReentrancyGuard
         address initStakingManager,
         address initVaultManager,
         address initStrategyManager,
-        address initMigrationManager,
         address lockboxMailbox,
         uint32 lockboxDestination,
         address superformFactory,
@@ -56,7 +55,6 @@ contract HyperStakingInit is AccessControlEnumerableUpgradeable, ReentrancyGuard
         _grantRole(LibAcl.STAKING_MANAGER_ROLE, initStakingManager);
         _grantRole(LibAcl.VAULT_MANAGER_ROLE, initVaultManager);
         _grantRole(LibAcl.STRATEGY_MANAGER_ROLE, initStrategyManager);
-        _grantRole(LibAcl.MIGRATION_MANAGER_ROLE, initMigrationManager);
 
         // adding IAccessControlEnumerable to supportedInterfaces
         LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();

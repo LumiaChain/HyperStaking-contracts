@@ -222,7 +222,7 @@ contract Tier1VaultFacet is ITier1Vault, HyperStakingAcl, ReentrancyGuardUpgrade
     /**
      * @notice Implementation of leaveTier1
      * @dev Without exiting strategy,
-     *      shared code used in stake withdrawal, but also during migration
+     *      shared code used in stake withdrawal, but also during
      * @return exitAllocation allocation which could be exited from strategy
      */
     function _leaveTier1(
