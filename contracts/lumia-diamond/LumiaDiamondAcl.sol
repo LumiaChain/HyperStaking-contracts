@@ -24,7 +24,6 @@ contract LumiaDiamondAcl is AccessControlEnumerableUpgradeable {
     //============================================================================================//
 
     bytes32 public constant LUMIA_FACTORY_MANAGER_ROLE = keccak256("LUMIA_FACTORY_MANAGER_ROLE");
-    bytes32 public constant LUMIA_REWARD_MANAGER_ROLE = keccak256("LUMIA_REWARD_MANAGER_ROLE");
 
     //============================================================================================//
     //                                          Errors                                            //
@@ -33,7 +32,6 @@ contract LumiaDiamondAcl is AccessControlEnumerableUpgradeable {
     error OnlyDiamondInternal();
     error NotFromMailbox(address from);
     error OnlyLumiaFactoryManager();
-    error OnlyLumiaRewardManager();
 
     //============================================================================================//
     //                                         Modifiers                                          //
@@ -61,24 +59,5 @@ contract LumiaDiamondAcl is AccessControlEnumerableUpgradeable {
             revert OnlyLumiaFactoryManager();
         }
         _;
-    }
-
-    /// @dev Only allows access for the `Lumia Reward Manager` role.
-    modifier onlyLumiaRewardManager() {
-        if (!hasRole(LUMIA_REWARD_MANAGER_ROLE, msg.sender)) {
-            revert OnlyLumiaRewardManager();
-        }
-        _;
-    }
-
-    //============================================================================================//
-    //                                      Public Functions                                      //
-    //============================================================================================//
-
-    // ========= View ========= //
-
-    /// @notice Helper function used by an external rewarder
-    function hasLumiaRewardManagerRole(address account) external view returns (bool) {
-        return hasRole(LUMIA_REWARD_MANAGER_ROLE, account);
     }
 }

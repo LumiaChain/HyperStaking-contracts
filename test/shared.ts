@@ -22,10 +22,10 @@ const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IER
 
 export async function getSigners() {
   const [
-    owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, lumiaRewardManager, bob, alice,
+    owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, bob, alice,
   ] = await ethers.getSigners();
 
-  return { owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, lumiaRewardManager, bob, alice };
+  return { owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, bob, alice };
 }
 
 // -------------------- Currency --------------------
@@ -113,7 +113,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   const rwaETH = rwa2.rwaAsset;
   const rwaETHOwner = rwa2.rwaAssetOwner;
 
-  const { lumiaDiamond, hyperlaneHandler, realAssets, masterChef } = await ignition.deploy(LumiaDiamondModule, {
+  const { lumiaDiamond, hyperlaneHandler, realAssets } = await ignition.deploy(LumiaDiamondModule, {
     parameters: {
       LumiaDiamondModule: {
         lumiaMailbox: mailboxAddress,
@@ -139,7 +139,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   await rwaETHOwner.addMinter(lumiaDiamond);
 
   return {
-    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, tier1, tier2, lockbox, routeRegistry, stakeInfoRoute, superformFactory, superVault, superformIntegration, lumiaDiamond, realAssets, masterChef, rwaUSD, rwaUSDOwner, rwaETH, rwaETHOwner,
+    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, tier1, tier2, lockbox, routeRegistry, stakeInfoRoute, superformFactory, superVault, superformIntegration, lumiaDiamond, realAssets, rwaUSD, rwaUSDOwner, rwaETH, rwaETHOwner,
   };
 }
 
