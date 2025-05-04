@@ -8,7 +8,6 @@ import SuperformMockModule from "../ignition/modules/test/SuperformMock";
 
 import TestERC20Module from "../ignition/modules/test/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
-import ZeroYieldStrategyModule from "../ignition/modules/ZeroYieldStrategy";
 import DirectStakeStrategyModule from "../ignition/modules/DirectStakeStrategy";
 
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IHyperFactory";
@@ -177,23 +176,6 @@ export async function createReserveStrategy(
   });
 
   return reserveStrategy;
-}
-
-/// @param currencyToken ZeroAddress is used for native currency
-export async function createZeroYieldStrategy(
-  diamond: Contract,
-  currencyToken: string,
-) {
-  const { zeroYieldStrategy } = await ignition.deploy(ZeroYieldStrategyModule, {
-    parameters: {
-      ZeroYieldStrategyModule: {
-        diamond: await diamond.getAddress(),
-        currencyToken,
-      },
-    },
-  });
-
-  return zeroYieldStrategy;
 }
 
 export async function createDirectStakeStrategy(
