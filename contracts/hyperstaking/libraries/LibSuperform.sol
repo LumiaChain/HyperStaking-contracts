@@ -27,7 +27,7 @@ struct SuperformStorage {
 
 library LibSuperform {
     bytes32 constant internal SUPERFORM_STORAGE_POSITION
-        = keccak256("hyperstaking-superform.storage");
+        = bytes32(uint256(keccak256("hyperstaking.superform-0.1.storage")) - 1);
 
     function diamondStorage() internal pure returns (SuperformStorage storage s) {
         bytes32 position = SUPERFORM_STORAGE_POSITION;

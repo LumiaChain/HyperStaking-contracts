@@ -40,8 +40,8 @@ interface IHyperlaneHandler {
         address indexed originLockbox,
         uint32 indexed originDestination,
         address strategy,
-        address assetToken
-        // address indexed sharesVault
+        address assetToken,
+        address indexed vaultShares
     );
 
     //===========================================================================================//

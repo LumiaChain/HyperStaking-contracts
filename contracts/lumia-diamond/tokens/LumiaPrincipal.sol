@@ -4,10 +4,13 @@ pragma solidity =0.8.27;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC20, ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 
+
 /**
- * @title LumiaAssetToken
+ * @title LumiaPrincipal
+ * @notice Represents the user's principal stake in a cross-chain strategy, this token reflects
+ *         the base capital locked into the system, excluding any yield or rewards
  */
-contract LumiaAssetToken is Ownable, ERC20Burnable {
+contract LumiaPrincipal is Ownable, ERC20Burnable {
     uint8 private immutable DECIMALS;
 
     address public lumiaDiamond;

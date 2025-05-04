@@ -84,7 +84,7 @@ describe("Strategy", function () {
   describe("ReserveStrategy", function () {
     it("check state after allocation", async function () {
       const { hyperStaking, testWstETH, reserveStrategy, reserveAssetPrice, signers } = await loadFixture(deployHyperStaking);
-      const { deposit, hyperFactory, stakeVault } = hyperStaking;
+      const { deposit, hyperFactory, allocation } = hyperStaking;
       const { owner, alice } = signers;
 
       const ownerAmount = parseEther("2");
@@ -95,32 +95,29 @@ describe("Strategy", function () {
       expect(await reserveStrategy.previewAllocation(ownerAmount)).to.equal(ownerAmount * parseEther("1") / reserveAssetPrice);
 
       // event
-      await expect(deposit.stakeDeposit(reserveStrategy, ownerAmount, owner, { value: ownerAmount }))
+      await expect(deposit.stakeDeposit(reserveStrategy, owner, ownerAmount, { value: ownerAmount }))
         .to.emit(reserveStrategy, "Allocate")
         .withArgs(owner, ownerAmount, ownerAmount * parseEther("1") / reserveAssetPrice);
 
-      // TODO: after moving vault to lumia
-      // expect(await testWstETH.balanceOf(hyperFactory)).to.equal(ownerAmount * parseEther("1") / reserveAssetPrice);
+      expect(await testWstETH.balanceOf(hyperFactory)).to.equal(ownerAmount * parseEther("1") / reserveAssetPrice);
 
       // event
-      await expect(deposit.stakeDeposit(reserveStrategy, aliceAmount, alice, { value: aliceAmount }))
+      await expect(deposit.stakeDeposit(reserveStrategy, alice, aliceAmount, { value: aliceAmount }))
         .to.emit(reserveStrategy, "Allocate")
         .withArgs(alice, aliceAmount, aliceAmount * parseEther("1") / reserveAssetPrice);
 
       // VaultInfo
+      expect((await hyperFactory.vaultInfo(reserveStrategy)).enabled).to.deep.equal(true);
+      expect((await hyperFactory.vaultInfo(reserveStrategy)).direct).to.deep.equal(false);
       expect((await hyperFactory.vaultInfo(reserveStrategy)).stakeCurrency).to.deep.equal([shared.nativeTokenAddress]);
       expect((await hyperFactory.vaultInfo(reserveStrategy)).strategy).to.equal(reserveStrategy);
-      expect((await hyperFactory.vaultInfo(reserveStrategy)).asset).to.equal(testWstETH);
+      expect((await hyperFactory.vaultInfo(reserveStrategy)).revenueAsset).to.equal(testWstETH);
 
       // StakeInfo
-      expect((await stakeVault.stakeInfo(reserveStrategy)).stakeBridged).to.equal(ownerAmount + aliceAmount);
-      expect((await stakeVault.stakeInfo(reserveStrategy)).totalStake).to.equal(ownerAmount + aliceAmount);
+      expect((await allocation.stakeInfo(reserveStrategy)).totalStake).to.equal(ownerAmount + aliceAmount);
+      expect((await allocation.stakeInfo(reserveStrategy)).totalAllocation).to.equal((ownerAmount + aliceAmount) * parseEther("1") / reserveAssetPrice);
 
-      // TODO: ??
-      expect((await stakeVault.stakeInfo(reserveStrategy)).assetAllocation).to.equal((ownerAmount + aliceAmount) * parseEther("1") / reserveAssetPrice);
-
-      // TODO: after moving vault to lumia
-      // expect(await testWstETH.balanceOf(hyperFactory)).to.equal((ownerAmount + aliceAmount) * parseEther("1") / reserveAssetPrice);
+      expect(await testWstETH.balanceOf(hyperFactory)).to.equal((ownerAmount + aliceAmount) * parseEther("1") / reserveAssetPrice);
     });
 
     it("there should be a possibility of emergency withdraw", async function () {
@@ -193,7 +190,7 @@ describe("Strategy", function () {
 
         const badStrategy = "0x36fD7e46150d3C0Be5741b0fc8b0b2af4a0D4Dc5";
 
-        await expect(deposit.stakeDeposit(badStrategy, 1, owner, { value: 1 }))
+        await expect(deposit.stakeDeposit(badStrategy, owner, 1, { value: 1 }))
           .to.be.revertedWithCustomError(deposit, "VaultDoesNotExist")
           .withArgs(badStrategy);
       });
@@ -213,13 +210,13 @@ describe("Strategy", function () {
 
       it("Vault external functions not be accessible outside deposit", async function () {
         const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
-        const { stakeVault } = hyperStaking;
+        const { allocation } = hyperStaking;
         const { alice } = signers;
 
-        await expect(stakeVault.join(reserveStrategy, alice, 1000))
+        await expect(allocation.join(reserveStrategy, alice, 1000))
           .to.be.reverted;
 
-        await expect(stakeVault.leave(reserveStrategy, alice, 1000))
+        await expect(allocation.leave(reserveStrategy, alice, 1000))
           .to.be.reverted;
       });
     });
@@ -228,7 +225,7 @@ describe("Strategy", function () {
   describe("Dinero Strategy", function () {
     it("staking deposit to dinero strategy should aquire apxEth", async function () {
       const { hyperStaking, autoPxEth, dineroStrategy, signers } = await loadFixture(deployHyperStaking);
-      const { deposit, hyperFactory, stakeVault } = hyperStaking;
+      const { deposit, hyperFactory, allocation } = hyperStaking;
       const { owner } = signers;
 
       const stakeAmount = parseEther("8");
@@ -239,7 +236,7 @@ describe("Strategy", function () {
       const expectedShares = autoPxEth.convertToShares(expectedAsset);
 
       // event
-      await expect(deposit.stakeDeposit(dineroStrategy, stakeAmount, owner, { value: stakeAmount }))
+      await expect(deposit.stakeDeposit(dineroStrategy, owner, stakeAmount, { value: stakeAmount }))
         .to.emit(dineroStrategy, "Allocate")
         .withArgs(
           owner,
@@ -255,11 +252,11 @@ describe("Strategy", function () {
       // Vault
       expect((await hyperFactory.vaultInfo(dineroStrategy)).stakeCurrency).to.deep.equal([shared.nativeTokenAddress]);
       expect((await hyperFactory.vaultInfo(dineroStrategy)).strategy).to.equal(dineroStrategy);
-      expect((await hyperFactory.vaultInfo(dineroStrategy)).asset).to.equal(autoPxEth);
+      expect((await hyperFactory.vaultInfo(dineroStrategy)).revenueAsset).to.equal(autoPxEth);
 
       // StakeInfo
-      expect((await stakeVault.stakeInfo(dineroStrategy)).totalStake).to.equal(stakeAmount);
-      expect((await stakeVault.stakeInfo(dineroStrategy)).assetAllocation).to.equal(stakeAmount * apxEthPrice / parseEther("1"));
+      expect((await allocation.stakeInfo(dineroStrategy)).totalStake).to.equal(stakeAmount);
+      expect((await allocation.stakeInfo(dineroStrategy)).totalAllocation).to.equal(stakeAmount * apxEthPrice / parseEther("1"));
 
       // apxETH balance
       // TODO: after moving vault to lumia
@@ -269,13 +266,13 @@ describe("Strategy", function () {
     // TODO: when redeem is implemented
     // it("unstaking from to dinero strategy should exchange apxEth back to eth", async function () {
     //   const { hyperStaking, autoPxEth, dineroStrategy, signers } = await loadFixture(deployHyperStaking);
-    //   const { deposit, hyperFactory, stakeVault } = hyperStaking;
+    //   const { deposit, hyperFactory, allocation } = hyperStaking;
     //   const { owner } = signers;
     //
     //   const stakeAmount = parseEther("3");
     //   const apxEthPrice = parseEther("1");
     //
-    //   await deposit.stakeDeposit(dineroStrategy, stakeAmount, owner, { value: stakeAmount });
+    //   await deposit.stakeDeposit(dineroStrategy, owner, stakeAmount, { value: stakeAmount });
     //
     //   await expect(deposit.stakeWithdrawTier1(dineroStrategy, stakeAmount, owner))
     //     .to.emit(dineroStrategy, "Exit")
@@ -283,8 +280,8 @@ describe("Strategy", function () {
     //
     //   expect((await hyperFactory.vaultInfo(dineroStrategy)).asset).to.equal(autoPxEth);
     //
-    //   expect((await stakeVault.stakeInfo(dineroStrategy)).totalStake).to.equal(0);
-    //   expect((await stakeVault.stakeInfo(dineroStrategy)).assetAllocation).to.equal(0);
+    //   expect((await allocation.stakeInfo(dineroStrategy)).totalStake).to.equal(0);
+    //   expect((await allocation.stakeInfo(dineroStrategy)).assetAllocation).to.equal(0);
     //
     //   expect(await autoPxEth.balanceOf(hyperFactory)).to.equal(0);
     // });

@@ -2,10 +2,8 @@
 pragma solidity =0.8.27;
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
-import {LumiaAssetToken} from "../LumiaAssetToken.sol";
 
-/// TODO: IERC4626
-// import {IERC20 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import {IERC20, IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
@@ -18,15 +16,15 @@ import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet
  * @param exists Helper boolean for easy determination if the route exists
  * @param originDestination The Chain id of the origin
  * @param originLockbox The address of the origin Lockbox
- * @param assetToken The LumiaAssetToken representing stake in a specific strategy
- * @param sharesVault The ERC4626 vault used to mint user shares and handle reward distribution
+ * @param assetToken The LumiaPrincipal token representing stake in a specific remote strategy
+ * @param vaultShares The ERC4626 vault used to mint user shares and handle reward distribution
  */
 struct RouteInfo {
     bool exists;
     uint32 originDestination;
     address originLockbox;
-    LumiaAssetToken assetToken;
-    // IERC4626 sharesVault;
+    IERC20 assetToken;
+    IERC4626 vaultShares;
 }
 
 struct LastMessage {
@@ -53,10 +51,6 @@ struct InterchainFactoryStorage {
 
     /// @notice Mapping of strategy to its detailed route information
     mapping (address strategy => RouteInfo) routes;
-
-    /// @notice Tracks the total state of value reflecting assets locked under a specific strategy
-    ///         on the origin chain, showing the total collateral possible to bridge out
-    mapping (address strategy => uint256 amount) generalBridgedState;
 }
 
 library LibInterchainFactory {
@@ -67,7 +61,7 @@ library LibInterchainFactory {
     // -------------------- Constants
 
     bytes32 constant internal INTERCHAIN_FACTORY_STORAGE_POSITION
-        = keccak256("lumia-interchain-factory.storage");
+        = bytes32(uint256(keccak256("lumia-diamond.interchain-factory-0.1.storage")) - 1);
 
     // 1e18 as a scaling factor, e.g. 0.1 ETH (1e17) == 10%
     uint256 constant internal PERCENT_PRECISION = 1e18; // represent 100%

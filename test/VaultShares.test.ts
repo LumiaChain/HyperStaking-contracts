@@ -1,6 +1,5 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
-import { ethers } from "hardhat";
 import { parseEther, ZeroAddress } from "ethers";
 
 import * as shared from "./shared";
@@ -26,41 +25,48 @@ async function deployHyperStaking() {
     hyperStaking.diamond, shared.nativeTokenAddress, await testReserveAsset.getAddress(), reserveAssetPrice,
   );
 
-  const vaultTokenName = "eth vault1";
-  const vaultTokenSymbol = "vETH1";
+  const vaultSharesName = "eth vault1";
+  const vaultSharesSymbol = "vETH1";
 
   await hyperStaking.hyperFactory.connect(signers.vaultManager).addStrategy(
     reserveStrategy,
-    vaultTokenName,
-    vaultTokenSymbol,
+    vaultSharesName,
+    vaultSharesSymbol,
   );
 
-  const vaultTokenAddress = (await hyperStaking.stakeVault.stakeInfo(reserveStrategy)).vaultToken;
-  const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
+  // -------------------- Hyperlane Handler --------------------
 
-  const lumiaAssetTokenAddress = (await hyperStaking.hyperlaneHandler.getRouteInfo(reserveStrategy)).assetToken;
-  const lumiaAssetToken = await ethers.getContractAt("TestERC20", lumiaAssetTokenAddress);
+  const { principalToken, vaultShares } = await shared.getDerivedTokens(
+    hyperStaking.hyperlaneHandler,
+    await reserveStrategy.getAddress(),
+  );
 
   /* eslint-disable object-property-newline */
   return {
     hyperStaking, // HyperStaking deployment
-    testReserveAsset, reserveStrategy, vaultToken, // test contracts
-    reserveAssetPrice, vaultTokenName, vaultTokenSymbol, // values
-    lumiaAssetToken, signers, // signers
+    testReserveAsset, reserveStrategy, principalToken, vaultShares, // test contracts
+    reserveAssetPrice, vaultSharesName, vaultSharesSymbol, // values
+    signers, // signers
   };
   /* eslint-enable object-property-newline */
 }
 
-describe("VaultToken", function () {
+describe("VaultShares", function () {
   describe("InterchainFactory", function () {
     it("vault token name, symbol and decimals", async function () {
-      const { testReserveAsset, vaultToken, vaultTokenName, vaultTokenSymbol } = await loadFixture(deployHyperStaking);
+      const { testReserveAsset, principalToken, vaultShares, vaultSharesName, vaultSharesSymbol } = await loadFixture(deployHyperStaking);
 
-      expect(await vaultToken.name()).to.equal(vaultTokenName);
-      expect(await vaultToken.symbol()).to.equal(vaultTokenSymbol);
+      expect(await principalToken.name()).to.equal(`Principal ${vaultSharesName}`);
+      expect(await principalToken.symbol()).to.equal("p" + vaultSharesSymbol);
 
-      expect(await testReserveAsset.decimals()).to.equal(18);
-      expect(await testReserveAsset.decimals()).to.equal(await vaultToken.decimals());
+      expect(await vaultShares.name()).to.equal(vaultSharesName);
+      expect(await vaultShares.symbol()).to.equal(vaultSharesSymbol);
+
+      const testReserveAssetDecimals = await testReserveAsset.decimals();
+
+      expect(testReserveAssetDecimals).to.equal(18);
+      expect(testReserveAssetDecimals).to.equal(await principalToken.decimals());
+      expect(testReserveAssetDecimals).to.equal(await vaultShares.decimals());
     });
 
     it("test route and registration", async function () {
@@ -105,20 +111,23 @@ describe("VaultToken", function () {
     });
   });
 
-  describe("StakeVault", function () {
+  describe("Allocation", function () {
     it("it shouldn't be possible to mint shares apart from the diamond", async function () {
-      const { vaultToken, signers } = await loadFixture(deployHyperStaking);
+      const { principalToken, vaultShares, signers } = await loadFixture(deployHyperStaking);
       const { alice } = signers;
 
-      await expect(vaultToken.deposit(100, alice))
-        .to.be.revertedWithCustomError(vaultToken, "OwnableUnauthorizedAccount");
+      await expect(principalToken.mint(alice, 100))
+        .to.be.revertedWithCustomError(vaultShares, "OwnableUnauthorizedAccount");
 
-      await expect(vaultToken.mint(100, alice))
-        .to.be.revertedWithCustomError(vaultToken, "OwnableUnauthorizedAccount");
+      await expect(vaultShares.deposit(100, alice))
+        .to.be.revertedWithCustomError(vaultShares, "OwnableUnauthorizedAccount");
+
+      await expect(vaultShares.mint(100, alice))
+        .to.be.revertedWithCustomError(vaultShares, "OwnableUnauthorizedAccount");
     });
 
-    it("it should be possible to stake deposit to vault", async function () {
-      const { hyperStaking, reserveStrategy, vaultToken, signers } = await loadFixture(deployHyperStaking);
+    it("stake deposit should generate vault shares", async function () {
+      const { hyperStaking, reserveStrategy, principalToken, vaultShares, signers } = await loadFixture(deployHyperStaking);
       const { deposit } = hyperStaking;
       const { owner, alice } = signers;
 
@@ -126,74 +135,88 @@ describe("VaultToken", function () {
 
       const depositType = 1;
       await expect(deposit.stakeDeposit(
-        reserveStrategy, stakeAmount, alice, { value: stakeAmount },
+        reserveStrategy, alice, stakeAmount, { value: stakeAmount },
       ))
         .to.emit(deposit, "StakeDeposit")
         .withArgs(owner, alice, reserveStrategy, stakeAmount, depositType);
 
+      // both principalToken and shares should be minted in ration 1:1 to the stake at start
+      expect(await vaultShares.totalSupply()).to.be.eq(stakeAmount);
+      expect(await principalToken.totalSupply()).to.be.eq(stakeAmount);
+
       // shares calculations
       const allocation = await reserveStrategy.previewAllocation(stakeAmount);
-      const expectedShares = await vaultToken.previewDeposit(allocation);
+      const expectedShares = await vaultShares.previewDeposit(allocation);
 
-      expect(await vaultToken.totalSupply()).to.be.eq(expectedShares);
+      // shares not equal stake in this test
+      expect(stakeAmount).to.not.be.eq(expectedShares);
+
+      // TODO: check if this work after revenue collection
+      // expect(await vaultShares.totalSupply()).to.be.eq(expectedShares);
     });
 
     it("shares should be minted equally regardless of the deposit order", async function () {
-      const { hyperStaking, reserveStrategy, vaultToken, signers } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, reserveStrategy, vaultShares, signers } = await loadFixture(deployHyperStaking);
       const { deposit } = hyperStaking;
       const { owner, alice, bob } = signers;
 
       const stakeAmount = parseEther("7");
 
-      await deposit.stakeDeposit(reserveStrategy, stakeAmount, owner, { value: stakeAmount });
-      await deposit.stakeDeposit(reserveStrategy, stakeAmount, bob, { value: stakeAmount });
-      await deposit.stakeDeposit(reserveStrategy, stakeAmount, alice, { value: stakeAmount });
+      await deposit.stakeDeposit(reserveStrategy, owner, stakeAmount, { value: stakeAmount });
+      await deposit.stakeDeposit(reserveStrategy, bob, stakeAmount, { value: stakeAmount });
+      await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
-      const aliceShares = await vaultToken.balanceOf(alice);
-      const bobShares = await vaultToken.balanceOf(bob);
-      const ownerShares = await vaultToken.balanceOf(owner);
+      const aliceShares = await vaultShares.balanceOf(alice);
+      const bobShares = await vaultShares.balanceOf(bob);
+      const ownerShares = await vaultShares.balanceOf(owner);
 
       expect(aliceShares).to.be.eq(bobShares);
       expect(aliceShares).to.be.eq(ownerShares);
 
       // 2x stake
-      await deposit.stakeDeposit(reserveStrategy, stakeAmount, alice, { value: stakeAmount });
+      await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
-      const aliceShares2 = await vaultToken.balanceOf(alice);
+      const aliceShares2 = await vaultShares.balanceOf(alice);
       expect(aliceShares2).to.be.eq(2n * bobShares);
     });
 
     it("it should be possible to redeem and withdraw stake", async function () {
       const {
-        hyperStaking, testReserveAsset, reserveStrategy, reserveAssetPrice, vaultToken, lumiaAssetToken, signers,
+        hyperStaking, testReserveAsset, reserveStrategy, reserveAssetPrice, principalToken, vaultShares, signers,
       } = await loadFixture(deployHyperStaking);
-      const { deposit } = hyperStaking;
+      const { deposit, lockbox } = hyperStaking;
       const {
         alice,
         // bob
       } = signers;
 
-      expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
+      expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
 
       const stakeAmount = parseEther("3");
-      await deposit.stakeDeposit(reserveStrategy, stakeAmount, alice, { value: stakeAmount });
+      await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
-      expect(await lumiaAssetToken.balanceOf(alice)).to.be.eq(stakeAmount); // 1:1 bridge mint
+      expect(await principalToken.totalSupply()).to.be.eq(stakeAmount); // 1:1 bridge mint
+      expect(await principalToken.balanceOf(vaultShares)).to.be.eq(stakeAmount); // locked in vault
 
-      const expectedShares = stakeAmount * parseEther("1") / reserveAssetPrice;
-      expect(await vaultToken.totalAssets()).to.be.eq(stakeAmount * parseEther("1") / reserveAssetPrice);
-      expect(await testReserveAsset.balanceOf(vaultToken)).to.be.gt(0);
+      expect(await vaultShares.totalAssets()).to.be.eq(stakeAmount);
 
-      // redeem should be possible only through tier2 - proxy
-      await expect(vaultToken.connect(alice).redeem(expectedShares, alice, alice))
-        .to.be.revertedWithCustomError(vaultToken, "OwnableUnauthorizedAccount");
+      // check allocation
+      const expectedAllocation = stakeAmount * parseEther("1") / reserveAssetPrice;
+      expect(await testReserveAsset.balanceOf(lockbox)).to.be.eq(expectedAllocation);
 
-      // withdraw should be possible only through tier2 - proxy
-      await expect(vaultToken.connect(alice).withdraw(stakeAmount, alice, alice))
-        .to.be.revertedWithCustomError(vaultToken, "OwnableUnauthorizedAccount");
+      // redeem should be possible only through realAssets facet - lumia proxy
+      await expect(vaultShares.connect(alice).redeem(stakeAmount, alice, alice))
+        .to.be.revertedWithCustomError(vaultShares, "OwnableUnauthorizedAccount");
+
+      // withdraw should be possible only through realAssets facet - lumia proxy
+      await expect(vaultShares.connect(alice).withdraw(stakeAmount, alice, alice))
+        .to.be.revertedWithCustomError(vaultShares, "OwnableUnauthorizedAccount");
 
       // interchain redeem TODO: vault shares redeem
       /*
+      // TODO: remove expectedShares?
+      // const expectedShares = stakeAmount * parseEther("1") / reserveAssetPrice;
+
       await rwaUSD.connect(alice).approve(realAssets, stakeAmount);
       const dispatchFee = await hyperlaneHandler.quoteDispatchStakeRedeem(reserveStrategy, bob, stakeAmount);
       await realAssets.connect(alice).handleRwaRedeem(
@@ -206,7 +229,7 @@ describe("VaultToken", function () {
       expect(await testReserveAsset.balanceOf(vaultToken)).to.be.eq(0);
 
       // -- scenario with approval redeem
-      await deposit.stakeDeposit(reserveStrategy, stakeAmount, alice, { value: stakeAmount });
+      await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
       // alice withdraw for bob
       await rwaUSD.connect(alice).approve(hyperlaneHandler, stakeAmount);

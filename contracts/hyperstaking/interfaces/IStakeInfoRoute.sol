@@ -17,8 +17,7 @@ interface IStakeInfoRoute {
         address lumiaFactory,
         address indexed strategy,
         address indexed user,
-        uint256 stakeAmount,
-        uint256 sharesAmount
+        uint256 stake
     );
 
     //===========================================================================================//

@@ -31,7 +31,6 @@ interface IDeposit {
         address indexed to,
         address indexed strategy,
         uint256 stake,
-        uint256 withdrawAmount,
         DepositType indexed depositType
     );
 
@@ -51,7 +50,6 @@ interface IDeposit {
     /// @notice Thrown when depositing to a not direct deposit vault
     error NotDirectDeposit(address strategy);
 
-
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
@@ -62,55 +60,44 @@ interface IDeposit {
      * @notice Deposits a specified stake amount directly into the lockbox and bridges it to Lumia
      *         Uses a designated Strategy contract, which does not perform any yield strategy generation
      * @param strategy The address of the strategy associated with the vault
-     * @param stake The amount of the token to stake
      * @param to The address receiving the staked token allocation (typically the user's address)
+     * @param stake The amount of the token to stake
      */
     function directStakeDeposit(
         address strategy,
-        uint256 stake,
-        address to
+        address to,
+        uint256 stake
     ) external payable;
-
-    /**
-     * @notice Withdraws a specified stake
-     * @dev Used internally and is called by Lockbox after getting StakeRedeem message
-     * @param strategy The address of the strategy associated with the vault
-     * @param stake The amount of the staked token to withdraw
-     * @param to The address to receive the withdrawn tokens
-     */
-    function directStakeWithdraw(
-        address strategy,
-        uint256 stake,
-        address to
-    ) external returns (uint256 withdrawAmount);
 
     /* ========== Active Deposit  ========== */
 
     /**
      * @notice Deposits a specified stake amount into chosen strategy
      * @param strategy The address of the strategy selected by the user
-     * @param stake The amount of the token to stake
      * @param to The address receiving the staked token allocation (typically the user's address)
+     * @param stake The amount of the token to stake
      */
     function stakeDeposit(
         address strategy,
-        uint256 stake,
-        address to
+        address to,
+        uint256 stake
     ) external payable;
 
+    /* ========== Stake Withdraw  ========== */
+
     /**
-     * @notice Withdraws a specified amount of shares, which are then exchanged for stake
-     *         and send to the user
-     * @dev Used internally and is called by Lockbox after getting StakeRedeem message
+     * @notice Withdraws a specified stake
+     * @dev Used internally after getting interchain StakeRedeem message
      * @param strategy The address of the strategy associated with the vault
-     * @param stake The amount of the staked token to withdraw
      * @param to The address to receive the withdrawn tokens
+     * @param stake The amount of the staked token to withdraw
      */
     function stakeWithdraw(
         address strategy,
-        uint256 stake,
-        address to
-    ) external returns (uint256 withdrawAmount);
+        address to,
+        uint256 stake
+    ) external;
+
 
     /* ========== */
 

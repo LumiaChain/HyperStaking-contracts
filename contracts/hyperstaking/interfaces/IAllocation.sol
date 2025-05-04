@@ -4,10 +4,10 @@ pragma solidity =0.8.27;
 import {StakeInfo} from "../libraries/LibHyperStaking.sol";
 
 /**
- * @title IStakeVault
- * @dev Interface for StakeVaultFacet
+ * @title IAllocation
+ * @dev Interface for AllocationFacet
  */
-interface IStakeVault {
+interface IAllocation {
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
@@ -15,6 +15,7 @@ interface IStakeVault {
     event Join(
         address indexed strategy,
         address indexed user,
+        uint256 stake,
         uint256 allocation
     );
 

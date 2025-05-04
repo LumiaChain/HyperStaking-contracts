@@ -3,11 +3,9 @@ pragma solidity =0.8.27;
 
 import {IDeposit} from "../interfaces/IDeposit.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
-import {IStakeVault} from "../interfaces/IStakeVault.sol";
-import {IStakeInfoRoute} from "../interfaces/IStakeInfoRoute.sol";
+import {IAllocation} from "../interfaces/IAllocation.sol";
+import {ILockbox} from "../interfaces/ILockbox.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
-
-import {StakeInfoData} from "../libraries/HyperlaneMailboxMessages.sol";
 
 import {
     ReentrancyGuardUpgradeable
@@ -18,7 +16,7 @@ import {
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
-    HyperStakingStorage, LibHyperStaking, VaultInfo, StakeInfo, DirectStakeInfo
+    HyperStakingStorage, LibHyperStaking, VaultInfo, DirectStakeInfo
 } from "../libraries/LibHyperStaking.sol";
 
 /**
@@ -47,7 +45,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
     /// @notice Direct stake deposit
     /// @inheritdoc IDeposit
-    function directStakeDeposit(address strategy, uint256 stake, address to)
+    function directStakeDeposit(address strategy, address to, uint256 stake)
         external
         payable
         nonReentrant
@@ -67,49 +65,17 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             stake
         );
 
-        StakeInfoData memory stakeData = StakeInfoData({
-            strategy: strategy,
-            sender: to,
-            stakeAmount: stake,
-            sharesAmount: 0
-        });
-
-        // quote bridge message fee
-        uint256 fee = IStakeInfoRoute(address(this)).quoteDispatchStakeInfo(stakeData);
-
         // direct forwarding a StakeInfo message across chains
-        IStakeInfoRoute(address(this)).stakeInfoDispatch{value: fee}(stakeData);
+        ILockbox(address(this)).bridgeStakeInfo(strategy, to, stake);
 
         emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Direct);
-    }
-
-    /// @notice Withdraw function (internal)
-    /// @inheritdoc IDeposit
-    function directStakeWithdraw(address strategy, uint256 stake, address to)
-        external
-        diamondInternal
-        returns (uint256 withdrawAmount)
-    {
-        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        VaultInfo storage vault = v.vaultInfo[strategy];
-
-        v.directStakeInfo[strategy].totalStake -= stake;
-
-        vault.stakeCurrency.transfer(
-            to,
-            stake
-        );
-
-        withdrawAmount = stake;
-
-        emit StakeWithdraw(address(this), to, strategy, stake, withdrawAmount, DepositType.Direct);
     }
 
     /* ========== Active Staking ========== */
 
     /// @notice Stake deposit function
     /// @inheritdoc IDeposit
-    function stakeDeposit(address strategy, uint256 stake, address to)
+    function stakeDeposit(address strategy, address to, uint256 stake)
         external
         payable
         nonReentrant
@@ -129,35 +95,37 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         );
 
         // true - bridge info to Lumia chain to mint coresponding rwa asset
-        IStakeVault(address(this)).join(strategy, to, stake);
+        IAllocation(address(this)).join(strategy, to, stake);
 
         emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Active);
     }
 
+    /* ========== Stake Withdraw ========== */
+
     /// @notice Withdraw function (internal)
     /// @inheritdoc IDeposit
-    function stakeWithdraw(address strategy, uint256 stake, address to)
+    function stakeWithdraw(address strategy, address to, uint256 stake)
         external
         diamondInternal
-        returns (uint256 withdrawAmount)
     {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        StakeInfo storage stakeInfo = v.stakeInfo[strategy];
+        VaultInfo storage vault = v.vaultInfo[strategy];
 
-        // how many shares must be withdrawn from the vault to withdraw a given amount of stake
-        uint256 allocation = IStrategy(strategy).previewAllocation(stake);
+        v.directStakeInfo[strategy].totalStake -= stake;
 
-        // actual withdraw (ERC4626 withdraw)
-        uint256 shares = stakeInfo.vaultToken.withdraw(allocation, to, address(this));
-        withdrawAmount = IStrategy(strategy).previewExit(allocation);
+        vault.stakeCurrency.transfer(
+            to,
+            stake
+        );
 
-        // save information
-        stakeInfo.sharesRedeemed += shares; // TODO: remove?
-        stakeInfo.stakeWithdrawn += withdrawAmount; // TODO: remove?
+        DepositType depositType;
+        if (IStrategy(strategy).isDirectStakeStrategy()) {
+            depositType = DepositType.Direct;
+        } else {
+            depositType = DepositType.Active;
+        }
 
-        stakeInfo.totalStake -= stake;
-
-        emit StakeWithdraw(address(this), to, strategy, shares, withdrawAmount, DepositType.Active);
+        emit StakeWithdraw(address(this), to, strategy, stake, depositType);
     }
 
     /* ========== ACL ========== */

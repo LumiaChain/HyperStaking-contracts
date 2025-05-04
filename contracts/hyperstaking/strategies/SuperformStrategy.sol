@@ -101,14 +101,17 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
 
         // transmute ERC1155A -> ERC20 and approve diamond to fetch the tokens
         superPositions.setApprovalForOne(DIAMOND, SUPERFORM_ID, allocation);
+
+        // tokens are transmuted 1:1
         superformIntegration.transmuteToERC20(
             address(this),
             SUPERFORM_ID,
             allocation,
             address(this)
         );
-        // tokens are transmuted 1:1
-        IERC20(revenueAsset()).safeIncreaseAllowance(DIAMOND, allocation);
+
+        // transfer allocation
+        IERC20(revenueAsset()).safeTransfer(DIAMOND, allocation);
 
         emit Allocate(user_, amount_, allocation);
     }

@@ -4,7 +4,10 @@ pragma solidity =0.8.27;
 import {IHyperlaneHandler} from "../interfaces/IHyperlaneHandler.sol";
 import {IRealAssets} from "../interfaces/IRealAssets.sol";
 import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
-import {LumiaAssetToken} from "../LumiaAssetToken.sol";
+import {LumiaPrincipal} from "../tokens/LumiaPrincipal.sol";
+import {LumiaVaultShares} from "../tokens/LumiaVaultShares.sol";
+
+import {IERC20, IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
@@ -67,7 +70,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         }
 
         if (msgType == MessageType.StakeInfo) {
-            IRealAssets(address(this)).handleRwaMint(originLockbox, data);
+            IRealAssets(address(this)).handleRwaMint(data);
             return;
         }
 
@@ -88,10 +91,6 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
     ) external payable diamondInternal {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
         RouteInfo storage r = ifs.routes[strategy];
-
-        LibInterchainFactory.checkRoute(ifs, strategy);
-
-        // TODO handle redeem through ERC4626 vault
 
         bytes memory body = generateStakeRedeemBody(strategy, to, assetAmount);
 
@@ -215,25 +214,56 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         RouteInfo storage r = ifs.routes[strategy];
         require(r.exists == false, RouteAlreadyExist());
 
-        LumiaAssetToken assetToken = new LumiaAssetToken(address(this), name, symbol, decimals);
-
-        // TODO vault
-
+        (IERC20 assetToken, IERC4626 vaultShares) = _deployLumiaTokens(
+            strategy,
+            name,
+            symbol,
+            decimals
+        );
 
         ifs.routes[strategy] = RouteInfo({
             exists: true,
             originDestination: originDestination,
             originLockbox: originLockbox,
-            assetToken: assetToken
-            // sharesVault: 
+            assetToken: assetToken,
+            vaultShares: vaultShares
         });
 
         emit RouteRegistered(
             originLockbox,
             originDestination,
             strategy,
-            address(assetToken)
-            // sharesVault 
+            address(assetToken),
+            address(vaultShares)
+        );
+    }
+
+    /**
+     * @notice Deploys a new asset Token and Vault ERC4626 token for a given strategy
+     * @param strategy The address of the strategy
+     * @param name The name of the vault token (and used for asset too) to be deployed
+     * @param symbol The symbol of the vault token (and asset) to be deployed
+     * @param decimals Decimal number used both for asset and vault shares
+     */
+    function _deployLumiaTokens(
+        address strategy,
+        string memory name,
+        string memory symbol,
+        uint8 decimals
+    ) internal returns (IERC20 assetToken, IERC4626 vaultShares) {
+        assetToken = new LumiaPrincipal(
+            address(this),
+            string.concat("Principal ", name), // TODO: write tests for that
+            string.concat("p", symbol),
+            decimals
+        );
+
+        vaultShares = new LumiaVaultShares(
+            address(this),
+            strategy,
+            assetToken,
+            name,
+            symbol
         );
     }
 }

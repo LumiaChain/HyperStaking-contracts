@@ -48,9 +48,8 @@ contract DineroStrategy is AbstractStrategy, PirexIntegration {
     ) external payable onlyLumiaDiamond returns (uint256 allocation) {
         require(amount_ == msg.value, BadAllocationValue());
 
-        // mint apx and allow Diamond (Vault) to fetch it
-        allocation = depositCompound(address(this));
-        IERC20(AUTO_PX_ETH).safeIncreaseAllowance(DIAMOND, allocation);
+        // mint apx for Diamond
+        allocation = depositCompound(DIAMOND);
 
         emit Allocate(user_, amount_, allocation);
     }

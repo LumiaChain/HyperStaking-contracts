@@ -99,8 +99,11 @@ contract ReserveStrategy is AbstractStrategy {
         allocation = previewAllocation(stakeAmount_);
         assetReserve -= allocation;
 
+        // fetch stake
         stake.transferFrom(DIAMOND, address(this), stakeAmount_);
-        IERC20(revenueAsset).safeIncreaseAllowance(DIAMOND, allocation);
+
+        // transfer allocation
+        IERC20(revenueAsset).safeTransfer(DIAMOND, allocation);
 
         emit Allocate(user_, stakeAmount_, allocation);
     }

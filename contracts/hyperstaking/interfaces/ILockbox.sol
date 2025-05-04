@@ -42,6 +42,14 @@ interface ILockbox {
     //                                          Mutable                                           //
     //============================================================================================//
 
+    /// @notice Helper function which locks assets and initiates bridge data transfer
+    /// @dev Through StakeInfo route
+    function bridgeStakeInfo(
+        address strategy,
+        address user,
+        uint256 stake
+    ) external payable;
+
     /**
      * @notice Function called by the Mailbox contract when a message is received
      */

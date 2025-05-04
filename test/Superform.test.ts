@@ -144,17 +144,19 @@ async function deployHyperStaking() {
     true,
   );
 
-  // --------------------
+  // -------------------- Hyperlane Handler --------------------
 
-  const vaultAddress = (await hyperStaking.stakeVault.stakeInfo(superformStrategy)).vaultToken;
-  const vault = await ethers.getContractAt("VaultToken", vaultAddress);
+  const { principalToken, vaultShares } = await shared.getDerivedTokens(
+    hyperStaking.hyperlaneHandler,
+    await superformStrategy.getAddress(),
+  );
 
   // --------------------
 
   /* eslint-disable object-property-newline */
   return {
     hyperStaking, // HyperStaking deployment
-    vault, testUSDC, superformStrategy, erc4626Vault, aerc20, // test contracts
+    testUSDC, superformStrategy, erc4626Vault, aerc20, principalToken, vaultShares, // test contracts
     superform, superVault, superformFactory, superPositions, superformRouter, superformId, // superform
     vaultTokenName, vaultTokenSymbol, // values
     signers, // signers
@@ -331,7 +333,7 @@ describe("Superform", function () {
   describe("Strategy", function () {
     it("superform strategy with vault should be created and strategy registered on lumia side", async function () {
       const { hyperStaking, testUSDC, superformStrategy, superformId } = await loadFixture(deployHyperStaking);
-      const { diamond, hyperFactory, hyperlaneHandler, stakeVault } = hyperStaking;
+      const { diamond, hyperFactory, hyperlaneHandler } = hyperStaking;
 
       expect(await superformStrategy.DIAMOND()).to.equal(diamond);
       expect(await superformStrategy.SUPERFORM_ID()).to.equal(superformId);
@@ -343,24 +345,23 @@ describe("Superform", function () {
       // VaultInfo
       expect((await hyperFactory.vaultInfo(superformStrategy)).stakeCurrency).to.deep.equal([testUSDC.target]);
       expect((await hyperFactory.vaultInfo(superformStrategy)).strategy).to.equal(superformStrategy);
-      expect((await hyperFactory.vaultInfo(superformStrategy)).asset).to.equal(revenueAsset);
+      expect((await hyperFactory.vaultInfo(superformStrategy)).revenueAsset).to.equal(revenueAsset);
 
-      const [vaultToken] = await stakeVault.stakeInfo(superformStrategy);
-      expect(vaultToken).to.not.equal(ZeroAddress);
-
-      expect((await hyperlaneHandler.getRouteInfo(superformStrategy)).exists).to.be.eq(true);
+      const [exists, vaultShares] = await hyperlaneHandler.getRouteInfo(superformStrategy);
+      expect(exists).to.equal(true);
+      expect(vaultShares).to.not.equal(ZeroAddress);
     });
 
     // TODO: when redeem and lumia shares are implemented
     // it("staking using superform strategy", async function () {
     //   const { hyperStaking, superformStrategy, testUSDC, erc4626Vault, vault, aerc20, signers } = await loadFixture(deployHyperStaking);
-    //   const { deposit, stakeVault, hyperFactory, rwaUSD, realAssets } = hyperStaking;
+    //   const { deposit, allocation, hyperFactory, rwaUSD, realAssets } = hyperStaking;
     //   const { alice } = signers;
     //
     //   const amount = parseUnits("2000", 6);
     //
     //   await testUSDC.connect(alice).approve(deposit, amount);
-    //   await expect(deposit.connect(alice).stakeDeposit(superformStrategy, amount, alice))
+    //   await expect(deposit.connect(alice).stakeDeposit(superformStrategy, alice, amount))
     //     .to.changeTokenBalances(testUSDC,
     //       [alice, erc4626Vault], [-amount, amount]);
     //
@@ -370,7 +371,7 @@ describe("Superform", function () {
     //   const [enabled] = await hyperFactory.vaultInfo(superformStrategy, alice);
     //   expect(enabled).to.be.eq(true);
     //
-    //   const [vaultToken] = await stakeVault.stakeInfo(superformStrategy, alice);
+    //   const [vaultToken] = await allocation.stakeInfo(superformStrategy, alice);
     //   expect(vaultToken).to.be.eq(vault.target);
     //
     //   // lpToken on the Lumia chain side
@@ -388,7 +389,7 @@ describe("Superform", function () {
     // TODO: when redeem and lumia shares are implemented
     // it("revenue from superform strategy", async function () {
     //   const { hyperStaking, superVault, superformStrategy, superform, erc4626Vault, testUSDC, signers } = await loadFixture(deployHyperStaking);
-    //   const { deposit, stakeVault, rwaUSD, realAssets } = hyperStaking;
+    //   const { deposit, allocation, rwaUSD, realAssets } = hyperStaking;
     //   const { vaultManager, alice } = signers;
     //
     //   // needed for simulate yield generation
@@ -397,7 +398,7 @@ describe("Superform", function () {
     //   const amount = parseUnits("100", 6);
     //
     //   await testUSDC.connect(alice).approve(deposit, amount);
-    //   await deposit.connect(alice).stakeDeposit(superformStrategy, amount, alice);
+    //   await deposit.connect(alice).stakeDeposit(superformStrategy, alice, amount);
     //
     //   // lpToken on the Lumia chain side
     //   const rwaBalance = await rwaUSD.balanceOf(alice);
@@ -418,13 +419,13 @@ describe("Superform", function () {
     //   // everything has been withdrawn, and vault has double the assets,
     //   // so the revenue is the same as the amount
     //   const expectedRevenue = amount;
-    //   expect(await stakeVault.checkRevenue(superformStrategy)).to.be.eq(expectedRevenue);
+    //   expect(await allocation.checkRevenue(superformStrategy)).to.be.eq(expectedRevenue);
     //
-    //   const revenueTx = stakeVault.connect(vaultManager).collectRevenue(superformStrategy, vaultManager, expectedRevenue);
+    //   const revenueTx = allocation.connect(vaultManager).collectRevenue(superformStrategy, vaultManager, expectedRevenue);
     //
     //   // events
-    //   await expect(revenueTx).to.emit(stakeVault, "Leave").withArgs(superformStrategy, vaultManager, expectedRevenue, anyValue);
-    //   await expect(revenueTx).to.emit(stakeVault, "RevenueCollected").withArgs(superformStrategy, vaultManager, expectedRevenue);
+    //   await expect(revenueTx).to.emit(allocation, "Leave").withArgs(superformStrategy, vaultManager, expectedRevenue, anyValue);
+    //   await expect(revenueTx).to.emit(allocation, "RevenueCollected").withArgs(superformStrategy, vaultManager, expectedRevenue);
     //
     //   // balance
     //   await expect(revenueTx).to.changeTokenBalances(testUSDC, [vaultManager, erc4626Vault], [expectedRevenue, -expectedRevenue]);
@@ -435,7 +436,7 @@ describe("Superform", function () {
     // TODO: when redeem and lumia shares are implemented
     // it("revenue should also depend on bridge safety margin", async function () {
     //   const { hyperStaking, superformStrategy, superVault, testUSDC, erc4626Vault, signers } = await loadFixture(deployHyperStaking);
-    //   const { deposit, stakeVault, rwaUSD, realAssets } = hyperStaking;
+    //   const { deposit, allocation, rwaUSD, realAssets } = hyperStaking;
     //   const { alice, vaultManager } = signers;
     //
     //   // needed for simulate yield generation
@@ -444,7 +445,7 @@ describe("Superform", function () {
     //   const amount = parseUnits("50", 6);
     //
     //   await testUSDC.approve(deposit, amount);
-    //   await deposit.stakeDeposit(superformStrategy, amount, alice);
+    //   await deposit.stakeDeposit(superformStrategy, alice, amount);
     //
     //   // increase the revenue
     //   const additionlAssets = parseUnits("100", 6);
@@ -456,21 +457,21 @@ describe("Superform", function () {
     //   await realAssets.connect(alice).handleRwaRedeem(superformStrategy, alice, alice, amount / 2n);
     //
     //   const newBridgeSafetyMargin = parseEther("0.1"); // 10%;
-    //   const expectedRevenue = await stakeVault.checkRevenue(superformStrategy);
+    //   const expectedRevenue = await allocation.checkRevenue(superformStrategy);
     //
     //   // only vault manager should be able to change the bridge safety margin
-    //   await expect(stakeVault.setBridgeSafetyMargin(superformStrategy, newBridgeSafetyMargin))
+    //   await expect(allocation.setBridgeSafetyMargin(superformStrategy, newBridgeSafetyMargin))
     //     .to.be.reverted;
     //
     //   // must be grerated than min safety margin
-    //   await expect(stakeVault.connect(vaultManager).setBridgeSafetyMargin(superformStrategy, 0))
-    //     .to.be.revertedWithCustomError(stakeVault, "SafetyMarginTooLow");
+    //   await expect(allocation.connect(vaultManager).setBridgeSafetyMargin(superformStrategy, 0))
+    //     .to.be.revertedWithCustomError(allocation, "SafetyMarginTooLow");
     //
     //   // OK
-    //   await stakeVault.connect(vaultManager).setBridgeSafetyMargin(superformStrategy, newBridgeSafetyMargin);
+    //   await allocation.connect(vaultManager).setBridgeSafetyMargin(superformStrategy, newBridgeSafetyMargin);
     //
     //   // the revenue should be less than before
-    //   expect(await stakeVault.checkRevenue(superformStrategy)).to.be.lt(expectedRevenue);
+    //   expect(await allocation.checkRevenue(superformStrategy)).to.be.lt(expectedRevenue);
     // });
   });
 });

@@ -8,7 +8,12 @@ import {
     LibInterchainFactory, InterchainFactoryStorage, RouteInfo
 } from "../libraries/LibInterchainFactory.sol";
 
+import {LumiaPrincipal} from "../tokens/LumiaPrincipal.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
+import {
+    ReentrancyGuardUpgradeable
+} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 import {
     HyperlaneMailboxMessages
@@ -18,9 +23,28 @@ import {
  * @title RealAssetsFacet
  * @notice Facet responsible for minting and redeeming RWA (Real-World Asset) tokens
  */
-contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
+contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
     using HyperlaneMailboxMessages for bytes;
+
+    //============================================================================================//
+    //                                          Errors                                            //
+    //============================================================================================//
+
+    error NotVaultToken();
+
+    //============================================================================================//
+    //                                         Modifiers                                          //
+    //============================================================================================//
+
+    modifier onlyVaultToken(address strategy) {
+        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+        RouteInfo storage r = ifs.routes[strategy];
+
+        require(msg.sender == address(r.vaultShares), NotVaultToken());
+        _;
+    }
+
 
     //============================================================================================//
     //                                      Public Functions                                      //
@@ -30,30 +54,27 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
 
     /// @inheritdoc IRealAssets
     function handleRwaMint(
-        address originLockbox,
         bytes calldata data
-    ) external diamondInternal {
+    ) external diamondInternal nonReentrant {
         address strategy = data.strategy();
         address sender = data.sender();
-        uint256 stakeAmount = data.stakeAmount();
-
-        // TODO remove
-        require(originLockbox != address(0), "unused var");
+        uint256 stake = data.stake();
 
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
         LibInterchainFactory.checkRoute(ifs, strategy);
 
         RouteInfo storage r = ifs.routes[strategy];
 
-        // store information about bridged state/stake
-        ifs.generalBridgedState[strategy] += stakeAmount; // TODO: is it needed?
         // TODO add minted shares?
 
-        // TODO handle vault shares, insted of simple asset mint
-        r.assetToken.mint(sender, stakeAmount);
+        // mint principal first
+        LumiaPrincipal(address(r.assetToken)).mint(address(this), stake);
 
-        // TODO: do we should have shares mint here?
-        emit RwaMint(strategy, sender, stakeAmount);
+        // deposit principal to vault and send shares to sender
+        r.assetToken.safeIncreaseAllowance(address(r.vaultShares), stake);
+        uint256 shares = r.vaultShares.deposit(stake, sender);
+
+        emit RwaMint(strategy, sender, stake, shares);
     }
 
     /// @inheritdoc IRealAssets
@@ -61,41 +82,26 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl {
         address strategy,
         address from,
         address to,
-        uint256 assetAmount
-    ) external payable {
+        uint256 shares
+    ) external payable nonReentrant {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
         LibInterchainFactory.checkRoute(ifs, strategy);
 
-        // RouteInfo storage r = ifs.routes[strategy];
+        RouteInfo storage r = ifs.routes[strategy];
 
-        // TODO check rather balance of shares
-        // require both user and general state
-        // require(
-        //     ifs.userBridgedState[r.originLockbox][rwaAsset][from] >= assetAmount,
-        //     InsufficientUserState()
-        // );
-        require(ifs.generalBridgedState[strategy] >= assetAmount, InsufficientGeneralState());
+        // redeem shares `from` to this contract (require user allowance to burn shares)
+        uint256 assets = r.vaultShares.redeem(shares, address(this), from);
 
-        // decrease bridged state/stake
-        ifs.generalBridgedState[strategy] -= assetAmount;
+        // burn assets, so they can be unlocked on the origin chain
+        LumiaPrincipal(address(r.assetToken)).burnFrom(address(r.vaultShares), assets);
 
-        // TODO transfer rather vault shares
-        // IERC20(rwaAsset).safeTransferFrom(from, address(this), assetAmount);
-
-        // use hyperlane handler function for dispatching rwaAsset
+        // use hyperlane handler function for dispatching stake redeem msg
         IHyperlaneHandler(address(this)).stakeRedeemDispatch{value: msg.value}(
             strategy,
             to,
-            assetAmount
+            assets
         );
 
-        emit RwaRedeem(strategy, from, to, assetAmount);
-    }
-
-    // ========= View ========= //
-
-    /// @inheritdoc IRealAssets
-    function getGeneralBridgedState(address strategy) external view returns (uint256) {
-        return LibInterchainFactory.diamondStorage().generalBridgedState[strategy];
+        emit RwaRedeem(strategy, from, to, assets, shares);
     }
 }

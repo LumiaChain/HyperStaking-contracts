@@ -84,7 +84,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     superformFactory, superformRouter, superVault, superPositions,
   } = await deploySuperformMock(erc4626Vault);
 
-  const { diamond, deposit, hyperFactory, stakeVault, lockbox, routeRegistry, stakeInfoRoute, superformIntegration } = await ignition.deploy(HyperStakingModule, {
+  const { diamond, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, superformIntegration } = await ignition.deploy(HyperStakingModule, {
     parameters: {
       HyperStakingModule: {
         lockboxMailbox: mailboxAddress,
@@ -118,7 +118,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   );
 
   return {
-    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, stakeVault, lockbox, routeRegistry, stakeInfoRoute, superformFactory, superVault, superformIntegration, lumiaDiamond, realAssets,
+    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, superformFactory, superVault, superformIntegration, lumiaDiamond, realAssets,
   };
 }
 
@@ -196,14 +196,14 @@ export async function createDirectStakeStrategy(
 
 // -------------------- Other Helpers --------------------
 
-export async function getDerivedTokens(stakeVault: Contract, routeFactory: Contract, strategy: string) {
-  const vaultTokenAddress = (await stakeVault.stakeInfo(strategy)).vaultToken;
-  const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
+export async function getDerivedTokens(hyperlaneHandler: Contract, strategy: string) {
+  const principalTokenAddress = (await hyperlaneHandler.getRouteInfo(strategy)).assetToken;
+  const principalToken = await ethers.getContractAt("LumiaPrincipal", principalTokenAddress);
 
-  const lpTokenAddress = await routeFactory.getLpToken(strategy);
-  const lpToken = await ethers.getContractAt("LumiaLPToken", lpTokenAddress);
+  const vaultSharesAddress = (await hyperlaneHandler.getRouteInfo(strategy)).vaultShares;
+  const vaultShares = await ethers.getContractAt("LumiaVaultShares", vaultSharesAddress);
 
-  return { vaultToken, lpToken };
+  return { principalToken, vaultShares };
 }
 
 export async function getCurrentBlockTimestamp() {

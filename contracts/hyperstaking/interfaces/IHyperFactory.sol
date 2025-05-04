@@ -14,17 +14,12 @@ interface IHyperFactory {
     event VaultCreate(
         address indexed from,
         address strategy,
-        address indexed asset,
+        bool direct,
+        address indexed stakeCurrency,
+        address indexed revenueAsset,
         string vaultTokenName,
-        string vaultTokenSymbol
-    );
-
-    event DirectVaultCreate(
-        address indexed from,
-        address strategy,
-        address indexed asset,
-        string vaultTokenName,
-        string vaultTokenSymbol
+        string vaultTokenSymbol,
+        uint8 decimals
     );
 
     event VaultEnabledSet(address indexed strategy, bool enabled);
@@ -35,9 +30,6 @@ interface IHyperFactory {
 
     /// @notice Thrown when attempting to create a vault using the same strategy
     error VaultAlreadyExist();
-
-    /// @notice Thrown when attempting to add a non-direct strategy as direct
-    error NotDirectStrategy(address strategy);
 
     /// @notice Thrown when attempting to enable non existing vault
     error VaultDoesNotExist(address strategy);
@@ -52,26 +44,11 @@ interface IHyperFactory {
      * @notice Adds a new strategy and links it to a specific staking currency and vault
      * @dev Sets up the strategy with an associated asset,
      *      payable for dispatching interchain "RouteRegistry" messages to other chain
-     * @param strategy The address of the strategy being added
      * @param strategy The existing strategy (IStrategy) for which a new vault will be created
      * @param vaultTokenName The name of the vault token to be deployed
      * @param vaultTokenSymbol The symbol of the vault token to be deployed
      */
     function addStrategy(
-        address strategy,
-        string memory vaultTokenName,
-        string memory vaultTokenSymbol
-    ) external payable;
-
-    /**
-     * @notice Adds a new direct strategy and links it to a specific staking currency and vault
-     * @dev Sets up the direct strategy which requires only strategy address
-     *      payable for dispatching interchain "RouteRegistry" messages to other chain
-     * @param strategy The existing strategy (IStrategy) for which a new vault will be created
-     * @param vaultTokenName The name of the vault token to be deployed
-     * @param vaultTokenSymbol The symbol of the vault token to be deployed
-     */
-    function addDirectStrategy(
         address strategy,
         string memory vaultTokenName,
         string memory vaultTokenSymbol

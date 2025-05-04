@@ -39,16 +39,17 @@ async function deployHyperStaking() {
   const mailboxFee = parseEther("0.05");
   await hyperStaking.mailbox.connect(signers.owner).setFee(mailboxFee);
 
-  const vaultTokenAddress = (await hyperStaking.stakeVault.stakeInfo(reserveStrategy)).vaultToken;
-  const vaultToken = await ethers.getContractAt("VaultToken", vaultTokenAddress);
+  // -------------------- Hyperlane Handler --------------------
 
-  const lumiaAssetTokenAddress = (await hyperStaking.hyperlaneHandler.getRouteInfo(reserveStrategy)).assetToken;
-  const lumiaAssetToken = await ethers.getContractAt("TestERC20", lumiaAssetTokenAddress);
+  const { principalToken, vaultShares } = await shared.getDerivedTokens(
+    hyperStaking.hyperlaneHandler,
+    await reserveStrategy.getAddress(),
+  );
 
   /* eslint-disable object-property-newline */
   return {
     hyperStaking, // HyperStaking deployment
-    testReserveAsset, reserveStrategy, vaultToken, lumiaAssetToken, // test contracts
+    testReserveAsset, reserveStrategy, principalToken, vaultShares, // test contracts
     reserveAssetPrice, mailboxFee, // values
     signers, // signers
   };
@@ -59,7 +60,7 @@ describe("Lockbox", function () {
   describe("Lockbox Facet", function () {
     it("vault token properties should be correct", async function () {
       const { hyperStaking, signers } = await loadFixture(deployHyperStaking);
-      const { diamond, stakeVault, hyperFactory, mailbox } = hyperStaking;
+      const { diamond, hyperFactory, mailbox } = hyperStaking;
       const { owner, vaultManager } = signers;
 
       const strangeToken = await shared.deloyTestERC20("Test 14 dec Coin", "t14c", 14);
@@ -77,19 +78,18 @@ describe("Lockbox", function () {
         vsymbol,
       );
 
-      const vault2Address = (await stakeVault.stakeInfo(reserveStrategy2)).vaultToken;
-      const vault2Token = await ethers.getContractAt("VaultToken", vault2Address);
+      const vault2 = await shared.getDerivedTokens(
+        hyperStaking.hyperlaneHandler,
+        await reserveStrategy2.getAddress(),
+      );
 
-      const assetToken2Address = (await hyperStaking.hyperlaneHandler.getRouteInfo(reserveStrategy2)).assetToken;
-      const assetToken2 = await ethers.getContractAt("TestERC20", assetToken2Address);
+      expect(await vault2.principalToken.name()).to.equal(`Principal ${vname}`);
+      expect(await vault2.principalToken.symbol()).to.equal("p" + vsymbol);
+      expect(await vault2.principalToken.decimals()).to.equal(14); // 14
 
-      expect(await vault2Token.name()).to.equal(vname);
-      expect(await vault2Token.symbol()).to.equal(vsymbol);
-      expect(await vault2Token.decimals()).to.equal(14); // 14
-
-      expect(await assetToken2.name()).to.equal(vname);
-      expect(await assetToken2.symbol()).to.equal(vsymbol);
-      expect(await assetToken2.decimals()).to.equal(14); // 14
+      expect(await vault2.vaultShares.name()).to.equal(vname);
+      expect(await vault2.vaultShares.symbol()).to.equal(vsymbol);
+      expect(await vault2.vaultShares.decimals()).to.equal(14); // 14
     });
 
     it("test origin update and acl", async function () {
@@ -128,7 +128,7 @@ describe("Lockbox", function () {
     //
     //   const depositType = 1;
     //   await expect(deposit.stakeDeposit(
-    //     reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
+    //     reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
     //   ))
     //     .to.emit(deposit, "StakeDeposit")
     //     .withArgs(owner, alice, reserveStrategy, stakeAmount, depositType);
@@ -190,7 +190,7 @@ describe("Lockbox", function () {
     //   const expectedLpAmount = stakeAmount * parseEther("1") / reserveAssetPrice;
     //
     //   await expect(deposit.stakeDeposit(
-    //     reserveStrategy, stakeAmount, alice, { value: stakeAmount + mailboxFee },
+    //     reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
     //   ))
     //     .to.emit(realAssets, "RwaMint")
     //     .withArgs(reserveStrategy, rwaETH, alice.address, stakeAmount);
@@ -261,8 +261,7 @@ describe("Lockbox", function () {
       const messageSI: StakeInfoDataStruct = {
         strategy: "0x7846C5d815300D27c4975C93Fdbe19b9D352F0d3",
         sender: "0xE5326B17594A697B27F9807832A0CF7CB025B4bb",
-        stakeAmount: parseEther("4.04"),
-        sharesAmount: parseEther("3.56"),
+        stake: parseEther("4.04"),
       };
 
       const bytesSI = await testWrapper.serializeStakeInfo(messageSI);
@@ -270,8 +269,7 @@ describe("Lockbox", function () {
       expect(await testWrapper.messageType(bytesSI)).to.equal(1);
       expect(await testWrapper.strategy(bytesSI)).to.equal(messageSI.strategy);
       expect(await testWrapper.sender(bytesSI)).to.equal(messageSI.sender);
-      expect(await testWrapper.stakeAmount(bytesSI)).to.equal(messageSI.stakeAmount);
-      expect(await testWrapper.sharesAmount(bytesSI)).to.equal(messageSI.sharesAmount);
+      expect(await testWrapper.stake(bytesSI)).to.equal(messageSI.stake);
 
       // StakeRedeem
 

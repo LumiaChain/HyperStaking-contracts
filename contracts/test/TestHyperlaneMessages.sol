@@ -92,12 +92,8 @@ contract TestHyperlaneMessages {
 
     // ========= StakeInfo ========= //
 
-    function stakeAmount(bytes calldata message) external pure returns (uint256) {
-        return message.stakeAmount();
-    }
-
-    function sharesAmount(bytes calldata message) external pure returns (uint256) {
-        return message.sharesAmount();
+    function stake(bytes calldata message) external pure returns (uint256) {
+        return message.stake();
     }
 
     // ========= TokenRedeem  ========= //

@@ -13,46 +13,30 @@ interface IRealAssets {
     event RwaMint(
         address indexed strategy,
         address sender,
-        uint256 stakeAmount
-        // TODO sharesAmount?
+        uint256 stake,
+        uint256 shares
     );
 
     event RwaRedeem(
         address indexed strategy,
         address from,
         address to,
-        uint256 assetAmount
-        // TODO shares?
+        uint256 assets, // de facto stake
+        uint256 shares
     );
-
-    //===========================================================================================//
-    //                                          Errors                                            //
-    //============================================================================================//
-
-    error InsufficientUserState();
-    error InsufficientGeneralState();
 
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
 
     /// @notice Handles the minting of RWA tokens based on the provided data
-    function handleRwaMint(address originLockbox, bytes calldata data) external;
+    function handleRwaMint(bytes calldata data) external;
 
-    /// @notice Handles the redemption of bridged RWA tokens for a user
+    /// @notice Handles the redemption of vault shares tokens for a user
     function handleRwaRedeem(
         address strategy,
         address from,
         address to,
-        uint256 assetAmount
+        uint256 shares
     ) external payable;
-
-    //============================================================================================//
-    //                                           View                                             //
-    //============================================================================================//
-
-    /// @notice Returns the total amount of assets bridged for a given strategy
-    function getGeneralBridgedState(
-        address strategy
-    ) external view returns (uint256);
 }

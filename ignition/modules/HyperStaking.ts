@@ -32,8 +32,8 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const hyperFactoryFacet = m.contract("HyperFactoryFacet");
   const hyperFactoryFacetInterface = getContractInterface("IHyperFactory");
 
-  const stakeVaultFacet = m.contract("StakeVaultFacet");
-  const stakeVaultInterface = getContractInterface("IStakeVault");
+  const allocationFacet = m.contract("AllocationFacet");
+  const allocationInterface = getContractInterface("IAllocation");
 
   const lockboxFacet = m.contract("LockboxFacet");
   const lockboxFacetInterface = getContractInterface("ILockbox");
@@ -64,9 +64,9 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       functionSelectors: getSelectors(hyperFactoryFacetInterface),
     },
     {
-      facetAddress: stakeVaultFacet,
+      facetAddress: allocationFacet,
       action: FacetCutAction.Add,
-      functionSelectors: getSelectors(stakeVaultInterface),
+      functionSelectors: getSelectors(allocationInterface),
     },
     {
       facetAddress: lockboxFacet,
@@ -116,7 +116,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const acl = m.contractAt("HyperStakingAcl", diamond);
   const deposit = m.contractAt("IDeposit", diamond);
   const hyperFactory = m.contractAt("IHyperFactory", diamond);
-  const stakeVault = m.contractAt("IStakeVault", diamond);
+  const allocation = m.contractAt("IAllocation", diamond);
   const lockbox = m.contractAt("ILockbox", diamond);
   const routeRegistry = m.contractAt("IRouteRegistry", diamond);
   const stakeInfoRoute = m.contractAt("IStakeInfoRoute", diamond);
@@ -125,7 +125,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   // --- return
 
   return {
-    diamond, acl, deposit, hyperFactory, stakeVault, lockbox, routeRegistry, stakeInfoRoute, superformIntegration,
+    diamond, acl, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, superformIntegration,
   };
 });
 

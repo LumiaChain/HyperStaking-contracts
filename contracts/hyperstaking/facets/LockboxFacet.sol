@@ -3,10 +3,15 @@ pragma solidity =0.8.27;
 
 import {ILockbox} from "../interfaces/ILockbox.sol";
 import {IDeposit} from "../interfaces/IDeposit.sol";
+import {IAllocation} from "../interfaces/IAllocation.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
-import {MessageType, HyperlaneMailboxMessages} from "../libraries/HyperlaneMailboxMessages.sol";
+import {IStakeInfoRoute} from "../interfaces/IStakeInfoRoute.sol";
+
+import {
+    StakeInfoData, MessageType, HyperlaneMailboxMessages
+} from "../libraries/HyperlaneMailboxMessages.sol";
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
@@ -38,6 +43,25 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
+
+    /// @inheritdoc ILockbox
+    function bridgeStakeInfo(
+        address strategy,
+        address user,
+        uint256 stake
+    ) external payable diamondInternal {
+        StakeInfoData memory data = StakeInfoData({
+            strategy: strategy,
+            sender: user,
+            stake: stake
+        });
+
+        // quote message fee for forwarding a TokenBridge message across chains
+        uint256 fee = IStakeInfoRoute(address(this)).quoteDispatchStakeInfo(data);
+
+        // actual dispatch
+        IStakeInfoRoute(address(this)).stakeInfoDispatch{value: fee}(data);
+    }
 
     /// @inheritdoc ILockbox
     function handle(
@@ -118,9 +142,10 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         uint256 stake = data.redeemAmount(); // amount -> amount of rwa asset / stake
 
         if (IStrategy(strategy).isDirectStakeStrategy()) {
-            IDeposit(address(this)).directStakeWithdraw(strategy, stake, user);
+            IDeposit(address(this)).stakeWithdraw(strategy, user, stake);
         } else {
-            IDeposit(address(this)).stakeWithdraw(strategy, stake, user);
+            uint256 allocation = IStrategy(strategy).previewAllocation(stake);
+            IAllocation(address(this)).leave(strategy, user, allocation);
         }
     }
 }

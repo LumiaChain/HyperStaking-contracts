@@ -39,8 +39,7 @@ contract StakeInfoRoute is IStakeInfoRoute, HyperStakingAcl {
             box.lumiaFactory,
             data.strategy,
             data.sender,
-            data.stakeAmount,
-            data.sharesAmount
+            data.stake
         );
     }
 
