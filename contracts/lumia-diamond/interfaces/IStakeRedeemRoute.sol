@@ -1,24 +1,23 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {RouteRegistryData} from "../libraries/HyperlaneMailboxMessages.sol";
+import {StakeRedeemData} from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
 
 /**
- * @title IRouteRegistry
- * @dev Interface for RouteRegistry
+ * @title IStakeRedeemRoute
+ * @dev Interface for StakeRedeemRoute
  */
-interface IRouteRegistry {
+interface IStakeRedeemRoute {
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
 
-    event RouteRegistryDispatched(
+    event StakeRedeemDispatched(
         address indexed mailbox,
-        address lumiaFactory,
+        address recipient,
         address indexed strategy,
-        string name,
-        string symbol,
-        uint8 decimals
+        address indexed user,
+        uint256 shares
     );
 
     //===========================================================================================//
@@ -33,21 +32,24 @@ interface IRouteRegistry {
     //============================================================================================//
 
     /**
-     * @notice Dispatches a cross-chain message informing about new strategy to register
-     * @dev This function sends a message to trigger new route registration
+     * @notice Initiates stake redemption
+     * @dev Handles cross-chain unstaking via hyperlane bridge
      */
-    function routeRegistryDispatch(RouteRegistryData memory data) external payable;
+    function stakeRedeemDispatch(
+        StakeRedeemData memory data
+    ) external payable;
 
     //============================================================================================//
     //                                           View                                             //
     //============================================================================================//
 
-    /// @notice Helper
-    function quoteDispatchRouteRegistry(RouteRegistryData memory data) external view returns (uint256);
+    /// @notice Helper: separated function for getting mailbox dispatch quote
+    function quoteDispatchStakeRedeem(
+        StakeRedeemData memory data
+    ) external view returns (uint256);
 
     /// @notice Helper: separated function for generating hyperlane message body
-    function generateRouteRegistryBody(
-        RouteRegistryData memory data
+    function generateStakeRedeemBody(
+        StakeRedeemData memory data
     ) external pure returns (bytes memory body);
-
 }

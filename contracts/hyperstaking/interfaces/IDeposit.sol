@@ -98,7 +98,6 @@ interface IDeposit {
         uint256 stake
     ) external;
 
-
     /* ========== */
 
     /// @notice Pauses stake functionalities

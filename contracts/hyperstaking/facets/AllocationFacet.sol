@@ -65,49 +65,104 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
     function leave(
         address strategy,
         address user,
-        uint256 allocation
-    ) public diamondInternal nonReentrant returns (uint256 stake) {
+        uint256 stake
+    ) public diamondInternal nonReentrant returns (uint256 allocation) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
         StakeInfo storage si = v.stakeInfo[strategy];
+
+        allocation = IStrategy(strategy).previewAllocation(stake);
 
         // save information
         si.totalAllocation += allocation;
 
         // exit strategy with given allocation
         vault.revenueAsset.safeIncreaseAllowance(strategy, allocation);
-        stake = IStrategy(strategy).exit(allocation, user);
+        uint256 exitStake = IStrategy(strategy).exit(allocation, user);
 
-        IDeposit(address(this)).stakeWithdraw(strategy, user, stake);
+        IDeposit(address(this)).stakeWithdraw(strategy, user, exitStake);
 
-        emit Leave(strategy, user, stake, allocation);
+        emit Leave(strategy, user, stake, exitStake, allocation);
     }
 
+    // ========= Vault Manager ========= //
+
     /// @inheritdoc IAllocation
-    function collectRevenue(address strategy, address to, uint256 amount)
+    function report(address strategy)
         external
         onlyVaultManager
     {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+        StakeInfo storage si = v.stakeInfo[strategy];
+        _checkActiveStrategy(vault, strategy); // strategy validation
+
+        address feeRecipient = vault.feeRecipient;
+        require(feeRecipient != address(0), FeeRecipientUnset());
+
         uint256 revenue = checkRevenue(strategy);
-        require(amount <= revenue, InsufficientRevenue());
+        require(revenue > 0, InsufficientRevenue());
 
-        uint256 allocation = IStrategy(strategy).previewAllocation(amount);
-        leave(strategy, to, allocation);
+        uint256 feeAmount = vault.feeRate * revenue / LibHyperStaking.PERCENT_PRECISION;
+        uint256 feeAllocation = leave(strategy, feeRecipient, feeAmount);
 
-        emit RevenueCollected(strategy, to, amount);
+        uint256 stakeAdded = revenue - feeAmount;
+
+        // increase total stake value
+        si.totalStake += stakeAdded;
+
+        // bridge StakeReward message
+        ILockbox(address(this)).bridgeStakeReward(strategy, stakeAdded);
+
+        emit StakeCompounded(
+            strategy,
+            feeRecipient,
+            vault.feeRate,
+            feeAmount,
+            feeAllocation,
+            stakeAdded
+        );
     }
 
     /// @inheritdoc IAllocation
     function setBridgeSafetyMargin(address strategy, uint256 newMargin) external onlyVaultManager {
-        require(newMargin >= LibHyperStaking.MIN_BRIDGE_SAFETY_MARGIN, SafetyMarginTooLow());
+        require(newMargin < LibHyperStaking.PERCENT_PRECISION, SafetyMarginTooHigh());
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+        _checkActiveStrategy(vault, strategy); // validation
+
+        uint256 oldMargin = vault.bridgeSafetyMargin;
+        vault.bridgeSafetyMargin = newMargin;
+
+        emit BridgeSafetyMarginUpdated(strategy, oldMargin, newMargin);
+    }
+
+    /// @inheritdoc IAllocation
+    function setFeeRecipient(address strategy, address newRecipient) external onlyVaultManager {
+        require(newRecipient != address(0), ZeroFeeRecipient());
 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        StakeInfo storage si = v.stakeInfo[strategy];
+        VaultInfo storage vault = v.vaultInfo[strategy];
+        _checkActiveStrategy(vault, strategy); // strategy validation
 
-        uint256 oldMargin = si.bridgeSafetyMargin;
-        si.bridgeSafetyMargin = newMargin;
+        address oldRecipient = vault.feeRecipient;
+        vault.feeRecipient = newRecipient;
 
-        emit BridgeSafetyMarginUpdated(oldMargin, newMargin);
+        emit FeeRecipientUpdated(strategy, oldRecipient, newRecipient);
+    }
+
+    /// @inheritdoc IAllocation
+    function setFeeRate(address strategy, uint256 newRate) external onlyVaultManager {
+        require(newRate <= LibHyperStaking.PERCENT_PRECISION, FeeRateTooHigh());
+
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+        _checkActiveStrategy(vault, strategy); // strategy validation
+
+        uint256 oldRate = vault.feeRate;
+        vault.feeRate = newRate;
+
+        emit FeeRateUpdated(strategy, oldRate, newRate);
     }
 
     // ========= View ========= //
@@ -121,6 +176,8 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
     /// @inheritdoc IAllocation
     function checkRevenue(address strategy) public view returns (uint256) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+
+        VaultInfo storage vault = v.vaultInfo[strategy];
         StakeInfo storage si = v.stakeInfo[strategy];
 
         // calculate total possible stake withdraw
@@ -131,7 +188,7 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
 
         // add safety margin to protect users from strategy asset volatility
         uint256 marginAmount = (
-            bridgeCollateral * si.bridgeSafetyMargin
+            bridgeCollateral * vault.bridgeSafetyMargin
         ) / LibHyperStaking.PERCENT_PRECISION;
 
         // check for negative revenue
@@ -140,5 +197,19 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         }
 
         return stake - (bridgeCollateral + marginAmount);
+    }
+
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
+    /// @notice helper check function, strategy validation
+    /// @dev unlike deposits, not enabled strategies are still available to the VaultManager operations
+    function _checkActiveStrategy(
+        VaultInfo storage vault,
+        address strategy
+    ) internal view {
+        require(vault.strategy != address(0), StrategyDoesNotExist(strategy));
+        require(!vault.direct, DirectStrategyNotAllowed(strategy));
     }
 }

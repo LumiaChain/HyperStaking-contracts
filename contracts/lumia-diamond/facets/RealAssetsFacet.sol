@@ -2,7 +2,7 @@
 pragma solidity =0.8.27;
 
 import {IRealAssets} from "../interfaces/IRealAssets.sol";
-import {IHyperlaneHandler} from "../interfaces/IHyperlaneHandler.sol";
+import {IStakeRedeemRoute} from "../interfaces/IStakeRedeemRoute.sol";
 import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
 import {
     LibInterchainFactory, InterchainFactoryStorage, RouteInfo
@@ -16,7 +16,7 @@ import {
 } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 import {
-    HyperlaneMailboxMessages
+    HyperlaneMailboxMessages, StakeRedeemData
 } from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
 
 /**
@@ -26,12 +26,6 @@ import {
 contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
     using HyperlaneMailboxMessages for bytes;
-
-    //============================================================================================//
-    //                                          Errors                                            //
-    //============================================================================================//
-
-    error NotVaultToken();
 
     //============================================================================================//
     //                                         Modifiers                                          //
@@ -65,8 +59,6 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
 
         RouteInfo storage r = ifs.routes[strategy];
 
-        // TODO add minted shares?
-
         // mint principal first
         LumiaPrincipal(address(r.assetToken)).mint(address(this), stake);
 
@@ -75,6 +67,27 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
         uint256 shares = r.vaultShares.deposit(stake, sender);
 
         emit RwaMint(strategy, sender, stake, shares);
+    }
+
+    /// @inheritdoc IRealAssets
+    function handleStakeReward(
+        bytes calldata data
+    ) external diamondInternal nonReentrant {
+        address strategy = data.strategy();
+        uint256 stakeAdded = data.stakeAdded();
+
+        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+        LibInterchainFactory.checkRoute(ifs, strategy);
+
+        RouteInfo storage r = ifs.routes[strategy];
+
+        // mint additional principal
+        LumiaPrincipal(address(r.assetToken)).mint(address(this), stakeAdded);
+
+        // increase principal reserve in vault, increase shares ratio, without minting new shares
+        r.assetToken.safeTransfer(address(r.vaultShares), stakeAdded);
+
+        emit StakeReward(strategy, stakeAdded);
     }
 
     /// @inheritdoc IRealAssets
@@ -96,12 +109,14 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
         LumiaPrincipal(address(r.assetToken)).burnFrom(address(r.vaultShares), assets);
 
         // use hyperlane handler function for dispatching stake redeem msg
-        IHyperlaneHandler(address(this)).stakeRedeemDispatch{value: msg.value}(
-            strategy,
-            to,
-            assets
-        );
+        StakeRedeemData memory data = StakeRedeemData({
+            strategy: strategy,
+            sender: to,
+            redeemAmount: assets
+        });
+        IStakeRedeemRoute(address(this)).stakeRedeemDispatch{value: msg.value}(data);
 
         emit RwaRedeem(strategy, from, to, assets, shares);
     }
+
 }

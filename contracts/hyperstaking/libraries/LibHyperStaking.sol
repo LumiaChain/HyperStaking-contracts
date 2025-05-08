@@ -17,12 +17,18 @@ import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 /// @param strategy Address of the strategy contract
 /// @param stakeCurrency Currency used for staking
 /// @param revenueAsset ERC-20 yield token used in the vault
+/// @param feeRecipient Address that receives the protocol’s fees
+/// @param feeRate Fee percentage, scaled by 1e18 (1e18 = 100%)
+/// @param bridgeSafetyMargin Safety buffer, scaled by 1e18, applied during revenue harvesting
 struct VaultInfo {
     bool enabled;
     bool direct;
     address strategy;
     Currency stakeCurrency;
     IERC20Metadata revenueAsset;
+    address feeRecipient;
+    uint256 feeRate;
+    uint256 bridgeSafetyMargin;
 }
 
 /// DirectStake specific info
@@ -35,7 +41,6 @@ struct DirectStakeInfo {
 struct StakeInfo {
     uint256 totalStake;
     uint256 totalAllocation;
-    uint256 bridgeSafetyMargin;
 }
 
 struct HyperlaneMessage {
@@ -73,10 +78,7 @@ library LibHyperStaking {
         = bytes32(uint256(keccak256("hyperstaking-0.1.storage")) - 1);
 
     // 1e18 as a scaling factor, e.g. for allocation, percent, e.g. 0.1 ETH (1e17) == 10%
-    uint256 constant internal ALLOCATION_POINT_PRECISION = 1e18;
     uint256 constant internal PERCENT_PRECISION = 1e18; // represent 100%
-
-    uint256 constant internal MIN_BRIDGE_SAFETY_MARGIN = 2e16; // 2%
 
     function diamondStorage() internal pure returns (HyperStakingStorage storage s) {
         bytes32 position = HYPERSTAKING_STORAGE_POSITION;

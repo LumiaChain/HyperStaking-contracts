@@ -50,9 +50,15 @@ interface ILockbox {
         uint256 stake
     ) external payable;
 
-    /**
-     * @notice Function called by the Mailbox contract when a message is received
-     */
+    /// @notice Helper function which inform about stake added after report-compounding
+    /// @dev Through StakeRreward route
+    function bridgeStakeReward(
+        address strategy,
+        uint256 stakeAdded
+    ) external payable;
+
+
+    /// @notice Function called by the Mailbox contract when a message is received
     function handle(
         uint32 origin,
         bytes32 sender,

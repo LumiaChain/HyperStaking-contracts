@@ -5,6 +5,8 @@ import {
     MessageType,
     RouteRegistryData,
     StakeInfoData,
+    StakeRewardData,
+    StakeRedeemData,
     HyperlaneMailboxMessages
 } from "../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
 
@@ -44,15 +46,19 @@ contract TestHyperlaneMessages {
         );
     }
 
+    function serializeStakeReward(
+        StakeRewardData memory data_
+    ) external pure returns (bytes memory) {
+        return HyperlaneMailboxMessages.serializeStakeReward(
+            data_
+        );
+    }
+
     function serializeStakeRedeem(
-        address strategy_,
-        address sender_,
-        uint256 redeemAmount_
+        StakeRedeemData memory data_
     ) external pure returns (bytes memory) {
         return HyperlaneMailboxMessages.serializeStakeRedeem(
-            strategy_,
-            sender_,
-            redeemAmount_
+            data_
         );
     }
 
@@ -94,6 +100,12 @@ contract TestHyperlaneMessages {
 
     function stake(bytes calldata message) external pure returns (uint256) {
         return message.stake();
+    }
+
+    // ========= StakeReward ========= //
+
+    function stakeAdded(bytes calldata message) external pure returns (uint256) {
+        return message.stakeAdded();
     }
 
     // ========= TokenRedeem  ========= //

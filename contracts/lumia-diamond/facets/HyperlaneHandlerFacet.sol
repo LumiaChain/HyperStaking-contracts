@@ -74,33 +74,12 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
             return;
         }
 
-        // TODO
-        // if (msgType == MessageType.RewardInfo) {
-        //     IRealAssets(address(this)).handleRewardDistribution(originLockbox, data);
-        //     return;
-        // }
+        if (msgType == MessageType.StakeReward) {
+            IRealAssets(address(this)).handleStakeReward(data);
+            return;
+        }
 
         revert UnsupportedMessage();
-    }
-
-    /// @inheritdoc IHyperlaneHandler
-    function stakeRedeemDispatch(
-        address strategy,
-        address to,
-        uint256 assetAmount
-    ) external payable diamondInternal {
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        RouteInfo storage r = ifs.routes[strategy];
-
-        bytes memory body = generateStakeRedeemBody(strategy, to, assetAmount);
-
-        // address left-padded to bytes32 for compatibility with hyperlane
-        bytes32 recipientBytes32 = TypeCasts.addressToBytes32(r.originLockbox);
-
-        // msg.value should already include fee calculated
-        ifs.mailbox.dispatch{value: msg.value}(r.originDestination, recipientBytes32, body);
-
-        emit StakeRedeemDispatched(address(ifs.mailbox), r.originLockbox, strategy, to, assetAmount);
     }
 
     // ========= Restricted ========= //
@@ -154,36 +133,6 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
     /// @inheritdoc IHyperlaneHandler
     function lastMessage() external view returns(LastMessage memory) {
         return LibInterchainFactory.diamondStorage().lastMessage;
-    }
-
-    /// @inheritdoc IHyperlaneHandler
-    function quoteDispatchStakeRedeem(
-        address strategy,
-        address to,
-        uint256 assetAmount
-    ) external view returns (uint256) {
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-
-        RouteInfo storage r = ifs.routes[strategy];
-
-        return ifs.mailbox.quoteDispatch(
-            r.originDestination,
-            TypeCasts.addressToBytes32(r.originLockbox),
-            generateStakeRedeemBody(strategy, to, assetAmount)
-        );
-    }
-
-    /// @inheritdoc IHyperlaneHandler
-    function generateStakeRedeemBody(
-        address strategy,
-        address to,
-        uint256 assetAmount
-    ) public pure returns (bytes memory body) {
-        body = HyperlaneMailboxMessages.serializeStakeRedeem(
-            strategy,
-            to,
-            assetAmount
-        );
     }
 
     /// @inheritdoc IHyperlaneHandler
@@ -253,7 +202,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
     ) internal returns (IERC20 assetToken, IERC4626 vaultShares) {
         assetToken = new LumiaPrincipal(
             address(this),
-            string.concat("Principal ", name), // TODO: write tests for that
+            string.concat("Principal ", name),
             string.concat("p", symbol),
             decimals
         );

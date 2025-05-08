@@ -28,14 +28,6 @@ interface IHyperlaneHandler {
         uint32 originDestination
     );
 
-    event StakeRedeemDispatched(
-        address indexed mailbox,
-        address recipient,
-        address indexed strategy,
-        address indexed user,
-        uint256 shares
-    );
-
     event RouteRegistered(
         address indexed originLockbox,
         uint32 indexed originDestination,
@@ -72,16 +64,6 @@ interface IHyperlaneHandler {
     ) external payable;
 
     /**
-     * @notice Initiates stake redemption
-     * @dev Handles cross-chain unstaking via hyperlane bridge
-     */
-    function stakeRedeemDispatch(
-        address strategy,
-        address to,
-        uint256 assetAmount
-    ) external payable;
-
-    /**
      * @notice Updates the mailbox address used for interchain messaging
      * @param newMailbox The new mailbox address
      */
@@ -111,20 +93,6 @@ interface IHyperlaneHandler {
 
     /// @notice Returns the last message saved in storage
     function lastMessage() external view returns(LastMessage memory);
-
-    /// @notice Helper: separated function for getting mailbox dispatch quote
-    function quoteDispatchStakeRedeem(
-        address strategy,
-        address to,
-        uint256 assetAmount
-    ) external view returns (uint256);
-
-    /// @notice Helper: separated function for generating hyperlane message body
-    function generateStakeRedeemBody(
-        address strategy,
-        address to,
-        uint256 assetAmount
-    ) external pure returns (bytes memory body);
 
     /// @notice Returns detailed route information for a given strategy
     function getRouteInfo(address strategy) external view returns (RouteInfo memory);

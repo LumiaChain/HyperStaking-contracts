@@ -7,6 +7,7 @@ import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 enum MessageType {
     RouteRegistry,
     StakeInfo,
+    StakeReward,
     StakeRedeem
 }
 
@@ -22,6 +23,17 @@ struct StakeInfoData {
     address strategy;
     address sender;
     uint256 stake;
+}
+
+struct StakeRewardData {
+    address strategy;
+    uint256 stakeAdded;
+}
+
+struct StakeRedeemData {
+    address strategy;
+    address sender;
+    uint256 redeemAmount;
 }
 
 library HyperlaneMailboxMessages {
@@ -79,14 +91,14 @@ library HyperlaneMailboxMessages {
         (uint8 symbolSize, bytes32 symbolBytes) = stringToBytes32(data_.symbol);
 
         return abi.encodePacked(
-            bytes8(uint64(MessageType.RouteRegistry)),  //  8-bytes: msg type
-            TypeCasts.addressToBytes32(data_.strategy), // 32-bytes: strategy address
-            nameSize,                                   //   1-byte: token name size
-            nameBytes,                                  // 64-bytes: token name
-            symbolSize,                                 //   1-byte: token symbol size
-            symbolBytes,                                // 32-bytes: token symbol
-            bytes1(data_.decimals),                     //   1-byte: token decimals
-            data_.metadata                              // XX-bytes: additional metadata
+            bytes8(uint64(MessageType.RouteRegistry)),   //  8-bytes: msg type
+            TypeCasts.addressToBytes32(data_.strategy),  // 32-bytes: strategy address
+            nameSize,                                    //   1-byte: token name size
+            nameBytes,                                   // 64-bytes: token name
+            symbolSize,                                  //   1-byte: token symbol size
+            symbolBytes,                                 // 32-bytes: token symbol
+            bytes1(data_.decimals),                      //   1-byte: token decimals
+            data_.metadata                               // XX-bytes: additional metadata
         );
     }
 
@@ -94,23 +106,31 @@ library HyperlaneMailboxMessages {
         StakeInfoData memory data_
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
-            bytes8(uint64(MessageType.StakeInfo)),      //  8-bytes: msg type
-            TypeCasts.addressToBytes32(data_.strategy), // 32-bytes: strategy address
-            TypeCasts.addressToBytes32(data_.sender),   // 32-bytes: sender address
-            data_.stake                                 // 32-bytes: stake amount
+            bytes8(uint64(MessageType.StakeInfo)),       //  8-bytes: msg type
+            TypeCasts.addressToBytes32(data_.strategy),  // 32-bytes: strategy address
+            TypeCasts.addressToBytes32(data_.sender),    // 32-bytes: sender address
+            data_.stake                                  // 32-bytes: stake amount
+        );
+    }
+
+    function serializeStakeReward(
+        StakeRewardData memory data_
+    ) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            bytes8(uint64(MessageType.StakeReward)),     //  8-bytes: msg type
+            TypeCasts.addressToBytes32(data_.strategy),  // 32-bytes: strategy address
+            data_.stakeAdded                             // 32-bytes: amount of stake added
         );
     }
 
     function serializeStakeRedeem(
-        address strategy_,
-        address sender_,
-        uint256 redeemAmount_
+        StakeRedeemData memory data_
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
-            bytes8(uint64(MessageType.StakeRedeem)),    //  8-bytes: msg type
-            TypeCasts.addressToBytes32(strategy_),      // 32-bytes: strategy address
-            TypeCasts.addressToBytes32(sender_),        // 32-bytes: sender address
-            redeemAmount_                               // 32-bytes: amount of shares to reedeem
+            bytes8(uint64(MessageType.StakeRedeem)),     //  8-bytes: msg type
+            TypeCasts.addressToBytes32(data_.strategy),  // 32-bytes: strategy address
+            TypeCasts.addressToBytes32(data_.sender),    // 32-bytes: sender address
+            data_.redeemAmount                           // 32-bytes: amount of shares to reedeem
         );
     }
 
@@ -160,6 +180,12 @@ library HyperlaneMailboxMessages {
 
     function stake(bytes calldata message) internal pure returns (uint256) {
         return uint256(bytes32(message[72:104]));
+    }
+
+    // ========= StakeReward ========= //
+
+    function stakeAdded(bytes calldata message) internal pure returns (uint256) {
+        return uint256(bytes32(message[40:72]));
     }
 
     // ========= StakeRedeem  ========= //

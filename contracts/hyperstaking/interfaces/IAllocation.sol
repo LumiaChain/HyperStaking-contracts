@@ -22,27 +22,51 @@ interface IAllocation {
     event Leave(
         address indexed strategy,
         address indexed user,
-        uint256 stake,
+        uint256 stake, // amount requested
+        uint256 exitStake, // amount actually withdrawn; can differ by a few wei due to rounding
         uint256 allocation
     );
 
-    event RevenueCollected(
+    event StakeCompounded(
         address indexed strategy,
-        address indexed to,
-        uint256 revenueAmount
+        address indexed feeRecipient,
+        uint256 feeRate,
+        uint256 feeAmount,
+        uint256 feeAllocation,
+        uint256 stakeAdded
     );
 
     event BridgeSafetyMarginUpdated(
+        address indexed strategy,
         uint256 oldMargin,
         uint256 newMargin
+    );
+
+    event FeeRecipientUpdated(
+        address indexed strategy,
+        address indexed oldRecipient,
+        address indexed newRecipient
+    );
+
+    event FeeRateUpdated(
+        address indexed strategy,
+        uint256 oldRate,
+        uint256 newRate
     );
 
     //============================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
 
+    error StrategyDoesNotExist(address strategy);
+    error DirectStrategyNotAllowed(address strategy);
+
+    error FeeRecipientUnset();
+    error ZeroFeeRecipient();
+    error FeeRateTooHigh();
+
     error InsufficientRevenue();
-    error SafetyMarginTooLow();
+    error SafetyMarginTooHigh();
 
     //============================================================================================//
     //                                          Mutable                                           //
@@ -70,16 +94,32 @@ interface IAllocation {
     ) external returns (uint256);
 
     /**
-     * @notice Collects revenue for a specific strategy and sends it to the target address
-     * @dev The possible amount to collect is already adjusted by bridgeSafetyMargin
+     * @notice Harvests revenue for a specific strategy and compound it
+     * @dev The possible amount to report is adjusted by bridgeSafetyMargin
      */
-    function collectRevenue(address strategy, address to, uint256 amount) external;
+    function report(address strategy) external;
 
     /**
      * @notice Sets the bridge safety margin (with 18 dec precision) for a specific strategy
      * @dev The safety margin cannot be set below the minimum allowed value (2% - 2e16)
      */
     function setBridgeSafetyMargin(address strategy, uint256 newMargin) external;
+
+
+    /**
+     * @notice Updates the fee recipient for a given active strategy
+     * @param strategy The strategy whose fee recipient is being set
+     * @param newRecipient The new recipient address
+     */
+    function setFeeRecipient(address strategy, address newRecipient) external;
+
+    /**
+     * @notice Updates the fee rate for a given active strategy
+     * @dev The new rate must be `<= 1e18` (i.e. 100%).
+     * @param strategy The vault/strategy whose rate is being set.
+     * @param newRate  The new fee rate (1e18 == 100%).
+     */
+    function setFeeRate(address strategy, uint256 newRate) external;
 
     //============================================================================================//
     //                                           View                                             //

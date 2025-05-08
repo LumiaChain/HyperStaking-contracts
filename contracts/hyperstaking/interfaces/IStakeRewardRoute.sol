@@ -1,24 +1,22 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {RouteRegistryData} from "../libraries/HyperlaneMailboxMessages.sol";
+import {StakeRewardData} from "../libraries/HyperlaneMailboxMessages.sol";
 
 /**
- * @title IRouteRegistry
- * @dev Interface for RouteRegistry
+ * @title IStakeRewardRoute
+ * @dev Interface for StakeRewardRoute
  */
-interface IRouteRegistry {
+interface IStakeRewardRoute {
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
 
-    event RouteRegistryDispatched(
+    event StakeRewardDispatched(
         address indexed mailbox,
         address lumiaFactory,
         address indexed strategy,
-        string name,
-        string symbol,
-        uint8 decimals
+        uint256 stake
     );
 
     //===========================================================================================//
@@ -33,21 +31,19 @@ interface IRouteRegistry {
     //============================================================================================//
 
     /**
-     * @notice Dispatches a cross-chain message informing about new strategy to register
-     * @dev This function sends a message to trigger new route registration
+     * @notice Dispatches a cross-chain message informing about stake reward
      */
-    function routeRegistryDispatch(RouteRegistryData memory data) external payable;
+    function stakeRewardDispatch(StakeRewardData memory data) external payable;
 
     //============================================================================================//
     //                                           View                                             //
     //============================================================================================//
 
     /// @notice Helper
-    function quoteDispatchRouteRegistry(RouteRegistryData memory data) external view returns (uint256);
+    function quoteDispatchStakeReward(StakeRewardData memory data) external view returns (uint256);
 
-    /// @notice Helper: separated function for generating hyperlane message body
-    function generateRouteRegistryBody(
-        RouteRegistryData memory data
+    /// @notice Helper
+    function generateStakeRewardBody(
+        StakeRewardData memory data
     ) external pure returns (bytes memory body);
-
 }

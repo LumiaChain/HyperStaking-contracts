@@ -121,7 +121,10 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
             direct: direct,
             strategy: strategy,
             stakeCurrency: stakeCurrency,
-            revenueAsset: IERC20Metadata(revenueAsset)
+            revenueAsset: IERC20Metadata(revenueAsset),
+            feeRecipient: address(0),
+            feeRate: 0,
+            bridgeSafetyMargin: 0
         });
 
         // init stakeInfo
@@ -134,8 +137,7 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
             // active staking
             v.stakeInfo[strategy] = StakeInfo({
                 totalStake: 0,
-                totalAllocation: 0,
-                bridgeSafetyMargin: 1e16 // 1%
+                totalAllocation: 0
             });
         }
     }

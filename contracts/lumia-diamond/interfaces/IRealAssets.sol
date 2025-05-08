@@ -25,12 +25,26 @@ interface IRealAssets {
         uint256 shares
     );
 
+    event StakeReward(
+        address indexed strategy,
+        uint256 stakeAdded
+    );
+
+    //============================================================================================//
+    //                                          Errors                                            //
+    //============================================================================================//
+
+    error NotVaultToken();
+
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
 
     /// @notice Handles the minting of RWA tokens based on the provided data
     function handleRwaMint(bytes calldata data) external;
+
+    /// @notice Handles the stake reward distribution
+    function handleStakeReward(bytes calldata data) external;
 
     /// @notice Handles the redemption of vault shares tokens for a user
     function handleRwaRedeem(

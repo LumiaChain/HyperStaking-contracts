@@ -25,6 +25,7 @@ contract StakeInfoRoute is IStakeInfoRoute, HyperStakingAcl {
     ) external payable diamondInternal {
         LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
         require(box.lumiaFactory != address(0), RecipientUnset());
+        require(box.destination != 0, DestinationUnset());
 
         bytes memory body = generateStakeInfoBody(data);
 

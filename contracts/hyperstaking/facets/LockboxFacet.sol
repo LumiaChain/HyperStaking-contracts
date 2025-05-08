@@ -8,9 +8,10 @@ import {IStrategy} from "../interfaces/IStrategy.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {IStakeInfoRoute} from "../interfaces/IStakeInfoRoute.sol";
+import {IStakeRewardRoute} from "../interfaces/IStakeRewardRoute.sol";
 
 import {
-    StakeInfoData, MessageType, HyperlaneMailboxMessages
+    StakeInfoData, StakeRewardData, MessageType, HyperlaneMailboxMessages
 } from "../libraries/HyperlaneMailboxMessages.sol";
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
@@ -56,11 +57,28 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
             stake: stake
         });
 
-        // quote message fee for forwarding a TokenBridge message across chains
+        // quote message fee for forwarding a StakeInfo message across chains
         uint256 fee = IStakeInfoRoute(address(this)).quoteDispatchStakeInfo(data);
 
         // actual dispatch
         IStakeInfoRoute(address(this)).stakeInfoDispatch{value: fee}(data);
+    }
+
+    /// @inheritdoc ILockbox
+    function bridgeStakeReward(
+        address strategy,
+        uint256 stakeAdded
+    ) external payable diamondInternal {
+        StakeRewardData memory data = StakeRewardData({
+            strategy: strategy,
+            stakeAdded: stakeAdded
+        });
+
+        // quote message fee for forwarding a StakeReward message across chains
+        uint256 fee = IStakeRewardRoute(address(this)).quoteDispatchStakeReward(data);
+
+        // actual dispatch
+        IStakeRewardRoute(address(this)).stakeRewardDispatch{value: fee}(data);
     }
 
     /// @inheritdoc ILockbox
@@ -144,8 +162,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         if (IStrategy(strategy).isDirectStakeStrategy()) {
             IDeposit(address(this)).stakeWithdraw(strategy, user, stake);
         } else {
-            uint256 allocation = IStrategy(strategy).previewAllocation(stake);
-            IAllocation(address(this)).leave(strategy, user, allocation);
+            IAllocation(address(this)).leave(strategy, user, stake);
         }
     }
 }

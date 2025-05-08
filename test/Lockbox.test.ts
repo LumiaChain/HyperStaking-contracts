@@ -7,6 +7,8 @@ import * as shared from "./shared";
 
 import { RouteRegistryDataStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IRouteRegistry";
 import { StakeInfoDataStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IStakeInfoRoute";
+import { StakeRewardDataStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IStakeRewardRoute";
+import { StakeRedeemDataStruct } from "../typechain-types/contracts/lumia-diamond/interfaces/IStakeRedeemRoute";
 
 async function deployHyperStaking() {
   const signers = await shared.getSigners();
@@ -271,24 +273,33 @@ describe("Lockbox", function () {
       expect(await testWrapper.sender(bytesSI)).to.equal(messageSI.sender);
       expect(await testWrapper.stake(bytesSI)).to.equal(messageSI.stake);
 
-      // StakeRedeem
+      // StakeReward
 
-      const messageSR = {
-        strtegy: "0x337baDc64C441e6956B87D248E5Bc284828cfa84",
-        sender: "0xcb37D723BE930Fca39F46F019d84E1B359d2170C",
-        amount: parseEther("2"),
+      const messageRI: StakeRewardDataStruct = {
+        strategy: "0x7846C5d815300D27c4975C93Fdbe19b9D352F0d3",
+        stakeAdded: parseEther("1.11"),
       };
 
-      const bytesSR = await testWrapper.serializeStakeRedeem(
-        messageSR.strtegy,
-        messageSR.sender,
-        messageSR.amount,
-      );
+      const bytesRI = await testWrapper.serializeStakeReward(messageRI);
 
-      expect(await testWrapper.messageType(bytesSR)).to.equal(2);
-      expect(await testWrapper.strategy(bytesSR)).to.equal(messageSR.strtegy);
+      expect(await testWrapper.messageType(bytesRI)).to.equal(2);
+      expect(await testWrapper.strategy(bytesRI)).to.equal(messageRI.strategy);
+      expect(await testWrapper.stakeAdded(bytesRI)).to.equal(messageRI.stakeAdded);
+
+      // StakeRedeem
+
+      const messageSR: StakeRedeemDataStruct = {
+        strategy: "0x337baDc64C441e6956B87D248E5Bc284828cfa84",
+        sender: "0xcb37D723BE930Fca39F46F019d84E1B359d2170C",
+        redeemAmount: parseEther("2"),
+      };
+
+      const bytesSR = await testWrapper.serializeStakeRedeem(messageSR);
+
+      expect(await testWrapper.messageType(bytesSR)).to.equal(3);
+      expect(await testWrapper.strategy(bytesSR)).to.equal(messageSR.strategy);
       expect(await testWrapper.sender(bytesSR)).to.equal(messageSR.sender);
-      expect(await testWrapper.redeemAmount(bytesSR)).to.equal(messageSR.amount);
+      expect(await testWrapper.redeemAmount(bytesSR)).to.equal(messageSR.redeemAmount);
     });
   });
 });
