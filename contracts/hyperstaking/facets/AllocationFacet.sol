@@ -67,22 +67,7 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         address user,
         uint256 stake
     ) public diamondInternal nonReentrant returns (uint256 allocation) {
-        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        VaultInfo storage vault = v.vaultInfo[strategy];
-        StakeInfo storage si = v.stakeInfo[strategy];
-
-        allocation = IStrategy(strategy).previewAllocation(stake);
-
-        // save information
-        si.totalAllocation += allocation;
-
-        // exit strategy with given allocation
-        vault.revenueAsset.safeIncreaseAllowance(strategy, allocation);
-        uint256 exitStake = IStrategy(strategy).exit(allocation, user);
-
-        IDeposit(address(this)).stakeWithdraw(strategy, user, exitStake);
-
-        emit Leave(strategy, user, stake, exitStake, allocation);
+        return _leave(strategy, user, stake, false);
     }
 
     // ========= Vault Manager ========= //
@@ -91,6 +76,7 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
     function report(address strategy)
         external
         onlyVaultManager
+        nonReentrant
     {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
@@ -104,7 +90,11 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         require(revenue > 0, InsufficientRevenue());
 
         uint256 feeAmount = vault.feeRate * revenue / LibHyperStaking.PERCENT_PRECISION;
-        uint256 feeAllocation = leave(strategy, feeRecipient, feeAmount);
+        uint256 feeAllocation;
+
+        if (feeAmount > 0) {
+            feeAllocation = _leave(strategy, feeRecipient, feeAmount, true);
+        }
 
         uint256 stakeAdded = revenue - feeAmount;
 
@@ -202,6 +192,35 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
     //============================================================================================//
     //                                     Internal Functions                                     //
     //============================================================================================//
+
+    /// @dev leave actual implementation - without diamondInternal
+    function _leave(
+        address strategy,
+        address user,
+        uint256 stake,
+        bool feeWithdraw
+    ) internal returns (uint256 allocation) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+        StakeInfo storage si = v.stakeInfo[strategy];
+
+        allocation = IStrategy(strategy).previewAllocation(stake);
+
+        // save information
+        si.totalAllocation -= allocation;
+
+        // exit strategy with given allocation
+        vault.revenueAsset.safeIncreaseAllowance(strategy, allocation);
+        uint256 exitStake = IStrategy(strategy).exit(allocation, user);
+
+        if (feeWithdraw) {
+            IDeposit(address(this)).feeWithdraw(vault, user, exitStake);
+        } else {
+            IDeposit(address(this)).stakeWithdraw(strategy, user, exitStake);
+        }
+
+        emit Leave(strategy, user, stake, exitStake, allocation);
+    }
 
     /// @notice helper check function, strategy validation
     /// @dev unlike deposits, not enabled strategies are still available to the VaultManager operations

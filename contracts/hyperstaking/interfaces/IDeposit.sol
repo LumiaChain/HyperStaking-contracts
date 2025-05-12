@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {DirectStakeInfo} from "../libraries/LibHyperStaking.sol";
+import {VaultInfo} from "../libraries/LibHyperStaking.sol";
 
 /**
  * @title IDeposit
@@ -27,11 +28,16 @@ interface IDeposit {
     );
 
     event StakeWithdraw(
-        address from,
         address indexed to,
         address indexed strategy,
         uint256 stake,
         DepositType indexed depositType
+    );
+
+    event FeeWithdraw(
+        address indexed feeRecipient,
+        address indexed strategy,
+        uint256 fee
     );
 
     //============================================================================================//
@@ -96,6 +102,19 @@ interface IDeposit {
         address strategy,
         address to,
         uint256 stake
+    ) external;
+
+    /**
+     * @notice Withdraws protocol fee
+     * @dev Used internally after report with non-zero feeRate
+     * @param vault VaultInfo of the strategy
+     * @param feeRecipient The address of fee recipient
+     * @param fee The amount of fee to withdraw
+     */
+    function feeWithdraw(
+        VaultInfo calldata vault,
+        address feeRecipient,
+        uint256 fee
     ) external;
 
     /* ========== */

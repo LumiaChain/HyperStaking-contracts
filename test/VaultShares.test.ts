@@ -4,6 +4,8 @@ import { parseEther, ZeroAddress } from "ethers";
 
 import * as shared from "./shared";
 
+import { StakeRedeemDataStruct } from "../typechain-types/contracts/lumia-diamond/interfaces/IStakeRedeemRoute";
+
 async function deployHyperStaking() {
   const signers = await shared.getSigners();
 
@@ -128,8 +130,8 @@ describe("VaultShares", function () {
 
     it("stake deposit should generate vault shares", async function () {
       const { hyperStaking, reserveStrategy, principalToken, vaultShares, signers } = await loadFixture(deployHyperStaking);
-      const { deposit } = hyperStaking;
-      const { owner, alice } = signers;
+      const { deposit, allocation } = hyperStaking;
+      const { owner, vaultManager, strategyManager, alice } = signers;
 
       const stakeAmount = parseEther("6");
 
@@ -144,15 +146,21 @@ describe("VaultShares", function () {
       expect(await vaultShares.totalSupply()).to.be.eq(stakeAmount);
       expect(await principalToken.totalSupply()).to.be.eq(stakeAmount);
 
-      // shares calculations
-      const allocation = await reserveStrategy.previewAllocation(stakeAmount);
-      const expectedShares = await vaultShares.previewDeposit(allocation);
+      // simulate yield generation, increase asset price
+      const assetPrice = await reserveStrategy.assetPrice();
+      await reserveStrategy.connect(strategyManager).setAssetPrice(assetPrice * 2n);
 
-      // shares not equal stake in this test
-      expect(stakeAmount).to.not.be.eq(expectedShares);
+      // compound stake
+      const feeRecipient = vaultManager;
+      await allocation.connect(vaultManager).setFeeRecipient(reserveStrategy, feeRecipient);
+      await allocation.connect(vaultManager).report(reserveStrategy);
 
-      // TODO: check if this work after revenue collection
-      // expect(await vaultShares.totalSupply()).to.be.eq(expectedShares);
+      // amount of shares stays the same
+      expect(await vaultShares.totalSupply()).to.be.eq(stakeAmount);
+
+      // principalToken amount should be increased
+      const totalStake = (await allocation.stakeInfo(reserveStrategy)).totalStake;
+      expect(await vaultShares.totalAssets()).to.be.eq(totalStake);
     });
 
     it("shares should be minted equally regardless of the deposit order", async function () {
@@ -184,10 +192,10 @@ describe("VaultShares", function () {
       const {
         hyperStaking, testReserveAsset, reserveStrategy, reserveAssetPrice, principalToken, vaultShares, signers,
       } = await loadFixture(deployHyperStaking);
-      const { deposit, lockbox } = hyperStaking;
+      const { deposit, lockbox, realAssets, stakeRedeemRoute } = hyperStaking;
       const {
         alice,
-        // bob
+        bob,
       } = signers;
 
       expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
@@ -212,36 +220,39 @@ describe("VaultShares", function () {
       await expect(vaultShares.connect(alice).withdraw(stakeAmount, alice, alice))
         .to.be.revertedWithCustomError(vaultShares, "OwnableUnauthorizedAccount");
 
-      // interchain redeem TODO: vault shares redeem
-      /*
-      // TODO: remove expectedShares?
-      // const expectedShares = stakeAmount * parseEther("1") / reserveAssetPrice;
+      // interchain redeem
+      await vaultShares.connect(alice).approve(realAssets, stakeAmount);
 
-      await rwaUSD.connect(alice).approve(realAssets, stakeAmount);
-      const dispatchFee = await hyperlaneHandler.quoteDispatchStakeRedeem(reserveStrategy, bob, stakeAmount);
-      await realAssets.connect(alice).handleRwaRedeem(
+      const stakeRedeemData: StakeRedeemDataStruct = {
+        strategy: reserveStrategy,
+        sender: alice,
+        redeemAmount: stakeAmount,
+      };
+      const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem(stakeRedeemData);
+
+      await vaultShares.connect(alice).approve(realAssets, stakeAmount);
+      await realAssets.connect(alice).redeem(
         reserveStrategy, alice, alice, stakeAmount, { value: dispatchFee },
       );
 
       // back to zero
-      expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
-      expect(await lumiaAssetToken.balanceOf(alice)).to.be.eq(0);
-      expect(await testReserveAsset.balanceOf(vaultToken)).to.be.eq(0);
+      expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
+      expect(await principalToken.balanceOf(vaultShares)).to.be.eq(0);
+      expect(await testReserveAsset.balanceOf(lockbox)).to.be.eq(0);
 
       // -- scenario with approval redeem
       await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
       // alice withdraw for bob
-      await rwaUSD.connect(alice).approve(hyperlaneHandler, stakeAmount);
-      await expect(realAssets.connect(alice).handleRwaRedeem(
+      await vaultShares.connect(alice).approve(realAssets, stakeAmount);
+      await expect(realAssets.connect(alice).redeem(
         reserveStrategy, alice, bob, stakeAmount, { value: dispatchFee },
       )).to.changeEtherBalance(bob, stakeAmount);
 
-      expect(await vaultToken.allowance(alice, bob)).to.be.eq(0);
-      expect(await vaultToken.balanceOf(alice)).to.be.eq(0);
-      expect(await vaultToken.balanceOf(bob)).to.be.eq(0);
-      expect(await testReserveAsset.balanceOf(vaultToken)).to.be.eq(0);
-      */
+      expect(await vaultShares.allowance(alice, bob)).to.be.eq(0);
+      expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
+      expect(await vaultShares.balanceOf(bob)).to.be.eq(0);
+      expect(await testReserveAsset.balanceOf(lockbox)).to.be.eq(0);
     });
   });
 });

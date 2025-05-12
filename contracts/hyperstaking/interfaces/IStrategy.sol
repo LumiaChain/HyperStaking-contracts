@@ -22,7 +22,7 @@ interface IStrategy {
     event Exit(
         address indexed user,
         uint256 assetAllocation,
-        uint256 exitAmount
+        uint256 exitStakeAmount
     );
 
     //============================================================================================//

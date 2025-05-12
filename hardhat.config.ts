@@ -47,6 +47,7 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       allowUnlimitedContractSize: true,
+      allowBlocksWithSameTimestamp: true,
     },
     localhost: {
       url: process.env.LOCAL_RPC_URL,

@@ -47,7 +47,7 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
     // ========= Diamond Internal ========= //
 
     /// @inheritdoc IRealAssets
-    function handleRwaMint(
+    function mint(
         bytes calldata data
     ) external diamondInternal nonReentrant {
         address strategy = data.strategy();
@@ -70,7 +70,7 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
     }
 
     /// @inheritdoc IRealAssets
-    function handleStakeReward(
+    function stakeReward(
         bytes calldata data
     ) external diamondInternal nonReentrant {
         address strategy = data.strategy();
@@ -87,17 +87,18 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
         // increase principal reserve in vault, increase shares ratio, without minting new shares
         r.assetToken.safeTransfer(address(r.vaultShares), stakeAdded);
 
-        emit StakeReward(strategy, stakeAdded);
+        emit RwaStakeReward(strategy, stakeAdded);
     }
 
     /// @inheritdoc IRealAssets
-    function handleRwaRedeem(
+    function redeem(
         address strategy,
         address from,
         address to,
         uint256 shares
     ) external payable nonReentrant {
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+
         LibInterchainFactory.checkRoute(ifs, strategy);
 
         RouteInfo storage r = ifs.routes[strategy];

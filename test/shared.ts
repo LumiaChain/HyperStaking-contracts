@@ -96,7 +96,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     },
   });
 
-  const { lumiaDiamond, hyperlaneHandler, realAssets } = await ignition.deploy(LumiaDiamondModule, {
+  const { lumiaDiamond, hyperlaneHandler, realAssets, stakeRedeemRoute } = await ignition.deploy(LumiaDiamondModule, {
     parameters: {
       LumiaDiamondModule: {
         lumiaMailbox: mailboxAddress,
@@ -118,7 +118,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   );
 
   return {
-    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, superformFactory, superVault, superformIntegration, lumiaDiamond, realAssets,
+    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, superformFactory, superVault, superformIntegration, lumiaDiamond, realAssets, stakeRedeemRoute,
   };
 }
 

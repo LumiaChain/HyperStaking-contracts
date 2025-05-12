@@ -70,12 +70,12 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         }
 
         if (msgType == MessageType.StakeInfo) {
-            IRealAssets(address(this)).handleRwaMint(data);
+            IRealAssets(address(this)).mint(data);
             return;
         }
 
         if (msgType == MessageType.StakeReward) {
-            IRealAssets(address(this)).handleStakeReward(data);
+            IRealAssets(address(this)).stakeReward(data);
             return;
         }
 

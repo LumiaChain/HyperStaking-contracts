@@ -23,6 +23,9 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
   const realAssetFacet = m.contract("RealAssetsFacet");
   const realAssetInterface = getContractInterface("IRealAssets");
 
+  const stakeRedeemRouteFacet = m.contract("StakeRedeemRoute");
+  const stakeRedeemRouteInterface = getContractInterface("IStakeRedeemRoute");
+
   const aclInterface = getContractInterface("LumiaDiamondAcl");
   const aclInterfaceSelectors = getSelectors(aclInterface).remove(["supportsInterface(bytes4)"]);
 
@@ -39,6 +42,11 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
       facetAddress: realAssetFacet,
       action: FacetCutAction.Add,
       functionSelectors: getSelectors(realAssetInterface),
+    },
+    {
+      facetAddress: stakeRedeemRouteFacet,
+      action: FacetCutAction.Add,
+      functionSelectors: getSelectors(stakeRedeemRouteInterface),
     },
   ];
 
@@ -73,10 +81,11 @@ const LumiaDiamondModule = buildModule("LumiaDiamondModule", (m) => {
 
   const hyperlaneHandler = m.contractAt("IHyperlaneHandler", diamond);
   const realAssets = m.contractAt("IRealAssets", diamond);
+  const stakeRedeemRoute = m.contractAt("IStakeRedeemRoute", diamond);
 
   // --- return
 
-  return { lumiaDiamond: diamond, hyperlaneHandler, realAssets };
+  return { lumiaDiamond: diamond, hyperlaneHandler, realAssets, stakeRedeemRoute };
 });
 
 export default LumiaDiamondModule;

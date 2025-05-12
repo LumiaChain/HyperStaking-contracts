@@ -44,6 +44,9 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const stakeInfoRouteFacet = m.contract("StakeInfoRoute");
   const stakeInfoRouteInterface = getContractInterface("IStakeInfoRoute");
 
+  const stakeRewardRouteFacet = m.contract("StakeRewardRoute");
+  const stakeRewardRouteInterface = getContractInterface("IStakeRewardRoute");
+
   const superformIntegrationFacet = m.contract("SuperformIntegrationFacet");
   const superformIntegrationFacetInterface = getContractInterface("ISuperformIntegration");
   const superformIntegrationFacetSelectors = getSelectors(superformIntegrationFacetInterface)
@@ -84,6 +87,11 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       functionSelectors: getSelectors(stakeInfoRouteInterface),
     },
     {
+      facetAddress: stakeRewardRouteFacet,
+      action: FacetCutAction.Add,
+      functionSelectors: getSelectors(stakeRewardRouteInterface),
+    },
+    {
       facetAddress: superformIntegrationFacet,
       action: FacetCutAction.Add,
       functionSelectors: superformIntegrationFacetSelectors,
@@ -120,12 +128,13 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const lockbox = m.contractAt("ILockbox", diamond);
   const routeRegistry = m.contractAt("IRouteRegistry", diamond);
   const stakeInfoRoute = m.contractAt("IStakeInfoRoute", diamond);
+  const stakeRewardRoute = m.contractAt("IStakeRewardRoute", diamond);
   const superformIntegration = m.contractAt("ISuperformIntegration", diamond);
 
   // --- return
 
   return {
-    diamond, acl, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, superformIntegration,
+    diamond, acl, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, stakeRewardRoute, superformIntegration,
   };
 });
 

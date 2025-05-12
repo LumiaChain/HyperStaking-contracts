@@ -118,33 +118,28 @@ describe("Lockbox", function () {
         .withArgs(lumiaFactoryManager, true, 123);
     });
 
-    // TODO: do it with shares
-    // it("stake deposit with non-zero mailbox fee", async function () {
-    //   const { hyperStaking, reserveStrategy, vaultToken, lumiaAssetToken, mailboxFee, signers } = await loadFixture(deployHyperStaking);
-    //   const { deposit } = hyperStaking;
-    //   const { owner, alice } = signers;
-    //
-    //   const rwaBefore = await lumiaAssetToken.balanceOf(alice);
-    //
-    //   const stakeAmount = parseEther("2");
-    //
-    //   const depositType = 1;
-    //   await expect(deposit.stakeDeposit(
-    //     reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
-    //   ))
-    //     .to.emit(deposit, "StakeDeposit")
-    //     .withArgs(owner, alice, reserveStrategy, stakeAmount, depositType);
-    //
-    //   const rwaAfter = await rwaETH.balanceOf(alice);
-    //   expect(rwaAfter).to.be.gt(rwaBefore);
-    //   expect(rwaAfter).to.be.eq(stakeAmount);
-    //
-    //   // more accurate amount calculation
-    //   const allocation = await reserveStrategy.previewAllocation(stakeAmount);
-    //   const vaultShares = await vaultToken.previewDeposit(allocation);
-    //
-    //   expect(vaultShares).to.be.eq(await vaultToken.totalSupply());
-    // });
+    it("stake deposit with non-zero mailbox fee", async function () {
+      const { hyperStaking, reserveStrategy, vaultShares, mailboxFee, signers } = await loadFixture(deployHyperStaking);
+      const { deposit } = hyperStaking;
+      const { owner, alice } = signers;
+
+      const sharesBefore = await vaultShares.balanceOf(alice);
+
+      const stakeAmount = parseEther("2");
+
+      const depositType = 1;
+      await expect(deposit.stakeDeposit(
+        reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
+      ))
+        .to.emit(deposit, "StakeDeposit")
+        .withArgs(owner, alice, reserveStrategy, stakeAmount, depositType);
+
+      const sharesAfter = await vaultShares.balanceOf(alice);
+      expect(sharesAfter).to.be.gt(sharesBefore);
+      expect(sharesAfter).to.be.eq(stakeAmount);
+
+      expect(stakeAmount).to.be.eq(await vaultShares.totalSupply());
+    });
 
     it("mailbox fee is needed when adding strategy too", async function () {
       const { hyperStaking, reserveStrategy, mailboxFee, signers } = await loadFixture(deployHyperStaking);
@@ -182,49 +177,58 @@ describe("Lockbox", function () {
       );
     });
 
-    // TODO: when redeem is implemented
-    // it("redeem the should triger leave on the origin chain - non-zero mailbox fee", async function () {
-    //   const { hyperStaking, reserveStrategy, vaultToken, testReserveAsset, reserveAssetPrice, mailboxFee, signers } = await loadFixture(deployHyperStaking);
-    //   const { deposit, hyperlaneHandler, realAssets, mailbox, rwaETH } = hyperStaking;
-    //   const { alice } = signers;
-    //
-    //   const stakeAmount = parseEther("3");
-    //   const expectedLpAmount = stakeAmount * parseEther("1") / reserveAssetPrice;
-    //
-    //   await expect(deposit.stakeDeposit(
-    //     reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
-    //   ))
-    //     .to.emit(realAssets, "RwaMint")
-    //     .withArgs(reserveStrategy, rwaETH, alice.address, stakeAmount);
-    //
-    //   const rwaAfter = await rwaETH.balanceOf(alice);
-    //   expect(rwaAfter).to.eq(stakeAmount);
-    //
-    //   await rwaETH.connect(alice).approve(realAssets, rwaAfter);
-    //
-    //   await expect(realAssets.connect(alice).handleRwaRedeem(
-    //     reserveStrategy, alice, alice, rwaAfter,
-    //   ))
-    //     .to.be.revertedWithCustomError(mailbox, "DispatchUnderpaid");
-    //
-    //   const dispatchFee = await hyperlaneHandler.quoteDispatchStakeRedeem(reserveStrategy, alice, rwaAfter);
-    //
-    //   await expect(realAssets.handleRwaRedeem(ZeroAddress, alice, alice, rwaAfter))
-    //     // custom error from LibInterchainFactory (unfortunetaly hardhat doesn't support it)
-    //     // .to.be.revertedWithCustomError(realAssets, "RouteDoesNotExist")
-    //     .to.be.reverted;
-    //
-    //   // redeem should return stakeAmount
-    //   const redeemTx = realAssets.connect(alice).handleRwaRedeem(
-    //     reserveStrategy, alice, alice, rwaAfter, { value: dispatchFee },
-    //   );
-    //
-    //   // lpToken -> vaultAsset -> strategy allocation -> stake withdraw
-    //   await expect(redeemTx).to.changeEtherBalance(alice, stakeAmount - dispatchFee);
-    //   await expect(redeemTx).to.changeTokenBalance(testReserveAsset, vaultToken, -expectedLpAmount);
-    //
-    //   expect(await rwaETH.balanceOf(alice)).to.eq(0);
-    // });
+    it("redeem the should triger leave on the origin chain - non-zero mailbox fee", async function () {
+      const { hyperStaking, reserveStrategy, principalToken, vaultShares, testReserveAsset, reserveAssetPrice, mailboxFee, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, lockbox, realAssets, stakeRedeemRoute, mailbox } = hyperStaking;
+      const { alice } = signers;
+
+      const stakeAmount = parseEther("3");
+      const expectedAllocation = stakeAmount * parseEther("1") / reserveAssetPrice;
+
+      await expect(deposit.stakeDeposit(
+        reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
+      ))
+        .to.emit(realAssets, "RwaMint")
+        .withArgs(reserveStrategy, alice.address, stakeAmount, stakeAmount);
+
+      const sharesAfter = await vaultShares.balanceOf(alice);
+      expect(sharesAfter).to.eq(stakeAmount);
+
+      await vaultShares.connect(alice).approve(realAssets, sharesAfter);
+
+      await expect(realAssets.connect(alice).redeem(
+        reserveStrategy, alice, alice, sharesAfter,
+      ))
+        .to.be.revertedWithCustomError(mailbox, "DispatchUnderpaid");
+
+      const stakeRedeemData: StakeRedeemDataStruct = {
+        strategy: reserveStrategy,
+        sender: alice,
+        redeemAmount: sharesAfter,
+      };
+      const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem(stakeRedeemData);
+
+      await expect(realAssets.redeem(ZeroAddress, alice, alice, sharesAfter))
+        // custom error from LibInterchainFactory (unfortunetaly hardhat doesn't support it)
+        // .to.be.revertedWithCustomError(realAssets, "RouteDoesNotExist")
+        .to.be.reverted;
+
+      // redeem should return stakeAmount
+      const redeemTx = realAssets.connect(alice).redeem(
+        reserveStrategy, alice, alice, sharesAfter, { value: dispatchFee },
+      );
+
+      // lpToken -> vaultAsset -> strategy allocation -> stake withdraw
+      await expect(redeemTx).to.changeEtherBalances(
+        [alice, reserveStrategy],
+        [stakeAmount - dispatchFee, -stakeAmount],
+      );
+
+      await expect(redeemTx).to.changeTokenBalance(testReserveAsset, lockbox, -expectedAllocation);
+      await expect(redeemTx).to.changeTokenBalance(principalToken, vaultShares, -stakeAmount);
+
+      expect(await vaultShares.balanceOf(alice)).to.eq(0);
+    });
   });
 
   describe("Hyperlane Mailbox Messages", function () {

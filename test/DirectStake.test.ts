@@ -112,61 +112,60 @@ describe("Direct Stake", function () {
     expect(await vaultShares.balanceOf(alice)).to.equal(stakeAmount);
   });
 
-  // TODO: lumia shared redeem
-  // it("lumia rwa shares could be redeemend back to origin chain in the same 1:1 ratio", async function () {
-  //   const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
-  //   const { deposit, realAssets, lockbox, rwaUSD } = hyperStaking;
-  //   const { alice, bob } = signers;
-  //
-  //   const stakeAmount = parseEther("500");
-  //
-  //   await testUSDC.approve(deposit, stakeAmount);
-  //   await deposit.directStakeDeposit(directStakeStrategy, alice, stakeAmount);
-  //
-  //   await rwaUSD.connect(alice).approve(realAssets, stakeAmount);
-  //   await expect(realAssets.handleRwaRedeem(directStakeStrategy, alice, bob, stakeAmount))
-  //     .to.emit(realAssets, "RwaRedeem")
-  //     .withArgs(directStakeStrategy.target, rwaUSD, alice, bob, stakeAmount);
-  //
-  //   expect((await deposit.directStakeInfo(directStakeStrategy)).totalStake).to.equal(0);
-  //
-  //   expect(await rwaUSD.balanceOf(alice)).to.equal(0);
-  //   expect(await realAssets.getUserBridgedState(lockbox, rwaUSD, alice)).to.equal(0);
-  // });
+  it("lumia rwa shares could be redeemend back to origin chain in the same 1:1 ratio", async function () {
+    const { hyperStaking, testUSDC, directStakeStrategy, vaultShares, signers } = await loadFixture(deployHyperStaking);
+    const { deposit, realAssets } = hyperStaking;
+    const { alice, bob } = signers;
 
-  // TODO: lumia shared redeem 2
-  // it("rwa shares should behave like ERC-20s and be redeemable by other users", async function () {
-  //   const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
-  //   const { deposit, realAssets, rwaUSD } = hyperStaking;
-  //   const { owner, alice, bob } = signers;
-  //
-  //   const stakeAmount = parseEther("3");
-  //
-  //   await testUSDC.approve(deposit, stakeAmount);
-  //   await deposit.directStakeDeposit(directStakeStrategy, alice, stakeAmount);
-  //   const initBalance = await rwaUSD.balanceOf(alice);
-  //
-  //   await rwaUSD.connect(alice).approve(bob, initBalance);
-  //   await rwaUSD.connect(bob).transferFrom(alice, bob, initBalance);
-  //
-  //   expect(await rwaUSD.balanceOf(alice)).to.be.eq(0);
-  //   expect(await rwaUSD.balanceOf(bob)).to.be.eq(initBalance);
-  //   expect(await rwaUSD.balanceOf(owner)).to.be.eq(0);
-  //
-  //   await rwaUSD.connect(bob).transfer(owner, initBalance);
-  //
-  //   expect(await rwaUSD.balanceOf(alice)).to.be.eq(0);
-  //   expect(await rwaUSD.balanceOf(bob)).to.be.eq(0);
-  //   expect(await rwaUSD.balanceOf(owner)).to.be.eq(initBalance);
-  //
-  //   await rwaUSD.approve(realAssets, initBalance);
-  //   await expect(realAssets.handleRwaRedeem(directStakeStrategy, owner, owner, stakeAmount))
-  //     .to.be.revertedWithCustomError(realAssets, "InsufficientUserState");
-  //
-  //   await rwaUSD.transfer(alice, initBalance);
-  //
-  //   // OK
-  //   await rwaUSD.connect(alice).approve(realAssets, initBalance);
-  //   await realAssets.handleRwaRedeem(directStakeStrategy, alice, alice, stakeAmount);
-  // });
+    const stakeAmount = parseEther("500");
+
+    await testUSDC.approve(deposit, stakeAmount);
+    await deposit.directStakeDeposit(directStakeStrategy, alice, stakeAmount);
+
+    await vaultShares.connect(alice).approve(realAssets, stakeAmount);
+    await expect(realAssets.redeem(directStakeStrategy, alice, bob, stakeAmount))
+      .to.emit(realAssets, "RwaRedeem")
+      .withArgs(directStakeStrategy.target, alice, bob, stakeAmount, stakeAmount);
+
+    expect((await deposit.directStakeInfo(directStakeStrategy)).totalStake).to.equal(0);
+
+    expect(await vaultShares.balanceOf(alice)).to.equal(0);
+  });
+
+  it("rwa shares should behave like ERC-20s and be redeemable by other users", async function () {
+    const { hyperStaking, testUSDC, directStakeStrategy, vaultShares, signers } = await loadFixture(deployHyperStaking);
+    const { deposit, realAssets } = hyperStaking;
+    const { owner, alice, bob } = signers;
+
+    const stakeAmount = parseEther("3");
+
+    await testUSDC.approve(deposit, stakeAmount);
+    await deposit.directStakeDeposit(directStakeStrategy, alice, stakeAmount);
+
+    const initBalance = await vaultShares.balanceOf(alice);
+    expect(initBalance).to.be.eq(stakeAmount);
+
+    await vaultShares.connect(alice).approve(bob, initBalance);
+    await vaultShares.connect(bob).transferFrom(alice, bob, initBalance);
+
+    expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
+    expect(await vaultShares.balanceOf(bob)).to.be.eq(initBalance);
+    expect(await vaultShares.balanceOf(owner)).to.be.eq(0);
+
+    await vaultShares.connect(bob).transfer(owner, initBalance);
+
+    expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
+    expect(await vaultShares.balanceOf(bob)).to.be.eq(0);
+    expect(await vaultShares.balanceOf(owner)).to.be.eq(initBalance);
+
+    await vaultShares.approve(realAssets, initBalance);
+    await expect(realAssets.redeem(directStakeStrategy, owner, owner, stakeAmount + 1n))
+      .to.be.revertedWithCustomError(vaultShares, "ERC4626ExceededMaxRedeem");
+
+    await vaultShares.transfer(alice, initBalance);
+
+    // OK from alice
+    await vaultShares.connect(alice).approve(realAssets, initBalance);
+    await realAssets.redeem(directStakeStrategy, alice, alice, stakeAmount);
+  });
 });

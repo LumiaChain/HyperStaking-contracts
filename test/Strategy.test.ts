@@ -1,5 +1,4 @@
-import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
-// import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
+import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import { ethers, ignition } from "hardhat";
 import { parseEther } from "ethers";
@@ -67,13 +66,20 @@ async function deployHyperStaking() {
     "dETH2",
   );
 
+  // -------------------- Hyperlane Handler --------------------
+
+  const { principalToken, vaultShares } = await shared.getDerivedTokens(
+    hyperStaking.hyperlaneHandler,
+    await dineroStrategy.getAddress(),
+  );
+
   // ----------------------------------------
 
   /* eslint-disable object-property-newline */
   return {
     hyperStaking, // HyperStaking deployment
     pxEth, upxEth, pirexEth, autoPxEth, // pirex mock
-    testWstETH, reserveStrategy, dineroStrategy, // test contracts
+    testWstETH, reserveStrategy, dineroStrategy, principalToken, vaultShares, // test contracts
     reserveAssetPrice, // values
     signers, // signers
   };
@@ -225,7 +231,7 @@ describe("Strategy", function () {
   describe("Dinero Strategy", function () {
     it("staking deposit to dinero strategy should aquire apxEth", async function () {
       const { hyperStaking, autoPxEth, dineroStrategy, signers } = await loadFixture(deployHyperStaking);
-      const { deposit, hyperFactory, allocation } = hyperStaking;
+      const { deposit, hyperFactory, lockbox, allocation } = hyperStaking;
       const { owner } = signers;
 
       const stakeAmount = parseEther("8");
@@ -259,32 +265,44 @@ describe("Strategy", function () {
       expect((await allocation.stakeInfo(dineroStrategy)).totalAllocation).to.equal(stakeAmount * apxEthPrice / parseEther("1"));
 
       // apxETH balance
-      // TODO: after moving vault to lumia
-      // expect(await autoPxEth.balanceOf(hyperFactory)).to.equal(stakeAmount * apxEthPrice / parseEther("1"));
+      expect(await autoPxEth.balanceOf(lockbox)).to.equal(stakeAmount * apxEthPrice / parseEther("1"));
     });
 
-    // TODO: when redeem is implemented
-    // it("unstaking from to dinero strategy should exchange apxEth back to eth", async function () {
-    //   const { hyperStaking, autoPxEth, dineroStrategy, signers } = await loadFixture(deployHyperStaking);
-    //   const { deposit, hyperFactory, allocation } = hyperStaking;
-    //   const { owner } = signers;
-    //
-    //   const stakeAmount = parseEther("3");
-    //   const apxEthPrice = parseEther("1");
-    //
-    //   await deposit.stakeDeposit(dineroStrategy, owner, stakeAmount, { value: stakeAmount });
-    //
-    //   await expect(deposit.stakeWithdrawTier1(dineroStrategy, stakeAmount, owner))
-    //     .to.emit(dineroStrategy, "Exit")
-    //     .withArgs(owner, stakeAmount * apxEthPrice / parseEther("1"), anyValue);
-    //
-    //   expect((await hyperFactory.vaultInfo(dineroStrategy)).asset).to.equal(autoPxEth);
-    //
-    //   expect((await allocation.stakeInfo(dineroStrategy)).totalStake).to.equal(0);
-    //   expect((await allocation.stakeInfo(dineroStrategy)).assetAllocation).to.equal(0);
-    //
-    //   expect(await autoPxEth.balanceOf(hyperFactory)).to.equal(0);
-    // });
+    it("unstaking from to dinero strategy should exchange apxEth back to eth", async function () {
+      const { hyperStaking, autoPxEth, vaultShares, dineroStrategy, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, hyperFactory, lockbox, realAssets, allocation } = hyperStaking;
+      const { owner } = signers;
+
+      const blockTime = await shared.getCurrentBlockTimestamp();
+
+      const stakeAmount = parseEther("3");
+      const apxEthPrice = parseEther("1");
+
+      // use the same block time for all transactions, because of autoPxEth rewards mechanism
+
+      await time.setNextBlockTimestamp(blockTime);
+      await deposit.stakeDeposit(dineroStrategy, owner, stakeAmount, { value: stakeAmount });
+
+      await time.setNextBlockTimestamp(blockTime);
+      await vaultShares.approve(realAssets, stakeAmount);
+
+      await time.setNextBlockTimestamp(blockTime);
+      const expectedAllocation = await dineroStrategy.previewAllocation(stakeAmount);
+
+      await time.setNextBlockTimestamp(blockTime);
+      await expect(realAssets.redeem(dineroStrategy, owner, owner, stakeAmount))
+        .to.emit(dineroStrategy, "Exit")
+        .withArgs(owner, expectedAllocation, stakeAmount);
+
+      expect(expectedAllocation).to.be.eq(stakeAmount * apxEthPrice / parseEther("1"));
+
+      expect((await hyperFactory.vaultInfo(dineroStrategy)).revenueAsset).to.equal(autoPxEth);
+
+      expect((await allocation.stakeInfo(dineroStrategy)).totalStake).to.equal(0);
+      expect((await allocation.stakeInfo(dineroStrategy)).totalAllocation).to.equal(0);
+
+      expect(await autoPxEth.balanceOf(lockbox)).to.equal(0);
+    });
 
     describe("Pirex Mock", function () {
       it("it should be possible to deposit ETH and get pxETH", async function () {

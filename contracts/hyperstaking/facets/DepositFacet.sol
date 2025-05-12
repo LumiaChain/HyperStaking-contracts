@@ -111,21 +111,36 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
 
-        v.directStakeInfo[strategy].totalStake -= stake;
+        DepositType depositType;
+        if (IStrategy(strategy).isDirectStakeStrategy()) {
+            depositType = DepositType.Direct;
+            v.directStakeInfo[strategy].totalStake -= stake;
+        } else {
+            depositType = DepositType.Active;
+            v.stakeInfo[strategy].totalStake -= stake;
+        }
 
         vault.stakeCurrency.transfer(
             to,
             stake
         );
 
-        DepositType depositType;
-        if (IStrategy(strategy).isDirectStakeStrategy()) {
-            depositType = DepositType.Direct;
-        } else {
-            depositType = DepositType.Active;
-        }
 
-        emit StakeWithdraw(address(this), to, strategy, stake, depositType);
+        emit StakeWithdraw(to, strategy, stake, depositType);
+    }
+
+    /// @notice Withdraw function for protocol fee (internal)
+    /// @inheritdoc IDeposit
+    function feeWithdraw(VaultInfo calldata vault, address feeRecipient, uint256 fee)
+        external
+        diamondInternal
+    {
+        vault.stakeCurrency.transfer(
+            feeRecipient,
+            fee
+        );
+
+        emit FeeWithdraw(feeRecipient, vault.strategy, fee);
     }
 
     /* ========== ACL ========== */

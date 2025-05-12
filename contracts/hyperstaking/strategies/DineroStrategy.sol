@@ -10,7 +10,6 @@ import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 
 import {PirexIntegration} from "./PirexIntegration.sol";
 
-
 /**
  * @title DineroStrategy
  * @notice This contract manages liquidity staking the base (ETH) asset in Pirex protocol
@@ -60,6 +59,7 @@ contract DineroStrategy is AbstractStrategy, PirexIntegration {
         address user_
     ) external onlyLumiaDiamond returns (uint256 exitAmount) {
         IERC20(AUTO_PX_ETH).transferFrom(DIAMOND, address(this), shares_);
+
         exitAmount = redeem(shares_, DIAMOND); // transfer amount back to the Diamond
 
         emit Exit(user_, shares_, exitAmount);
