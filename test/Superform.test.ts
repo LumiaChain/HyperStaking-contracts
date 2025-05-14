@@ -1,4 +1,4 @@
-import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import { ethers, ignition, network } from "hardhat";
 import { Signer, Contract, parseUnits, parseEther, ZeroAddress } from "ethers";
@@ -353,7 +353,7 @@ describe("Superform", function () {
 
     it("staking using superform strategy", async function () {
       const { hyperStaking, superformStrategy, testUSDC, erc4626Vault, vaultShares, aerc20, signers } = await loadFixture(deployHyperStaking);
-      const { deposit, allocation, hyperFactory, hyperlaneHandler, realAssets } = hyperStaking;
+      const { deposit, defaultWithdrawDelay, allocation, hyperFactory, lockbox, hyperlaneHandler, realAssets } = hyperStaking;
       const { alice } = signers;
 
       const amount = parseUnits("2000", 6);
@@ -377,9 +377,17 @@ describe("Superform", function () {
       expect(rwaBalance).to.be.eq(amount);
 
       await vaultShares.connect(alice).approve(realAssets, rwaBalance);
+      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await expect(realAssets.connect(alice).redeem(superformStrategy, alice, alice, rwaBalance))
         .to.changeTokenBalances(testUSDC,
-          [alice, erc4626Vault], [amount, -amount]);
+          [lockbox, erc4626Vault], [amount, -amount]);
+
+      await time.setNextBlockTimestamp(expectedUnlock);
+      await expect(deposit.connect(alice).claimWithdraw(superformStrategy, alice))
+        .to.changeTokenBalances(testUSDC,
+          [alice, lockbox],
+          [amount, -amount],
+        );
 
       expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
     });
@@ -388,7 +396,7 @@ describe("Superform", function () {
       const {
         hyperStaking, superVault, superformStrategy, superform, erc4626Vault, testUSDC, vaultShares, signers, principalToken,
       } = await loadFixture(deployHyperStaking);
-      const { deposit, hyperFactory, allocation, realAssets } = hyperStaking;
+      const { deposit, defaultWithdrawDelay, hyperFactory, allocation, lockbox, realAssets } = hyperStaking;
       const { vaultManager, alice, bob } = signers;
 
       // needed for simulate yield generation
@@ -411,9 +419,13 @@ describe("Superform", function () {
       const precisionError = 1n;
 
       await vaultShares.connect(alice).approve(realAssets, rwaBalance);
+      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await expect(realAssets.connect(alice).redeem(superformStrategy, alice, alice, rwaBalance))
         .to.changeTokenBalances(testUSDC,
-          [alice, erc4626Vault], [amount - precisionError, -amount + precisionError]);
+          [lockbox, erc4626Vault], [amount - precisionError, -amount + precisionError]);
+
+      await time.setNextBlockTimestamp(expectedUnlock);
+      await deposit.connect(alice).claimWithdraw(superformStrategy, alice);
 
       // Report revenue
 

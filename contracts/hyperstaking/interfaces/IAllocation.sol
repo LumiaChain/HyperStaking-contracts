@@ -117,7 +117,7 @@ interface IAllocation {
      * @notice Updates the fee rate for a given active strategy
      * @dev The new rate must be `<= 1e18` (i.e. 100%).
      * @param strategy The vault/strategy whose rate is being set.
-     * @param newRate  The new fee rate (1e18 == 100%).
+     * @param newRate The new fee rate (1e18 == 100%).
      */
     function setFeeRate(address strategy, uint256 newRate) external;
 

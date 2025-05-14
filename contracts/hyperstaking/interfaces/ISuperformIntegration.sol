@@ -88,9 +88,9 @@ interface ISuperformIntegration is IERC1155Receiver {
         address receiver
     ) external;
 
-    ///  @dev Updates the status of a Superform strategy
-    ///  @param strategy The address of the strategy to update
-    ///  @param status The new status of the strategy (true to enable, false to disable)
+    /// @dev Updates the status of a Superform strategy
+    /// @param strategy The address of the strategy to update
+    /// @param status The new status of the strategy (true to enable, false to disable)
     function updateSuperformStrategies(address strategy, bool status) external;
 
     /// @dev Sets the maximum slippage used in superform, where 10000 = 100%

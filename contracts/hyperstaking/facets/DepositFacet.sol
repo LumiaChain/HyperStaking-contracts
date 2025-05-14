@@ -16,7 +16,7 @@ import {
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
-    HyperStakingStorage, LibHyperStaking, VaultInfo, DirectStakeInfo
+    HyperStakingStorage, LibHyperStaking, VaultInfo, DirectStakeInfo, Claim
 } from "../libraries/LibHyperStaking.sol";
 
 /**
@@ -27,6 +27,8 @@ import {
  */
 contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, PausableUpgradeable {
     using CurrencyHandler for Currency;
+
+    uint64 public constant MAX_WITHDRAW_DELAY = 30 days;
 
     //============================================================================================//
     //                                         Modifiers                                          //
@@ -102,14 +104,20 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
     /* ========== Stake Withdraw ========== */
 
-    /// @notice Withdraw function (internal)
     /// @inheritdoc IDeposit
-    function stakeWithdraw(address strategy, address to, uint256 stake)
-        external
-        diamondInternal
-    {
+    function claimWithdraw(address strategy, address to) external {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        Claim storage claim = v.pendingClaims[msg.sender][strategy];
+
+        // sender may withdraw only their own pending claim, but can forward it to any address (`to`)
+        require(claim.amount > 0, ZeroClaim());
+        require(
+            block.timestamp >= claim.unlockTime,
+            ClaimTooEarly(uint64(block.timestamp), claim.unlockTime)
+        );
+
         VaultInfo storage vault = v.vaultInfo[strategy];
+        uint256 stake = claim.amount;
 
         DepositType depositType;
         if (IStrategy(strategy).isDirectStakeStrategy()) {
@@ -120,13 +128,34 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             v.stakeInfo[strategy].totalStake -= stake;
         }
 
+        // reset claim
+        claim.amount = 0;
+        claim.unlockTime = 0;
+
         vault.stakeCurrency.transfer(
             to,
             stake
         );
 
+        emit WithdrawClaimed(strategy, to, stake, depositType);
+    }
 
-        emit StakeWithdraw(to, strategy, stake, depositType);
+    /// @notice Queues a stake withdrawal (internal)
+    /// @inheritdoc IDeposit
+    function queueWithdraw(
+        address strategy,
+        address to,
+        uint256 stake
+    ) external diamondInternal {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+
+        uint64 unlockTime = uint64(block.timestamp) + v.withdrawDelay;
+        v.pendingClaims[to][strategy] = Claim({
+            amount: stake,
+            unlockTime: unlockTime
+        });
+
+        emit WithdrawQueued(strategy, to, stake, unlockTime);
     }
 
     /// @notice Withdraw function for protocol fee (internal)
@@ -146,6 +175,17 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     /* ========== ACL ========== */
 
     /// @inheritdoc IDeposit
+    function setWithdrawDelay(uint64 newDelay) external onlyStakingManager {
+        require(newDelay < MAX_WITHDRAW_DELAY, WithdrawDelayTooHigh(newDelay));
+
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        uint64 previousDelay = v.withdrawDelay;
+        v.withdrawDelay = newDelay;
+
+        emit WithdrawDelaySet(msg.sender, previousDelay, newDelay);
+    }
+
+    /// @inheritdoc IDeposit
     function pauseDeposit() external onlyStakingManager whenNotPaused {
         _pause();
     }
@@ -156,6 +196,22 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     }
 
     // ========= View ========= //
+
+    /// @inheritdoc IDeposit
+    function withdrawDelay() external view returns (uint64) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        return v.withdrawDelay;
+    }
+
+    /// @inheritdoc IDeposit
+    function pendingWithdraw(
+        address user,
+        address strategy
+    ) external view returns (uint256 amount, uint256 unlockTime) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        Claim storage claim = v.pendingClaims[user][strategy];
+        return (claim.amount, claim.unlockTime);
+    }
 
     /// @inheritdoc IDeposit
     function directStakeInfo(address strategy) external view returns (DirectStakeInfo memory) {

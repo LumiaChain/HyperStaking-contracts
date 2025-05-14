@@ -1,4 +1,4 @@
-import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { parseEther, ZeroAddress } from "ethers";
@@ -179,7 +179,7 @@ describe("Lockbox", function () {
 
     it("redeem the should triger leave on the origin chain - non-zero mailbox fee", async function () {
       const { hyperStaking, reserveStrategy, principalToken, vaultShares, testReserveAsset, reserveAssetPrice, mailboxFee, signers } = await loadFixture(deployHyperStaking);
-      const { deposit, lockbox, realAssets, stakeRedeemRoute, mailbox } = hyperStaking;
+      const { deposit, defaultWithdrawDelay, lockbox, realAssets, stakeRedeemRoute, mailbox } = hyperStaking;
       const { alice } = signers;
 
       const stakeAmount = parseEther("3");
@@ -219,13 +219,20 @@ describe("Lockbox", function () {
       );
 
       // lpToken -> vaultAsset -> strategy allocation -> stake withdraw
-      await expect(redeemTx).to.changeEtherBalances(
-        [alice, reserveStrategy],
-        [stakeAmount - dispatchFee, -stakeAmount],
-      );
-
+      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await expect(redeemTx).to.changeTokenBalance(testReserveAsset, lockbox, -expectedAllocation);
       await expect(redeemTx).to.changeTokenBalance(principalToken, vaultShares, -stakeAmount);
+      await expect(redeemTx).to.changeEtherBalances(
+        [lockbox, reserveStrategy],
+        [stakeAmount, -stakeAmount],
+      );
+
+      await time.setNextBlockTimestamp(expectedUnlock);
+      await expect(deposit.connect(alice).claimWithdraw(reserveStrategy, alice))
+        .to.changeEtherBalances(
+          [alice, lockbox],
+          [stakeAmount, -stakeAmount],
+        );
 
       expect(await vaultShares.balanceOf(alice)).to.eq(0);
     });

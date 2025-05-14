@@ -1,4 +1,4 @@
-import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import { parseEther, ZeroAddress } from "ethers";
 
@@ -192,7 +192,7 @@ describe("VaultShares", function () {
       const {
         hyperStaking, testReserveAsset, reserveStrategy, reserveAssetPrice, principalToken, vaultShares, signers,
       } = await loadFixture(deployHyperStaking);
-      const { deposit, lockbox, realAssets, stakeRedeemRoute } = hyperStaking;
+      const { deposit, defaultWithdrawDelay, lockbox, realAssets, stakeRedeemRoute } = hyperStaking;
       const {
         alice,
         bob,
@@ -245,13 +245,19 @@ describe("VaultShares", function () {
 
       // alice withdraw for bob
       await vaultShares.connect(alice).approve(realAssets, stakeAmount);
+      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await expect(realAssets.connect(alice).redeem(
         reserveStrategy, alice, bob, stakeAmount, { value: dispatchFee },
-      )).to.changeEtherBalance(bob, stakeAmount);
+      )).to.changeEtherBalance(lockbox, stakeAmount);
 
       expect(await vaultShares.allowance(alice, bob)).to.be.eq(0);
       expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
       expect(await vaultShares.balanceOf(bob)).to.be.eq(0);
+
+      await time.setNextBlockTimestamp(expectedUnlock);
+      await expect(deposit.connect(bob).claimWithdraw(reserveStrategy, bob))
+        .to.changeEtherBalance(bob, stakeAmount);
+
       expect(await testReserveAsset.balanceOf(lockbox)).to.be.eq(0);
     });
   });

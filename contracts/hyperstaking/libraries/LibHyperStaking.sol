@@ -43,6 +43,12 @@ struct StakeInfo {
     uint256 totalAllocation;
 }
 
+// @param unlockTime Timestamp when claim becomes withdrawable
+struct Claim {
+    uint256 amount;
+    uint64 unlockTime;
+}
+
 struct HyperlaneMessage {
     address sender;
     bytes data;
@@ -68,6 +74,12 @@ struct HyperStakingStorage {
 
     /// @notice Info of directStake
     mapping (address strategy => DirectStakeInfo) directStakeInfo;
+
+    /// @notice Global delay, in seconds, that must elapse after a claim is queued
+    uint64 withdrawDelay;
+
+    /// @notice Pending claims for each user and strategy
+    mapping(address user => mapping(address strategy => Claim)) pendingClaims;
 
     /// @notice General lockbox data
     LockboxData lockboxData;

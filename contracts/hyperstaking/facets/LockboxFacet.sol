@@ -160,7 +160,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         uint256 stake = data.redeemAmount(); // amount -> amount of rwa asset / stake
 
         if (IStrategy(strategy).isDirectStakeStrategy()) {
-            IDeposit(address(this)).stakeWithdraw(strategy, user, stake);
+            IDeposit(address(this)).queueWithdraw(strategy, user, stake);
         } else {
             IAllocation(address(this)).leave(strategy, user, stake);
         }

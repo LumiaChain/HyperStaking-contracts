@@ -18,7 +18,7 @@ import {
 import {IMailbox} from "../external/hyperlane/interfaces/IMailbox.sol";
 
 import {LibAcl} from "./libraries/LibAcl.sol";
-import {LibHyperStaking, LockboxData} from "./libraries/LibHyperStaking.sol";
+import {LibHyperStaking, HyperStakingStorage, LockboxData} from "./libraries/LibHyperStaking.sol";
 import {LibSuperform} from "./libraries/LibSuperform.sol";
 
 
@@ -60,9 +60,15 @@ contract HyperStakingInit is AccessControlEnumerableUpgradeable, ReentrancyGuard
         LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
         ds.supportedInterfaces[type(IAccessControlEnumerable).interfaceId] = true;
 
+        // initialize storage
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+
+        // withdraw delay, by default 3 days - 259200 seconds
+        v.withdrawDelay = 259200;
+
         // initialize Lockbox
         require(lockboxMailbox != address(0), ZeroAddress());
-        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
+        LockboxData storage box = v.lockboxData;
 
         box.destination = lockboxDestination;
         box.mailbox = IMailbox(lockboxMailbox);

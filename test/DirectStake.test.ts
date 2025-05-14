@@ -1,4 +1,4 @@
-import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import { parseEther, ZeroAddress } from "ethers";
 
@@ -114,7 +114,7 @@ describe("Direct Stake", function () {
 
   it("lumia rwa shares could be redeemend back to origin chain in the same 1:1 ratio", async function () {
     const { hyperStaking, testUSDC, directStakeStrategy, vaultShares, signers } = await loadFixture(deployHyperStaking);
-    const { deposit, realAssets } = hyperStaking;
+    const { deposit, defaultWithdrawDelay, realAssets } = hyperStaking;
     const { alice, bob } = signers;
 
     const stakeAmount = parseEther("500");
@@ -123,9 +123,13 @@ describe("Direct Stake", function () {
     await deposit.directStakeDeposit(directStakeStrategy, alice, stakeAmount);
 
     await vaultShares.connect(alice).approve(realAssets, stakeAmount);
+    const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
     await expect(realAssets.redeem(directStakeStrategy, alice, bob, stakeAmount))
       .to.emit(realAssets, "RwaRedeem")
       .withArgs(directStakeStrategy.target, alice, bob, stakeAmount, stakeAmount);
+
+    await time.setNextBlockTimestamp(expectedUnlock);
+    await deposit.connect(bob).claimWithdraw(directStakeStrategy, bob);
 
     expect((await deposit.directStakeInfo(directStakeStrategy)).totalStake).to.equal(0);
 

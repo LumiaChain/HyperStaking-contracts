@@ -96,6 +96,8 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     },
   });
 
+  const defaultWithdrawDelay = 3 * 24 * 60 * 60; // 3 days
+
   const { lumiaDiamond, hyperlaneHandler, realAssets, stakeRedeemRoute } = await ignition.deploy(LumiaDiamondModule, {
     parameters: {
       LumiaDiamondModule: {
@@ -118,7 +120,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   );
 
   return {
-    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, superformFactory, superVault, superformIntegration, lumiaDiamond, realAssets, stakeRedeemRoute,
+    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, superformFactory, superVault, superformIntegration, lumiaDiamond, realAssets, stakeRedeemRoute, defaultWithdrawDelay,
   };
 }
 

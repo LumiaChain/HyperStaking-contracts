@@ -216,7 +216,7 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         if (feeWithdraw) {
             IDeposit(address(this)).feeWithdraw(vault, user, exitStake);
         } else {
-            IDeposit(address(this)).stakeWithdraw(strategy, user, exitStake);
+            IDeposit(address(this)).queueWithdraw(strategy, user, exitStake);
         }
 
         emit Leave(strategy, user, stake, exitStake, allocation);

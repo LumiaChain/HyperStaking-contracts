@@ -270,7 +270,7 @@ describe("Strategy", function () {
 
     it("unstaking from to dinero strategy should exchange apxEth back to eth", async function () {
       const { hyperStaking, autoPxEth, vaultShares, dineroStrategy, signers } = await loadFixture(deployHyperStaking);
-      const { deposit, hyperFactory, lockbox, realAssets, allocation } = hyperStaking;
+      const { deposit, defaultWithdrawDelay, hyperFactory, lockbox, realAssets, allocation } = hyperStaking;
       const { owner } = signers;
 
       const blockTime = await shared.getCurrentBlockTimestamp();
@@ -290,6 +290,7 @@ describe("Strategy", function () {
       const expectedAllocation = await dineroStrategy.previewAllocation(stakeAmount);
 
       await time.setNextBlockTimestamp(blockTime);
+      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await expect(realAssets.redeem(dineroStrategy, owner, owner, stakeAmount))
         .to.emit(dineroStrategy, "Exit")
         .withArgs(owner, expectedAllocation, stakeAmount);
@@ -297,6 +298,9 @@ describe("Strategy", function () {
       expect(expectedAllocation).to.be.eq(stakeAmount * apxEthPrice / parseEther("1"));
 
       expect((await hyperFactory.vaultInfo(dineroStrategy)).revenueAsset).to.equal(autoPxEth);
+
+      await time.setNextBlockTimestamp(expectedUnlock);
+      await deposit.claimWithdraw(dineroStrategy, owner);
 
       expect((await allocation.stakeInfo(dineroStrategy)).totalStake).to.equal(0);
       expect((await allocation.stakeInfo(dineroStrategy)).totalAllocation).to.equal(0);
