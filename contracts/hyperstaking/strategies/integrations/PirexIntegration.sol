@@ -4,10 +4,10 @@ pragma solidity =0.8.27;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {PirexEth} from "../../external/pirex/PirexEth.sol";
-import {AutoPxEth} from "../../external/pirex/AutoPxEth.sol";
+import {PirexEth} from "../../../external/pirex/PirexEth.sol";
+import {AutoPxEth} from "../../../external/pirex/AutoPxEth.sol";
 
-import {DataTypes} from "../../external/pirex/libraries/DataTypes.sol";
+import {DataTypes} from "../../../external/pirex/libraries/DataTypes.sol";
 
 contract PirexIntegration {
     using SafeERC20 for IERC20;
@@ -45,9 +45,8 @@ contract PirexIntegration {
     //                                          Errors                                            //
     //============================================================================================//
 
-    error ZeroAmount();
-
-    error ZeroAddress();
+    error ZeroAmountPx();
+    error ZeroAddressPx();
 
     //============================================================================================//
     //                                        Constructor                                         //
@@ -58,9 +57,9 @@ contract PirexIntegration {
         address pirexEth_,
         address autoPxEth_
     ) {
-        require(pxEth_ != address(0), ZeroAddress());
-        require(pirexEth_ != address(0), ZeroAddress());
-        require(autoPxEth_ != address(0), ZeroAddress());
+        require(pxEth_ != address(0), ZeroAddressPx());
+        require(pirexEth_ != address(0), ZeroAddressPx());
+        require(autoPxEth_ != address(0), ZeroAddressPx());
 
         PX_ETH = pxEth_;
         PIREX_ETH = pirexEth_;
@@ -72,8 +71,8 @@ contract PirexIntegration {
     //============================================================================================//
 
     function depositCompound(address receiver_) public payable returns (uint256 apxEthReceived) {
-        require(receiver_ != address(0), ZeroAddress());
-        require(msg.value > 0, ZeroAmount());
+        require(receiver_ != address(0), ZeroAddressPx());
+        require(msg.value > 0, ZeroAmountPx());
 
         // Retrieve this value before making the compound deposit, as it will alter the vault ratio
         apxEthReceived = _convertEthToApxEth(msg.value);
@@ -91,8 +90,8 @@ contract PirexIntegration {
 
     // shares - apxEth amount
     function redeem(uint256 shares_, address receiver_) public returns (uint256 ethReceived) {
-        require(receiver_ != address(0), ZeroAddress());
-        require(shares_ > 0, ZeroAmount());
+        require(receiver_ != address(0), ZeroAddressPx());
+        require(shares_ > 0, ZeroAmountPx());
 
         // apxEth -> pxEth
         uint256 pxEthReceived = AutoPxEth(AUTO_PX_ETH).redeem(shares_, address(this), address(this));

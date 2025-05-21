@@ -29,6 +29,9 @@ abstract contract AbstractStrategy is IStrategy {
     //                                          Errors                                            //
     //============================================================================================//
 
+    error ZeroAddress();
+    error ZeroAmount();
+
     error NotLumiaDiamond();
     error NotStrategyManager();
 
@@ -56,6 +59,8 @@ abstract contract AbstractStrategy is IStrategy {
     constructor(
         address diamond_
     ) {
+        require(diamond_ != address(0), ZeroAddress());
+
         DIAMOND = diamond_;
     }
 

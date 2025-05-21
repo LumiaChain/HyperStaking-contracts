@@ -14,8 +14,6 @@ import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Re
 //                                           Storage                                              //
 //================================================================================================//
 
-error ZeroAddress();
-
 struct SuperformStorage {
     EnumerableSet.AddressSet superformStrategies;
     uint256 maxSlippage; // where 10000 = 100%
@@ -28,6 +26,8 @@ struct SuperformStorage {
 library LibSuperform {
     bytes32 constant internal SUPERFORM_STORAGE_POSITION
         = bytes32(uint256(keccak256("hyperstaking.superform-0.1.storage")) - 1);
+
+    error ZeroAddress();
 
     function diamondStorage() internal pure returns (SuperformStorage storage s) {
         bytes32 position = SUPERFORM_STORAGE_POSITION;

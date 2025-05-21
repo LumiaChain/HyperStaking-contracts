@@ -47,7 +47,7 @@ interface ISuperformIntegration is IERC1155Receiver {
     error ZeroAmount();
     error ZeroAddress();
     error UpdateFailed();
-    error NotFromStrategy(address);
+    error NotFromSuperStrategy(address);
     error AERC20NotRegistered();
 
     //============================================================================================//
@@ -87,6 +87,14 @@ interface ISuperformIntegration is IERC1155Receiver {
         uint256 superPositionAmount,
         address receiver
     ) external;
+
+    /// @dev clear allowance for the superform strategy, set in allocation join,
+    ///      so no leftover approval should remain
+    function clearAssetApproval(uint256 superformId, uint256 amount) external;
+
+    /// @dev clear allowance for the superform strategy, set in allocation leave,
+    ///      so no leftover approval should remain
+    function clearRevenueAssetApproval(uint256 superformId, uint256 amount) external;
 
     /// @dev Updates the status of a Superform strategy
     /// @param strategy The address of the strategy to update

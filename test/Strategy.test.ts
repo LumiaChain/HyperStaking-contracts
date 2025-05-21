@@ -27,11 +27,10 @@ async function deployHyperStaking() {
   // -------------------- Deploy Tokens --------------------
 
   const testWstETH = await shared.deloyTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
-  const erc4626Vault = await shared.deloyTestERC4626Vault(testWstETH);
 
   // --------------------- Hyperstaking Diamond --------------------
 
-  const hyperStaking = await shared.deployTestHyperStaking(0n, erc4626Vault);
+  const hyperStaking = await shared.deployTestHyperStaking(0n);
 
   // -------------------- Apply Strategies --------------------
 

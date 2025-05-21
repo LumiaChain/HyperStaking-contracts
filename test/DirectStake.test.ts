@@ -7,19 +7,14 @@ import * as shared from "./shared";
 async function deployHyperStaking() {
   const signers = await shared.getSigners();
 
-  // -------------------- Deploy Tokens --------------------
-
-  const testUSDC = await shared.deloyTestERC20("Test USDC", "tUSDC", 6); // 6 decimal places
-  const erc4626Vault = await shared.deloyTestERC4626Vault(testUSDC);
-
   // --------------------- Hyperstaking Diamond --------------------
 
-  const hyperStaking = await shared.deployTestHyperStaking(0n, erc4626Vault);
+  const hyperStaking = await shared.deployTestHyperStaking(0n);
 
   // -------------------- Apply Strategies --------------------
 
   const directStakeStrategy = await shared.createDirectStakeStrategy(
-    hyperStaking.diamond, await testUSDC.getAddress(),
+    hyperStaking.diamond, await hyperStaking.testUSDC.getAddress(),
   );
 
   const vaultTokenName = "Direct USD";
@@ -42,7 +37,7 @@ async function deployHyperStaking() {
   /* eslint-disable object-property-newline */
   return {
     hyperStaking, // HyperStaking deployment
-    testUSDC, directStakeStrategy, principalToken, vaultShares, // test contracts
+    directStakeStrategy, principalToken, vaultShares, // test contracts
     signers, // signers
   };
   /* eslint-enable object-property-newline */
@@ -50,8 +45,8 @@ async function deployHyperStaking() {
 
 describe("Direct Stake", function () {
   it("adding strategy should save proper data", async function () {
-    const { hyperStaking, directStakeStrategy, principalToken, vaultShares, testUSDC } = await loadFixture(deployHyperStaking);
-    const { hyperFactory, lockbox, hyperlaneHandler } = hyperStaking;
+    const { hyperStaking, directStakeStrategy, principalToken, vaultShares } = await loadFixture(deployHyperStaking);
+    const { testUSDC, hyperFactory, lockbox, hyperlaneHandler } = hyperStaking;
 
     // VaultInfo
     expect((await hyperFactory.vaultInfo(directStakeStrategy)).enabled).to.deep.equal(true);
@@ -69,8 +64,8 @@ describe("Direct Stake", function () {
   });
 
   it("only direct stake strategy should be allowed for direct staking", async function () {
-    const { hyperStaking, testUSDC, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
-    const { diamond, deposit, hyperFactory, realAssets } = hyperStaking;
+    const { hyperStaking, directStakeStrategy, signers } = await loadFixture(deployHyperStaking);
+    const { testUSDC, diamond, deposit, hyperFactory, realAssets } = hyperStaking;
     const { alice, vaultManager } = signers;
 
     // adding new non-direct stake strategy
@@ -97,8 +92,8 @@ describe("Direct Stake", function () {
   });
 
   it("direct stake strategy should mint lumia asset in 1:1 ratio", async function () {
-    const { hyperStaking, testUSDC, directStakeStrategy, principalToken, vaultShares, signers } = await loadFixture(deployHyperStaking);
-    const { deposit } = hyperStaking;
+    const { hyperStaking, directStakeStrategy, principalToken, vaultShares, signers } = await loadFixture(deployHyperStaking);
+    const { testUSDC, deposit } = hyperStaking;
     const { alice } = signers;
 
     const stakeAmount = parseEther("500");
@@ -113,8 +108,8 @@ describe("Direct Stake", function () {
   });
 
   it("lumia rwa shares could be redeemend back to origin chain in the same 1:1 ratio", async function () {
-    const { hyperStaking, testUSDC, directStakeStrategy, vaultShares, signers } = await loadFixture(deployHyperStaking);
-    const { deposit, defaultWithdrawDelay, realAssets } = hyperStaking;
+    const { hyperStaking, directStakeStrategy, vaultShares, signers } = await loadFixture(deployHyperStaking);
+    const { testUSDC, deposit, defaultWithdrawDelay, realAssets } = hyperStaking;
     const { alice, bob } = signers;
 
     const stakeAmount = parseEther("500");
@@ -137,8 +132,8 @@ describe("Direct Stake", function () {
   });
 
   it("rwa shares should behave like ERC-20s and be redeemable by other users", async function () {
-    const { hyperStaking, testUSDC, directStakeStrategy, vaultShares, signers } = await loadFixture(deployHyperStaking);
-    const { deposit, realAssets } = hyperStaking;
+    const { hyperStaking, directStakeStrategy, vaultShares, signers } = await loadFixture(deployHyperStaking);
+    const { testUSDC, deposit, realAssets } = hyperStaking;
     const { owner, alice, bob } = signers;
 
     const stakeAmount = parseEther("3");

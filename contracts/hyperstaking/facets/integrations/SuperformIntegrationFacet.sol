@@ -1,24 +1,23 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {ISuperformIntegration} from "../interfaces/ISuperformIntegration.sol";
-import {HyperStakingAcl} from "../HyperStakingAcl.sol";
+import {ISuperformIntegration} from "../../interfaces/ISuperformIntegration.sol";
+import {HyperStakingAcl} from "../../HyperStakingAcl.sol";
 
-import {LibSuperform, SuperformStorage} from "../libraries/LibSuperform.sol";
+import {LibSuperform, SuperformStorage} from "../../libraries/LibSuperform.sol";
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
-import {IBaseRouterImplementation} from "../../external/superform/core/interfaces/IBaseRouterImplementation.sol";
-import {ISuperformFactory} from "../../external/superform/core/interfaces/ISuperformFactory.sol";
-import {ISuperPositions} from "../../external/superform/core/interfaces/ISuperPositions.sol";
-import {IBaseForm} from "../../external/superform/core/interfaces/IBaseForm.sol";
+import {IBaseRouterImplementation} from "../../../external/superform/core/interfaces/IBaseRouterImplementation.sol";
+import {ISuperformFactory} from "../../../external/superform/core/interfaces/ISuperformFactory.sol";
+import {ISuperPositions} from "../../../external/superform/core/interfaces/ISuperPositions.sol";
+import {IBaseForm} from "../../../external/superform/core/interfaces/IBaseForm.sol";
 
 import {
     SingleDirectSingleVaultStateReq, SingleVaultSFData, LiqRequest
-} from "../../external/superform/core/types/DataTypes.sol";
-import {DataLib} from "../../external/superform/core/libraries/DataLib.sol";
+} from "../../../external/superform/core/types/DataTypes.sol";
+import {DataLib} from "../../../external/superform/core/libraries/DataLib.sol";
 
 /**
  * @title SuperformIntegration
@@ -52,10 +51,10 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
     //============================================================================================//
 
     /// @notice Only accept messages from superform strategies
-    modifier onlyStrategy() {
+    modifier onlySuperStrategy() {
         SuperformStorage storage s = LibSuperform.diamondStorage();
 
-        require(s.superformStrategies.contains(msg.sender), NotFromStrategy(msg.sender));
+        require(s.superformStrategies.contains(msg.sender), NotFromSuperStrategy(msg.sender));
         _;
     }
 
@@ -71,7 +70,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         uint256 assetAmount,
         address receiver,
         address receiverSP
-    ) external onlyStrategy returns (uint256 superPositionReceived) {
+    ) external onlySuperStrategy returns (uint256 superPositionReceived) {
         SuperformStorage storage s = LibSuperform.diamondStorage();
 
         require(s.superformFactory.isSuperform(superformId), InvalidSuperformId(superformId));
@@ -115,16 +114,13 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         );
     }
 
-    /**
-     * @notice Withdraws assets from a single vault
-     * @return assetReceived Amount of assets withdrawn from the vault
-     */
+    /// @inheritdoc ISuperformIntegration
     function singleVaultWithdraw(
         uint256 superformId,
         uint256 superPositionAmount,
         address receiver,
         address receiverSP
-    ) external onlyStrategy returns (uint256 assetReceived) {
+    ) external onlySuperStrategy returns (uint256 assetReceived) {
         SuperformStorage storage s = LibSuperform.diamondStorage();
 
         require(s.superformFactory.isSuperform(superformId), InvalidSuperformId(superformId));
@@ -178,7 +174,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         uint256 superformId,
         uint256 assetAmount,
         address receiver
-    ) external onlyStrategy {
+    ) external onlySuperStrategy {
         LibSuperform.diamondStorage().superPositions.transmuteToERC20(
             owner, superformId, assetAmount, receiver
         );
@@ -190,10 +186,24 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         uint256 superformId,
         uint256 superPositionAmount,
         address receiver
-    ) external onlyStrategy {
+    ) external onlySuperStrategy {
         LibSuperform.diamondStorage().superPositions.transmuteToERC1155A(
             owner, superformId, superPositionAmount, receiver
         );
+    }
+
+    /// @inheritdoc ISuperformIntegration
+    function clearAssetApproval(uint256 superformId, uint256 amount) external onlySuperStrategy {
+        IBaseForm superform = _getSuperform(superformId);
+        address asset = superform.getVaultAsset();
+
+        IERC20(asset).safeDecreaseAllowance(msg.sender, amount);
+    }
+
+    /// @inheritdoc ISuperformIntegration
+    function clearRevenueAssetApproval(uint256 superformId, uint256 amount) external onlySuperStrategy {
+        address revenueAsset = aERC20Token(superformId);
+        IERC20(revenueAsset).safeDecreaseAllowance(msg.sender, amount);
     }
 
     /* ========== Strategy Manager  ========== */
@@ -270,7 +280,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
     }
 
     /// @inheritdoc ISuperformIntegration
-    function aERC20Token(uint256 superformId) external view returns (address) {
+    function aERC20Token(uint256 superformId) public view returns (address) {
         SuperformStorage storage s = LibSuperform.diamondStorage();
 
         address token = s.superPositions.getERC20TokenAddress(superformId);

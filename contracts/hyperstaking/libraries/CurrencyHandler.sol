@@ -102,6 +102,11 @@ library CurrencyHandler {
     /**
      * @dev Approves tokens to be spent by a spender. This applies only to ERC20 tokens
      * No approval is needed for native coins
+     *
+     * WARNING: Calling ERC20.approve directly can be unsafe when changing an existing
+     * non-zero allowance, since a front-running spender could use both the old and new
+     * allowance. Consider using increaseAllowance/decreaseAllowance or SafeERC20 helpers
+     *
      * @param currency The Currency struct (token address)
      * @param spender The address of the spender allowed to spend the tokens
      * @param amount The amount of tokens to approve for spending
@@ -118,6 +123,43 @@ library CurrencyHandler {
         }
 
         IERC20(currency.token).approve(spender, amount);
+    }
+
+    /**
+     * @dev Safely increases the ERC20 allowance granted to `spender` by the caller
+     * Reverts if `currency` is native (no approval mechanism)
+     * @param currency The Currency struct (token address)
+     * @param spender The address allowed to spend the tokens
+     * @param addedValue The amount by which to increase the allowance
+     */
+    function increaseAllowance(
+        Currency memory currency,
+        address spender,
+        uint256 addedValue
+    ) internal {
+        if (isNativeCoin(currency)) {
+            revert("Increase not allowed for native coins");
+        }
+        IERC20(currency.token).safeIncreaseAllowance(spender, addedValue);
+    }
+
+    /**
+     * @dev Safely decreases the ERC20 allowance granted to `spender` by the caller
+     * Reverts if `currency` is native (no approval mechanism) or if
+     * the current allowance is less than `subtractedValue`
+     * @param currency The Currency struct (token address)
+     * @param spender The address whose allowance is to be decreased
+     * @param subtractedValue The amount by which to decrease the allowance
+     */
+    function decreaseAllowance(
+        Currency memory currency,
+        address spender,
+        uint256 subtractedValue
+    ) internal {
+        if (isNativeCoin(currency)) {
+            revert("Decrease not allowed for native coins");
+        }
+        IERC20(currency.token).safeDecreaseAllowance(spender, subtractedValue);
     }
 
     /**

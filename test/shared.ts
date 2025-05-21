@@ -1,17 +1,21 @@
 import { ignition, ethers, network } from "hardhat";
-import { Contract, ZeroAddress, parseEther } from "ethers";
+import { Contract, ZeroAddress, parseEther, parseUnits } from "ethers";
 
 import HyperStakingModule from "../ignition/modules/HyperStaking";
 import LumiaDiamondModule from "../ignition/modules/LumiaDiamond";
 import OneChainMailboxModule from "../ignition/modules/test/OneChainMailbox";
 import SuperformMockModule from "../ignition/modules/test/SuperformMock";
+import CurveMockModule from "../ignition/modules/test/CurveMock.ts";
 
 import TestERC20Module from "../ignition/modules/test/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
 import DirectStakeStrategyModule from "../ignition/modules/DirectStakeStrategy";
 
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IHyperFactory";
-import { IERC20 } from "../typechain-types";
+
+import { IERC20, ISuperformIntegration } from "../typechain-types";
+
+import { SingleDirectSingleVaultStateReqStruct } from "../typechain-types/contracts/external/superform/core/BaseRouter";
 
 // full - because there are two differnet vesions of IERC20 used in the project
 const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";
@@ -67,8 +71,20 @@ export async function deploySuperformMock(erc4626Vault: Contract) {
   });
 }
 
-export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: Contract) {
+export async function deployTestHyperStaking(mailboxFee: bigint) {
+  const { alice, vaultManager, lumiaFactoryManager } = await getSigners();
   const testDestination = 31337; // the same for both sides of the test "oneChain" bridge
+
+  // -------------------- Deploy Tokens --------------------
+
+  const testUSDC = await deloyTestERC20("Test USDC", "tUSDC", 6);
+  const testUSDT = await deloyTestERC20("Test USDT", "tUSDT", 6);
+
+  const stableUnits = (val: string) => parseUnits(val, 6);
+  await testUSDC.mint(alice.address, stableUnits("1000000"));
+  await testUSDT.mint(alice.address, stableUnits("1000000"));
+
+  // -------------------- Hyperlane --------------------
 
   const { mailbox } = await ignition.deploy(OneChainMailboxModule, {
     parameters: {
@@ -80,11 +96,31 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
   });
   const mailboxAddress = await mailbox.getAddress();
 
+  // -------------------- Superform --------------------
+
+  const erc4626Vault = await deloyTestERC4626Vault(testUSDC);
   const {
     superformFactory, superformRouter, superVault, superPositions,
   } = await deploySuperformMock(erc4626Vault);
 
-  const { diamond, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, superformIntegration } = await ignition.deploy(HyperStakingModule, {
+  // -------------------- Curve --------------------
+
+  const { curvePool, curveRouter } = await ignition.deploy(CurveMockModule, {
+    parameters: {
+      CurveMockModule: {
+        usdcAddress: await testUSDC.getAddress(),
+        usdtAddress: await testUSDT.getAddress(),
+      },
+    },
+  });
+
+  // fill the pool with some USDC and USDT
+  await testUSDC.transfer(await curvePool.getAddress(), stableUnits("500000"));
+  await testUSDT.transfer(await curvePool.getAddress(), stableUnits("500000"));
+
+  // -------------------- HyperStaking --------------------
+
+  const { diamond, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, superformIntegration, curveIntegration } = await ignition.deploy(HyperStakingModule, {
     parameters: {
       HyperStakingModule: {
         lockboxMailbox: mailboxAddress,
@@ -92,11 +128,14 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
         superformFactory: await superformFactory.getAddress(),
         superformRouter: await superformRouter.getAddress(),
         superPositions: await superPositions.getAddress(),
+        curveRouter: await curveRouter.getAddress(),
       },
     },
   });
 
   const defaultWithdrawDelay = 3 * 24 * 60 * 60; // 3 days
+
+  // -------------------- Lumia Diamond --------------------
 
   const { lumiaDiamond, hyperlaneHandler, realAssets, stakeRedeemRoute } = await ignition.deploy(LumiaDiamondModule, {
     parameters: {
@@ -106,7 +145,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     },
   });
 
-  const { vaultManager, lumiaFactoryManager } = await getSigners();
+  // -------------------- Other/Configuration --------------------
 
   // finish setup for hyperstaking
   await lockbox.connect(vaultManager).setLumiaFactory(hyperlaneHandler);
@@ -119,9 +158,20 @@ export async function deployTestHyperStaking(mailboxFee: bigint, erc4626Vault: C
     testDestination,
   );
 
+  /* eslint-disable object-property-newline */
   return {
-    mailbox, hyperlaneHandler, diamond, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, superformFactory, superVault, superformIntegration, lumiaDiamond, realAssets, stakeRedeemRoute, defaultWithdrawDelay,
+    diamond,
+    deposit, hyperFactory, allocation, lockbox, // hyperstaking facets
+    defaultWithdrawDelay, // deposit parameter
+    routeRegistry, stakeInfoRoute, // hyperstaking route facets
+    superformIntegration, curveIntegration, // hyperstaking integration facets
+    lumiaDiamond, hyperlaneHandler, realAssets, stakeRedeemRoute, // lumia diamond facets
+    superVault, superformFactory, // superform mock
+    curvePool, curveRouter, // curve mock
+    testUSDC, testUSDT, erc4626Vault, // test tokens
+    mailbox, // hyperlane test mailbox
   };
+  /* eslint-enable object-property-newline */
 }
 
 export async function deloyTestERC20(name: string, symbol: string, decimals: number = 18): Promise<Contract> {
@@ -195,6 +245,63 @@ export async function createDirectStakeStrategy(
 
   return directStakeStrategy;
 }
+
+// -------------------- Superform AERC20 --------------------
+
+export async function registerAERC20(
+  superformIntegration: ISuperformIntegration,
+  superVault: Contract,
+  testUSDC: Contract,
+): Promise<IERC20> {
+  const superformFactory = await ethers.getContractAt("SuperformFactory", await superformIntegration.superformFactory());
+
+  const superformId = await superformFactory.vaultToSuperforms(superVault, 0);
+  const superformRouter = await ethers.getContractAt("SuperformRouter", await superformIntegration.superformRouter());
+  const superPositions = await ethers.getContractAt("SuperPositions", await superformIntegration.superPositions());
+
+  const [superformAddress,,] = await superformFactory.getSuperform(superformId);
+  const superform = await ethers.getContractAt("BaseForm", superformAddress);
+
+  // to register aERC20 we need to deposit some amount first
+  const [owner] = await ethers.getSigners();
+  const amount = parseUnits("1", 6);
+  const maxSlippage = 50n; // 0.5%
+  const outputAmount = await superform.previewDepositTo(amount);
+
+  await testUSDC.approve(superformRouter, amount);
+  const routerReq: SingleDirectSingleVaultStateReqStruct = {
+    superformData: {
+      superformId,
+      amount,
+      outputAmount,
+      maxSlippage,
+      liqRequest: {
+        txData: "0x",
+        token: testUSDC,
+        interimToken: ZeroAddress,
+        bridgeId: 1,
+        liqDstChainId: 0,
+        nativeAmount: 0,
+      },
+      permit2data: "0x",
+      hasDstSwap: false,
+      retain4626: false,
+      receiverAddress: owner,
+      receiverAddressSP: owner,
+      extraFormData: "0x",
+    },
+  };
+
+  await superformRouter.singleDirectSingleVaultDeposit(routerReq);
+
+  // actual token registration
+  await superPositions.registerAERC20(superformId);
+
+  return ethers.getContractAt(
+    "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20",
+    await superPositions.getERC20TokenAddress(superformId),
+  ) as unknown as IERC20;
+};
 
 // -------------------- Other Helpers --------------------
 

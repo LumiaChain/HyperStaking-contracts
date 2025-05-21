@@ -48,7 +48,7 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         if (vault.stakeCurrency.isNativeCoin()) {
             allocation = IStrategy(strategy).allocate{value: stake}(stake, user);
         } else {
-            vault.stakeCurrency.approve(strategy, stake);
+            vault.stakeCurrency.increaseAllowance(strategy, stake);
             allocation = IStrategy(strategy).allocate(stake, user);
         }
 

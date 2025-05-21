@@ -28,12 +28,12 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     uint256 public immutable SUPERFORM_ID;
 
     /// Token address used in allocation
-    IERC20 public immutable STAKE_TOKEN;
+    IERC20 public immutable SUPERFORM_INPUT_TOKEN;
 
-    /// Helper type (diamond, superform integration facet)
+    /// Superform integration - (diamond facet)
     ISuperformIntegration public superformIntegration;
 
-    /// Additional helper, which could be determined in the constructor
+    /// SuperPositions contract address
     ISuperPositions public superPositions;
 
     //============================================================================================//
@@ -51,8 +51,11 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     constructor(
         address diamond_,
         address superVault_,
-        address stakeToken_
+        address stakeToken_ // SuperUSDC supports USDC as deposit, asset is checked
     ) AbstractStrategy(diamond_) {
+        require(superVault_ != address(0), ZeroAddress());
+        require(stakeToken_ != address(0), ZeroAddress());
+
         superformIntegration = ISuperformIntegration(diamond_);
         SUPER_VAULT = superVault_;
 
@@ -78,7 +81,7 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
             InvalidStakeToken(IERC4626(superVault_).asset(), stakeToken_)
         );
 
-        STAKE_TOKEN = IERC20(stakeToken_);
+        SUPERFORM_INPUT_TOKEN = IERC20(stakeToken_);
     }
 
     //============================================================================================//
@@ -91,7 +94,12 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     function allocate(
         uint256 amount_,
         address user_
-    ) external payable onlyLumiaDiamond returns (uint256 allocation) {
+    ) public payable virtual onlyLumiaDiamond returns (uint256 allocation) {
+        require(amount_ > 0, ZeroAmount());
+
+        // set by allocation join, but not needed
+        superformIntegration.clearAssetApproval(SUPERFORM_ID, amount_);
+
         allocation = superformIntegration.singleVaultDeposit(
             SUPERFORM_ID,
             amount_,
@@ -99,8 +107,8 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
             address(this)
         );
 
-        // transmute ERC1155A -> ERC20 and approve diamond to fetch the tokens
-        superPositions.setApprovalForOne(DIAMOND, SUPERFORM_ID, allocation);
+        // transmute ERC1155A -> ERC20 and approve integration to fetch the tokens
+        superPositions.setApprovalForOne(address(superformIntegration), SUPERFORM_ID, allocation);
 
         // tokens are transmuted 1:1
         superformIntegration.transmuteToERC20(
@@ -111,7 +119,7 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
         );
 
         // transfer allocation
-        IERC20(revenueAsset()).safeTransfer(DIAMOND, allocation);
+        IERC20(revenueAsset()).safeTransfer(msg.sender, allocation);
 
         emit Allocate(user_, amount_, allocation);
     }
@@ -120,7 +128,10 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     function exit(
         uint256 shares_,
         address user_
-    ) external onlyLumiaDiamond returns (uint256 exitAmount) {
+    ) public virtual onlyLumiaDiamond returns (uint256 exitAmount) {
+        // set by allocation leave, but not needed
+        superformIntegration.clearRevenueAssetApproval(SUPERFORM_ID, shares_);
+
         superformIntegration.transmuteToERC1155A(
             msg.sender,
             SUPERFORM_ID,
@@ -141,24 +152,24 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     // ========= View ========= //
 
     /// @inheritdoc IStrategy
-    function stakeCurrency() external view returns(Currency memory) {
+    function stakeCurrency() public view virtual returns(Currency memory) {
         return Currency({
-            token: address(STAKE_TOKEN)
+            token: address(SUPERFORM_INPUT_TOKEN)
         });
     }
 
     /// @inheritdoc IStrategy
-    function revenueAsset() public view returns(address) {
+    function revenueAsset() public view virtual returns(address) {
         return superformIntegration.aERC20Token(SUPERFORM_ID);
     }
 
     /// @inheritdoc IStrategy
-    function previewAllocation(uint256 stakeAmount_) external view returns (uint256) {
+    function previewAllocation(uint256 stakeAmount_) public view virtual returns (uint256) {
         return superformIntegration.previewDepositTo(SUPERFORM_ID, stakeAmount_);
     }
 
     /// @inheritdoc IStrategy
-    function previewExit(uint256 assetAllocation_) external view returns (uint256 stakeAmount) {
+    function previewExit(uint256 assetAllocation_) public view virtual returns (uint256 stakeAmount) {
         return superformIntegration.previewWithdrawFrom(SUPERFORM_ID, assetAllocation_);
     }
 

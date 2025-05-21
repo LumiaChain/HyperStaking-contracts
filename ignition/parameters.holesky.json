@@ -6,8 +6,15 @@
     "upxEth": "0x3D87d61a88Ec8Fe57f5795C7abB5514e122b4014",
     "autoPxEth": "0x0e4bf0D7e9198756B821446C6Fb7A17Dfbfca198"
   },
-  "SuperformMockModule": {
-    "erc4626VaultAddress": "0x0000000000000000000000000000000000000000"
+  "SuperformStrategyModule": {
+    "diamond": "0xB71cCcF6D425d6fd306f4Cad41F50dBe3f135e6a",
+    "superVault": "0x0000000000000000000000000000000000000000",
+    "stakeToken": "0x0000000000000000000000000000000000000000"
+  },
+  "SwapSuperStrategyModule": {
+    "diamond": "0xB71cCcF6D425d6fd306f4Cad41F50dBe3f135e6a",
+    "superVault": "0x0000000000000000000000000000000000000000",
+    "stakeToken": "0x0000000000000000000000000000000000000000"
   },
   "HyperStakingModule": {
     "lockboxMailbox": "0x46f7C5D896bbeC89bE1B19e4485e59b4Be49e9Cc",

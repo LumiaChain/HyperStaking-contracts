@@ -105,6 +105,11 @@ const config: HardhatUserConfig = {
     disambiguatePaths: false,
     runOnCompile: reportSize,
     strict: true,
+
+    // IGNORE these contracts:
+    except: [
+      "external",
+    ],
   },
 
   etherscan: {

@@ -11,6 +11,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const superformFactory = m.getParameter("superformFactory");
   const superformRouter = m.getParameter("superformRouter");
   const superPositions = m.getParameter("superPositions");
+  const curveRouter = m.getParameter("curveRouter");
 
   const { diamond } = m.useModule(DiamondModule);
 
@@ -51,6 +52,9 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const superformIntegrationFacetInterface = getContractInterface("ISuperformIntegration");
   const superformIntegrationFacetSelectors = getSelectors(superformIntegrationFacetInterface)
     .remove(["supportsInterface(bytes4)"]);
+
+  const curveIntegrationFacet = m.contract("CurveIntegrationFacet");
+  const curveIntegrationFacetInterface = getContractInterface("ICurveIntegration");
 
   // --- cut struct
 
@@ -96,6 +100,11 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       action: FacetCutAction.Add,
       functionSelectors: superformIntegrationFacetSelectors,
     },
+    {
+      facetAddress: curveIntegrationFacet,
+      action: FacetCutAction.Add,
+      functionSelectors: getSelectors(curveIntegrationFacetInterface),
+    },
   ];
 
   // --- cut init
@@ -111,6 +120,7 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       superformFactory,
       superformRouter,
       superPositions,
+      curveRouter,
     ],
   );
 
@@ -130,11 +140,12 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const stakeInfoRoute = m.contractAt("IStakeInfoRoute", diamond);
   const stakeRewardRoute = m.contractAt("IStakeRewardRoute", diamond);
   const superformIntegration = m.contractAt("ISuperformIntegration", diamond);
+  const curveIntegration = m.contractAt("ICurveIntegration", diamond);
 
   // --- return
 
   return {
-    diamond, acl, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, stakeRewardRoute, superformIntegration,
+    diamond, acl, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, stakeRewardRoute, superformIntegration, curveIntegration,
   };
 });
 
