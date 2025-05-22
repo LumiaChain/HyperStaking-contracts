@@ -135,7 +135,7 @@ describe("CurveStrategy", function () {
       [0n, 0n, 0n, 0n, 0n],
       [0n, 0n, 0n, 0n, 0n],
       [0n, 0n, 0n, 0n, 0n],
-    ]; // indices ignored by mock
+    ]; // indexes ignored by mock
 
     // pools[5]
     const pools: [string, string, string, string, string] = [

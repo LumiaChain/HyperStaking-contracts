@@ -3,7 +3,8 @@
 ---
 
 This specification describes the architecture and key features of the Lumia Smart Contracts, which manage staking pools, cross-chain asset handling, and contract upgrades.
-The system uses two or more Diamond Proxy contracts: one on the origin chain (such as Ethereum or Arbitrum) to manage deposits and revenue strategies, and another on the Lumia Chain to handle interchain communication, RWA asset generation, and revenue distribution.
+
+The system follows a star architecture, centered on a Diamond Proxy contract deployed on the Lumia Chain to handle interchain communication, ERC-4626 shares minting, and revenue distribution, and multiple Diamond Proxy contracts deployed on various origin chains (e.g., Ethereum, Base, Arbitrum) to manage local deposits, staking pools, and revenue strategies.
 
 <p align="center">
     <img src="img/general_scheme.png" alt="General Scheme">
@@ -23,15 +24,18 @@ The **Access Control List (ACL)** defines roles like `StakingManager`, and `Vaul
 
 ### Hyperlane Integration
 
-**Hyperlane** plays a crucial role in facilitating cross-chain communication and managing `RWA Assets` within **HyperStaking**. The integration is based on a **two-tier** system that supports both traditional and liquid staking operations, as well as **direct staking**, which most closely resembles a bridge operation:
+**Hyperlane** provides secure cross-chain messaging between origin-chain Diamond Proxies and the central Lumia Chain Diamond Proxy. This ensures:
++
 
-- **directStaking**: Direct staking allows users to stake assets directly on the Lumia Chain without needing to pass through the revenue strategy. This enables faster processing and more flexible staking options, while still maintaining cross-chain compatibility through Hyperlane's messaging infrastructure.
+- **Direct Staking**: Direct staking allows users to stake assets directly on the Lumia Chain without needing to pass through the revenue strategy. This enables faster processing and more flexible staking options, while still maintaining cross-chain compatibility through Hyperlane's messaging infrastructure.
 
-- **Tier 1**: The primary tier, typically deployed on a chain like Ethereum, maintains the base infrastructure for traditional staking. Users stake assets, and their staking information is stored in contract storage along with their share in associated strategies. While no liquid tokens are issued in this tier, a small revenue fee is collected to benefit Tier 2 operations, incentivizing cross-chain functionality.
+- **Stake Synchronization**: When a user stakes on an origin chain, a Hyperlane message is sent to mint ERC-4626 shares on the Lumia Chain representing the stake plus accrued revenue.
 
-- **Tier 2**: Deployed on the Lumia Chain, this tier manages liquid staking. When users stake assets, an interchain message is sent to mint a liquid RWA Asset on the Lumia Chain, representing the revenue-generating assets linked to the strategy. These tokens are fully transferable, tradeable, and can be redeemed back to the originating chain. This architecture enables the Lumia Chain to collect revenue from assets on origin chains. The Tier 2 system ensures efficient interchain messaging, leveraging Hyperlane's robust bridging capabilities.
+- **Redemption Flow**: When a user redeems or exits shares on the Lumia Chain, Hyperlane relays a burn-and-withdraw instruction to the origin-chain proxy to burn the shares and release the underlying assets and rewards.
 
-Through this setup, users benefit from multi-chain revenue streams without the complexity of interacting with multiple protocols and bridges directly.
+This design centralizes staking and redemption logic around Hyperlane messaging, enabling users to seamlessly access multi-chain revenue streams without interacting directly with multiple protocols or bridges.
+
+<div style="page-break-after: always;"></div>
 
 ## 1. Handling Multiple Deposit Currencies
 
@@ -81,7 +85,25 @@ Low-risk strategies are used to generate optimal income for stakers. All strateg
 
 This interface allows strategies to be deployed independently of the main upgradeable Proxy Diamond code and linked with new staking pools.
 
-- **Shares:** Are emitted by the strategies and moved to the `StrategyVault`. These shares represent the user’s contribution in the strategy, (vault may potentially issue derivative tradable liquidity tokens). Specific strategies examples are detailed below.
+- **Shares:** Are minted on the Lumia Chain as ERC-4626 tokens, representing both users’ stake and used to distribute revenue from strategies.
+
+## Reward Distribution via `report()` Function
+
+A central `report()` function for each strategy aggregates yields from and updates share value.
+
+```solidity
+/**
+ * @notice Harvests and compounds revenue for a given strategy
+ */
+function report(address strategy) external;
+```
+
+**Flow**:
+
+1. **Trigger**: authorized manager calls `report()`.
+3. **Accounting**: Increases total assets; recalculates `pricePerShare = totalAssets / totalShares`.
+4. **Cross‑chain Distribution**: Emits `RewardsReported(amount)` event; Hyperlane relays report to origin proxies.
+5. **User Update**: Share price bump represents distributed rewards; user share holdings automatically reflect yield.
 
 <div style="page-break-after: always;"></div>
 

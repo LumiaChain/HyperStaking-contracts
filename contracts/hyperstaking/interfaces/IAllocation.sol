@@ -105,7 +105,6 @@ interface IAllocation {
      */
     function setBridgeSafetyMargin(address strategy, uint256 newMargin) external;
 
-
     /**
      * @notice Updates the fee recipient for a given active strategy
      * @param strategy The strategy whose fee recipient is being set
