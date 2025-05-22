@@ -9,10 +9,9 @@ This project introduces multiple staking pools and a range of yield-generating s
 ### Key Features:
 - **Diamond Proxy Architecture**: HyperStaking is built on the ERC-2535 standard, allowing modular and upgradeable contract functionality.
 - **Staking Pools**: Supports staking pools, capable of integrating with various strategies.
-- **Revenue Strategies**: Pools are linked to yield-generating strategies.
-- **ERC4626 Integration**: Tier 2 utilizes the ERC4626 standard for vaults, ensuring compatibility with DeFi, where LP tokens represent the staked ETH and its associated revenue.
-- **Revarding Fee Logic**: Introduces a fee system for Tier 1, calculated based on the revenue generated from the underlying asset (not the stake itself). Fees are distributed among LP token holders, enhancing the value of Tier 2 shares.
+- **ERC4626 Vaults**: Implements ERC-4626–compatible vaults on the Lumia-chain side, representing the staked asset on the origin chain together with generated revenue from the yield strategy.
 - **Hyperlane Integration**: Building a cross-chain bridge using Hyperlane for interaction between chains.
+- **Reward Distribution**: Introduces an inter-chain report system on the revenue generated from the underlying assets. Collected fees are distributed among shares token holders, boosting share value.
 
 ### Testing
 
