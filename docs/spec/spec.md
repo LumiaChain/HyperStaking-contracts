@@ -60,14 +60,18 @@ struct Currency {
 
 ## 2. Revenue Strategies
 
-Low-risk strategies are used to generate optimal income for stakers. All strategies implement a common interface, enabling seamless integration with staking pools and allowing new strategies to be added over time. The interface is defined in the [IStrategy.sol](../../contracts/hyperstaking/interfaces/IStrategy.sol) contract and includes the following key functions:
+Low‑risk strategies are designed to safely deploy staked assets into yield‑generating protocols or simply hold value in a compatible form. Each strategy adheres to a common interface, allowing seamless integration with vaults and staking pools while remaining decoupled from the core diamond proxy logic. New strategies can be added without affecting the other ones.
+
+### 2.1 Core Interface: Allocation & Exit
+
+These two functions form the backbone of any stake strategy:
 
 ```solidity
     /**
-     * @notice Allocates a specified amount of the stake to the strategy
-     * @param stakeAmount_ The amount of stake received for allocation
-     * @param user_ The address of the user making the allocation
-     * @return allocation The amount successfully allocated
+     * @notice Allocates a specified amount of staked assets into the strategy.
+     * @param stakeAmount_ The amount of stake (ERC-20 or native) provided for allocation.
+     * @param user_ The address of the depositor initiating the allocation.
+     * @return allocation The effective amount successfully allocated to the strategy.
      */
     function allocate(
         uint256 stakeAmount_,
@@ -75,17 +79,59 @@ Low-risk strategies are used to generate optimal income for stakers. All strateg
     ) external payable returns (uint256 allocation);
 
     /**
-     * @notice Exits a specified amount of the strategy shares to the vault
-     * @param assetAllocation_ The amount of the strategy-specific asset (shares) to withdraw
-     * @param user_ The address of the user requesting the exit
-     * @return exitAmount The amount successfully exited
+     * @notice Redeems strategy shares and returns underlying assets to the vault.
+     * @param assetAllocation_ The amount of the strategy’s share tokens to withdraw.
+     * @param user_ The address of the vault or user requesting the exit.
+     * @return exitAmount The amount of underlying assets returned to the caller.
      */
-    function exit(uint256 assetAllocation_, address user_) external returns (uint256 exitAmount);
+    function exit(
+        uint256 assetAllocation_,
+        address user_
+    ) external returns (uint256 exitAmount);
 ```
 
-This interface allows strategies to be deployed independently of the main upgradeable Proxy Diamond code and linked with new staking pools.
+* **allocate:** Moves assets from the vault into the strategy, issuing or updating internal share accounting. Must handle asset deposits appropriate to the strategy (e.g., ERC‑20 tokens, native currency, or other supported asset types).
+* **exit:** Converts strategy shares back into underlying assets and transfers them to the vault. Determines the current exchange price and handles asset valuation to compute `exitAmount`.
 
-- **Shares:** Are minted on the Lumia Chain as ERC-4626 tokens, representing both users’ stake and used to distribute revenue from strategies.
+These functions allow the vault to treat all strategies uniformly, regardless of the underlying protocol or mechanics.
+
+<div style="page-break-after: always;"></div>
+
+### 2.2 Strategy Type Flags
+
+To support different flow patterns, each strategy also exposes two boolean flags:
+
+```solidity
+    /**
+     * @notice Indicates whether the strategy is a DirectStakeStrategy.
+     * @dev  Direct stake strategies bypass yield‑generating logic and
+     *       exist solely to allow 1:1 deposits into the vault. They:
+     *         - Store currency info for compatibility with the vault.
+     *         - Revert on any `allocate`, `exit`, or preview calls.
+     *         - Perform no token or native transfers.
+     * @return Always `true` for direct stake strategies, `false` otherwise.
+     */
+    function isDirectStakeStrategy() external view returns (bool);
+
+    /**
+     * @notice Returns true if this stake strategy is an integrated strategy.
+     * @dev  Integrated strategies delegate all asset movements to the
+     *       IntegrationFacet within the same diamond. As a result:
+     *         - No calls to `transferFrom` or native pull operations.
+     *         - No ERC‑20 approvals managed by the strategy itself.
+     *         - `allocate(...)` and `exit(...)` simply forward to the facet,
+     *           which executes internal transfers between strategy and vault.
+     * @return Always `true` for integrated strategies, `false` otherwise.
+     */
+    function isIntegratedStakeStrategy() external view returns (bool);
+```
+
+* **Direct strategies** are effectively placeholders: they exist to satisfy the vault’s strategy interface without moving funds into any external protocol. Perfect for simple 1:1 deposit/withdraw flows.
+* **Integrated strategies** rely on the diamond’s IntegrationFacet to handle every asset movement internally. No external allowance setup or approval calls are needed; the facet’s permission covers both ERC‑20 and native transfers.
+
+This separation of allocation/exit logic from strategy‑type flags ensures clarity: the vault always calls `allocate` and `exit` in the same way, while each strategy declares its operational mode via its flags.
+
+* **Shares:** Are minted on the Lumia Chain as ERC-4626 tokens, representing users’ stake within a strategy and used to distribute revenue generated by that strategy.
 
 ## Reward Distribution via `report()` Function
 
@@ -136,3 +182,41 @@ When users unstake, the Dinero Protocol is used to redeem pxETH from apxETH (an 
 In the future, the fee could be reduced by implementing a delayed unstake option, creating an unstake buffer for ongoing operations, similar to the model used in the Dinero Protocol.
 
 <div style="page-break-after: always;"></div>
+
+### Strategy Examples: Superform Strategy
+
+The Superform Strategy is an **integrated** strategy that interacts with its dedicated `SuperformIntegrationFacet` within the diamond. On allocation, it:
+
+1. Receives USDC deposits via the `allocate` call.
+2. Queries the Superform protocol’s on‑chain for the current USDC -> SuperUSDC conversion rate, which reflects accrued interest and floating rates.
+3. Calculates the exact amount of SuperUSDC to mint.
+4. Invokes the `SuperformIntegrationFacet` to perform the internal transfer: moving USDC out of the allocation vault and minting SuperUSDC directly by the protocol.
+
+On exit:
+
+1. The strategy calculates the redeemable USDC amount from SuperUSDC using the latest rate.
+2. Calls the `SuperformIntegrationFacet` to transmute ERC-20 SuperUSDC back into its ERC-1155 NFT representation.
+3. Invokes the `SuperformIntegrationFacet` to burn the ERC-1155 SuperUSDC and credit the corresponding USDC back to the user.
+3. All transfers remain within the diamond, leveraging its internal asset registry and permissioning.
+
+This approach ensures:
+
+* Tight integration with Superform’s yield accrual.
+* Zero on‑chain approval overhead.
+* Accurate valuation via on‑chain rate feeds.
+
+### Strategy Examples: Swap Super Strategy
+
+The Swap Super Strategy is also **integrated** and uses two dedicated facets—`CurveIntegrationFacet` and `SuperformIntegrationFacet` to orchestrate a two‑step flow:
+
+1. **USDT -> USDC (Curve 3pool):** Uses Curve’s large, highly liquid 3pool to swap incoming USDT for USDC in a single step, executed internally via `CurveIntegrationFacet`.
+
+2. **USDC -> SuperUSDC (Superform):** Forwards the obtained USDC to `SuperformIntegrationFacet`, which mints SuperUSDC as in the Superform Strategy.
+
+On exit, the strategy reverses these steps:
+
+1. Burns SuperUSDC via the Superform facet to receive USDC.
+2. Swaps USDC back to USDT using the Curve 3pool facet’s optimal path logic.
+3. Returns USDT to the user, all through internal facet calls.
+
+By combining Curve’s efficient pool mechanics with Superform’s yield‑boosting wrapper, the Swap Super Strategy offers a seamless entry from USDT into interest‑bearing SuperUSDC and exit back to USDT, **fully integrated** within the diamond’s logic and asset management framework.
