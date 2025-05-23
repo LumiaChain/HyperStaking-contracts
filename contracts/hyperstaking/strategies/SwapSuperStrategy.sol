@@ -83,9 +83,6 @@ contract SwapSuperStrategy is SuperformStrategy {
     ) public payable override onlyLumiaDiamond returns (uint256 allocation) {
         require(amount_ > 0, ZeroAmount());
 
-        // set by allocation join, but not needed
-        curveIntegration.clearAssetApproval(address(CURVE_INPUT_TOKEN), amount_);
-
         // slippage adjusted
         uint256 expected = curveIntegration.quote(
             address(CURVE_INPUT_TOKEN),
@@ -139,9 +136,6 @@ contract SwapSuperStrategy is SuperformStrategy {
             minDx,
             msg.sender
         );
-
-        // clear approval done for superform
-        curveIntegration.clearAssetApproval(address(CURVE_INPUT_TOKEN), exitAmount);
 
         emit CurveSwapExit(user_, superformOut, exitAmount, slippageBps);
     }

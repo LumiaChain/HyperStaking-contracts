@@ -58,6 +58,18 @@ interface IStrategy {
      */
     function isDirectStakeStrategy() external view returns (bool);
 
+    /**
+     * @notice Returns true if this stake strategy is an integrated strategy
+     * @dev An integrated strategy delegates all asset movements (ERC-20 tokens or native currency)
+     *      to the IntegrationFacet within the same diamond. As a result:
+     *        - The strategy never calls `transferFrom` or any pull for ERC20 tokens
+     *        - It never needs to handle native currency transfers itself
+     *        - It does not manage any ERC20 approvals itself
+     *        - Both `allocate(...)` and `exit(...)` invoke the IntegrationFacet
+     *          directly to move tokens internally within the diamond
+     */
+    function isIntegratedStakeStrategy() external view returns (bool);
+
     /// @return Currency used for allocation into strategy (stake)
     function stakeCurrency() external view returns(Currency calldata);
 

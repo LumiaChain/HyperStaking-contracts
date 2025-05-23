@@ -45,11 +45,18 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         // allocate stake amount in strategy
         // and receive allocation
         uint256 allocation;
-        if (vault.stakeCurrency.isNativeCoin()) {
-            allocation = IStrategy(strategy).allocate{value: stake}(stake, user);
-        } else {
-            vault.stakeCurrency.increaseAllowance(strategy, stake);
+
+        // Integrated strategy: all asset movements are handled internally by the IntegrationFacet
+        if (IStrategy(strategy).isIntegratedStakeStrategy()) {
+            // no-vaule and without increaseAllowance
             allocation = IStrategy(strategy).allocate(stake, user);
+        } else {
+            if (vault.stakeCurrency.isNativeCoin()) {
+                allocation = IStrategy(strategy).allocate{value: stake}(stake, user);
+            } else {
+                vault.stakeCurrency.increaseAllowance(strategy, stake);
+                allocation = IStrategy(strategy).allocate(stake, user);
+            }
         }
 
         // save information
@@ -209,8 +216,12 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         // save information
         si.totalAllocation -= allocation;
 
+
+        // Integrated strategy does not require allowance
+        if (!IStrategy(strategy).isIntegratedStakeStrategy()) {
+            vault.revenueAsset.safeIncreaseAllowance(strategy, allocation);
+        }
         // exit strategy with given allocation
-        vault.revenueAsset.safeIncreaseAllowance(strategy, allocation);
         uint256 exitStake = IStrategy(strategy).exit(allocation, user);
 
         if (feeWithdraw) {

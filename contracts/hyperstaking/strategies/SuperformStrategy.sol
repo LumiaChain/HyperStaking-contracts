@@ -97,9 +97,6 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     ) public payable virtual onlyLumiaDiamond returns (uint256 allocation) {
         require(amount_ > 0, ZeroAmount());
 
-        // set by allocation join, but not needed
-        superformIntegration.clearAssetApproval(SUPERFORM_ID, amount_);
-
         allocation = superformIntegration.singleVaultDeposit(
             SUPERFORM_ID,
             amount_,
@@ -129,9 +126,6 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
         uint256 shares_,
         address user_
     ) public virtual onlyLumiaDiamond returns (uint256 exitAmount) {
-        // set by allocation leave, but not needed
-        superformIntegration.clearRevenueAssetApproval(SUPERFORM_ID, shares_);
-
         superformIntegration.transmuteToERC1155A(
             msg.sender,
             SUPERFORM_ID,
@@ -147,6 +141,11 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
         );
 
         emit Exit(user_, shares_, exitAmount);
+    }
+
+    /// @inheritdoc IStrategy
+    function isIntegratedStakeStrategy() external pure virtual override returns (bool) {
+        return true;
     }
 
     // ========= View ========= //

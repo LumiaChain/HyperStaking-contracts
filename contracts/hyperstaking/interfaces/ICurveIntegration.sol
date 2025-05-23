@@ -56,10 +56,6 @@ interface ICurveIntegration {
         address receiver
     ) external returns (uint256 dy);
 
-    /// @dev clear allowance for the swap strategy, set in allocation,
-    ///      so no leftover approval should remain
-    function clearAssetApproval(address token, uint256 amount) external;
-
     /// @notice Points the facet to a new Curve Router address
     function updateCurveRouter(address newRouter) external;
 

@@ -192,20 +192,6 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         );
     }
 
-    /// @inheritdoc ISuperformIntegration
-    function clearAssetApproval(uint256 superformId, uint256 amount) external onlySuperStrategy {
-        IBaseForm superform = _getSuperform(superformId);
-        address asset = superform.getVaultAsset();
-
-        IERC20(asset).safeDecreaseAllowance(msg.sender, amount);
-    }
-
-    /// @inheritdoc ISuperformIntegration
-    function clearRevenueAssetApproval(uint256 superformId, uint256 amount) external onlySuperStrategy {
-        address revenueAsset = aERC20Token(superformId);
-        IERC20(revenueAsset).safeDecreaseAllowance(msg.sender, amount);
-    }
-
     /* ========== Strategy Manager  ========== */
 
     /// @inheritdoc ISuperformIntegration

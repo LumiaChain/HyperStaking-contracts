@@ -66,14 +66,6 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
             blank,
             receiver
         );
-
-        // increase expcted allowance for the superform integration
-        IERC20(tokenOut).safeIncreaseAllowance(msg.sender, dy);
-    }
-
-    /// @inheritdoc ICurveIntegration
-    function clearAssetApproval(address token, uint256 amount) external onlySwapStrategy {
-        IERC20(token).safeDecreaseAllowance(msg.sender, amount);
     }
 
     /* ========== Strategy Manager ========== */

@@ -73,6 +73,11 @@ abstract contract AbstractStrategy is IStrategy {
         return false;
     }
 
+    /// @inheritdoc IStrategy
+    function isIntegratedStakeStrategy() external pure virtual returns (bool) {
+        return false;
+    }
+
     // ========= StrategyManager ========= //
 
     /**
