@@ -1,11 +1,16 @@
 import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 
 import { ethers, ignition } from "hardhat";
-import { parseUnits, ZeroAddress } from "ethers";
+import { parseEther, parseUnits, Contract, ZeroAddress } from "ethers";
 import SwapSuperStrategyModule from "../ignition/modules/SwapSuperStrategy";
+import TestSwapIntegrationModule from "../ignition/modules/test/TestSwapIntegration.ts";
+
+import { ISuperformIntegration } from "../typechain-types";
 
 import { expect } from "chai";
 import * as shared from "./shared";
+
+const stableUnits = (val: string) => parseUnits(val, 6);
 
 async function deployHyperStaking() {
   const signers = await shared.getSigners();
@@ -96,7 +101,7 @@ describe("CurveStrategy", function () {
     pool: string,
     tokenIn: string,
     tokenOut: string,
-    toUSDC: boolean = false,
+    indexes: [bigint, bigint] = [1n, 2n], // default USDC (1) -> USDT (2)
   ): [
     string[],
     [
@@ -114,12 +119,9 @@ describe("CurveStrategy", function () {
     route[1] = pool;
     route[2] = tokenOut;
 
-    // very simple, but works only for 2 tokens (USDC -> USDT or USDT -> USDC)
-    let i = 1n; let j = 2n;
-    if (toUSDC) {
-      i = 2n;
-      j = 1n;
-    }
+    // works only with 2 tokens, there is no check for length
+    const i = indexes[0];
+    const j = indexes[1];
 
     // swap_params[5][5] – only first row matters; explicit tuple typing
     const params:
@@ -149,36 +151,45 @@ describe("CurveStrategy", function () {
     return [route, params, pools];
   }
 
+  async function createMockedCurvePool(
+    token1: Contract,
+    token2: Contract,
+    fillAmount: bigint = parseEther("100"),
+  ) {
+    const curvePool = await ethers.deployContract("MockCurvePool", [
+      await token1.getAddress(),
+      await token2.getAddress(),
+    ]);
+
+    // fill the pool with tokens
+    await token1.transfer(await curvePool.getAddress(), fillAmount);
+    await token2.transfer(await curvePool.getAddress(), fillAmount);
+
+    return curvePool;
+  }
+
+  async function getMockedCurve() {
+    const signers = await shared.getSigners();
+    const { owner } = signers;
+
+    // -------------------- Deploy Tokens --------------------
+
+    const usdc = await shared.deloyTestERC20("Test USDC", "tUSDC", 6);
+    const usdt = await shared.deloyTestERC20("Test USDT", "tUSDT", 6);
+
+    await usdc.mint(owner, stableUnits("1000000"));
+    await usdt.mint(owner, stableUnits("1000000"));
+
+    // ------------------ Mock Curve Router ------------------
+
+    const curvePool = await createMockedCurvePool(usdc, usdt, stableUnits("500000"));
+    const curveRouter = await ethers.deployContract("MockCurveRouter");
+
+    return { curvePool, curveRouter, usdc, usdt, owner };
+  }
+
   describe("Curve Mock Router", function () {
-    async function getMockedCurve() {
-      const signers = await shared.getSigners();
-      const { owner } = signers;
-
-      // -------------------- Deploy Tokens --------------------
-
-      const usdc = await shared.deloyTestERC20("Test USDC", "tUSDC", 6);
-      const usdt = await shared.deloyTestERC20("Test USDT", "tUSDT", 6);
-
-      const stableUnits = (val: string) => parseUnits(val, 6);
-      await usdc.mint(owner, stableUnits("1000000"));
-      await usdt.mint(owner, stableUnits("1000000"));
-
-      // ------------------ Mock Curve Router ------------------
-
-      const curvePool = await ethers.deployContract("MockCurvePool", [
-        await usdt.getAddress(),
-        await usdc.getAddress(),
-      ]);
-
-      const curveRouter = await ethers.deployContract("MockCurveRouter");
-
-      await usdc.transfer(await curvePool.getAddress(), stableUnits("500000"));
-      await usdt.transfer(await curvePool.getAddress(), stableUnits("500000"));
-
-      return { curvePool, curveRouter, usdc, usdt, owner };
-    }
-
-    it("get_dy / get_dx reflect the rate", async function () {
+    it("real get_dy / get_dx reflect the rate", async function () {
       const { curvePool, curveRouter, usdc, usdt } = await loadFixture(getMockedCurve);
 
       const amount = parseUnits("100", 6);
@@ -195,7 +206,10 @@ describe("CurveStrategy", function () {
       // change rate to 0.98
       await curvePool.setRate(parseUnits("0.98", 18));
       dy = await curveRouter.get_dy(route, params, amount, pools);
-      expect(dy).to.equal((amount * 98n) / 100n);
+      expect(dy).to.equal((amount)); // still 1:1
+
+      // but real
+      expect(await curvePool.realDy(amount)).to.equal((amount * 98n) / 100n);
 
       // dx should invert dy
       const dx = await curveRouter.get_dx(
@@ -246,12 +260,11 @@ describe("CurveStrategy", function () {
 
       const amountIn = parseUnits("500", 6);
 
-      const toUSDC = true;
       const [route, params, pools] = oneHopRoute(
         await curvePool.getAddress(),
         await usdt.getAddress(),
         await usdc.getAddress(),
-        toUSDC,
+        [2n, 1n], // USDT (2) -> USDC (1)
       );
 
       await usdt.approve(await curveRouter.getAddress(), amountIn);
@@ -270,6 +283,251 @@ describe("CurveStrategy", function () {
       const balAfter = await usdc.balanceOf(owner.address);
 
       expect(balAfter - balBefore).to.equal(dy);
+    });
+  });
+
+  describe("Swap Test Integration", function () {
+    async function getMockedIntegrations() {
+      const signers = await shared.getSigners();
+      const { curvePool, curveRouter, usdc, usdt } = await loadFixture(getMockedCurve);
+
+      await usdc.mint(signers.alice.address, parseUnits("10000", 6));
+      await usdt.mint(signers.alice.address, parseUnits("10000", 6));
+
+      const erc4626Vault = await shared.deloyTestERC4626Vault(usdc);
+
+      const {
+        superformFactory, superformRouter, superVault, superPositions,
+      } = await shared.deploySuperformMock(erc4626Vault);
+
+      const { testSwapIntegration } = await ignition.deploy(TestSwapIntegrationModule, {
+        parameters: {
+          TestSwapIntegrationModule: {
+            superformFactory: await superformFactory.getAddress(),
+            superformRouter: await superformRouter.getAddress(),
+            superPositions: await superPositions.getAddress(),
+            curveRouter: await curveRouter.getAddress(),
+          },
+        },
+      });
+
+      // create strategy
+      const { swapSuperStrategy } = await ignition.deploy(SwapSuperStrategyModule, {
+        parameters: {
+          SwapSuperStrategyModule: {
+            diamond: await testSwapIntegration.getAddress(), // using testSwapIntegration as a diamond
+            curveInputToken: await usdt.getAddress(),
+            curvePool: await curvePool.getAddress(),
+            superVault: await superVault.getAddress(),
+            superformInputToken: await usdc.getAddress(),
+          },
+        },
+      });
+
+      // ------------------ Add Strategy ------------------
+
+      await testSwapIntegration.connect(signers.owner).updateSuperformStrategies(
+        swapSuperStrategy,
+        true,
+      );
+
+      await testSwapIntegration.connect(signers.owner).updateSwapStrategies(
+        swapSuperStrategy,
+        true,
+      );
+
+      // ------------------ SuperUSDC ------------------
+
+      const superUSDC = await shared.registerAERC20( // transmuted ERC20 version
+        testSwapIntegration as unknown as ISuperformIntegration, superVault, usdc,
+      );
+
+      // ------------------ CurveIntegration ------------------
+
+      const nCoins = 3n; // simulating 3pool
+      const testDAIAddr = ZeroAddress; // not used in mock
+      const registerTokens = [testDAIAddr, usdc.target, usdt.target];
+      const indexes = [0n, 1n, 2n];
+      await testSwapIntegration.connect(signers.owner).registerPool(
+        curvePool,
+        nCoins,
+        registerTokens,
+        indexes,
+      );
+
+      /* eslint-disable object-property-newline */
+      return {
+        testSwapIntegration, // integration
+        swapSuperStrategy, // strategy
+        usdt, usdc, erc4626Vault, superUSDC, // tokens
+        curvePool, curveRouter, superformFactory, superformRouter, superVault, superPositions, // mocks
+        signers, // signers
+      };
+      /* eslint-disable object-property-newline */
+    }
+
+    it("check for bad route and tokens", async function () {
+      const { testSwapIntegration, usdc, usdt, superVault, signers } = await loadFixture(getMockedIntegrations);
+
+      // -------------------- setup
+
+      const badToken = await shared.deloyTestERC20("Test BAD1", "BB1", 6);
+
+      const { owner, alice } = signers;
+      await badToken.mint(owner, stableUnits("1000000"));
+      await badToken.mint(alice, stableUnits("1000000"));
+
+      const strangePool = await createMockedCurvePool(badToken, usdc, stableUnits("500000"));
+
+      // create strategy which uses not registered tokens
+      const strangeStrategy = (await ignition.deploy(SwapSuperStrategyModule, {
+        parameters: {
+          SwapSuperStrategyModule: {
+            diamond: await testSwapIntegration.getAddress(), // using testSwapIntegration as a diamond
+            curveInputToken: await badToken.getAddress(),
+            curvePool: await strangePool.getAddress(),
+            superVault: await superVault.getAddress(),
+            superformInputToken: await usdc.getAddress(),
+          },
+        },
+      })).swapSuperStrategy;
+
+      // -------------------- actual test
+
+      const amount = parseUnits("321", 6);
+
+      await badToken.connect(alice).approve(testSwapIntegration, amount);
+
+      await expect(testSwapIntegration.connect(alice).allocate(strangeStrategy, amount))
+        .to.be.revertedWithCustomError(testSwapIntegration, "PoolNotRegistered");
+
+      // register pool with wrong tokens
+      let nCoins = 2n;
+      let registerTokens = [usdc.target, usdt.target]; // missing badToken
+      let indexes = [0n, 1n];
+      await testSwapIntegration.registerPool(
+        strangePool,
+        nCoins,
+        registerTokens,
+        indexes,
+      );
+
+      await expect(testSwapIntegration.connect(alice).allocate(strangeStrategy, amount))
+        .to.be.revertedWithCustomError(testSwapIntegration, "TokenNotRegistered")
+        .withArgs(badToken);
+
+      // register bad again
+      nCoins = 2n;
+      registerTokens = [badToken.target, usdt.target]; // usdt instead of usdc
+      indexes = [45n, 4n]; // strange indexes
+      await testSwapIntegration.registerPool(
+        strangePool,
+        nCoins,
+        registerTokens,
+        indexes,
+      );
+
+      await expect(testSwapIntegration.connect(alice).allocate(strangeStrategy, amount))
+        .to.be.revertedWithCustomError(testSwapIntegration, "TokenNotRegistered")
+        .withArgs(usdc);
+
+      // register correctly
+      nCoins = 2n;
+      registerTokens = [badToken.target, usdc.target]; // usdt instead of usdc
+      indexes = [0n, 1n]; // strange indexes
+      await testSwapIntegration.registerPool(
+        strangePool,
+        nCoins,
+        registerTokens,
+        indexes,
+      );
+
+      await expect(testSwapIntegration.connect(alice).allocate(strangeStrategy, amount))
+        .to.be.revertedWithCustomError(testSwapIntegration, "NotFromSwapStrategy")
+        .withArgs(strangeStrategy);
+
+      // register strategy
+      await testSwapIntegration.updateSwapStrategies(
+        strangeStrategy,
+        true,
+      );
+
+      await expect(testSwapIntegration.connect(alice).allocate(strangeStrategy, amount))
+        .to.be.revertedWithCustomError(testSwapIntegration, "NotFromSuperStrategy")
+        .withArgs(strangeStrategy);
+
+      await testSwapIntegration.updateSuperformStrategies(
+        strangeStrategy,
+        true,
+      );
+
+      // OK
+      await testSwapIntegration.connect(alice).allocate(strangeStrategy, amount);
+    });
+
+    it("allocation", async function () {
+      const { testSwapIntegration, swapSuperStrategy, usdt, usdc, erc4626Vault, superUSDC, signers } = await loadFixture(getMockedIntegrations);
+      const { alice } = signers;
+
+      const initialSVaultAmount = await usdc.balanceOf(erc4626Vault);
+      const amount = parseUnits("100", 6);
+
+      expect(await superUSDC.balanceOf(alice)).to.equal(0);
+
+      await usdt.connect(alice).approve(testSwapIntegration, amount);
+      await testSwapIntegration.connect(alice).allocate(swapSuperStrategy, amount);
+
+      expect(await usdt.allowance(alice, testSwapIntegration)).to.equal(0);
+      expect(await usdc.balanceOf(erc4626Vault)).to.equal(amount + initialSVaultAmount);
+      expect(await superUSDC.balanceOf(alice)).to.equal(amount);
+    });
+
+    it("exit", async function () {
+      const { testSwapIntegration, swapSuperStrategy, usdt, usdc, erc4626Vault, curvePool, superUSDC, signers } = await loadFixture(getMockedIntegrations);
+      const { alice } = signers;
+
+      const amount = parseUnits("300", 6);
+
+      await usdt.connect(alice).approve(testSwapIntegration, amount);
+      await testSwapIntegration.connect(alice).allocate(swapSuperStrategy, amount);
+
+      await superUSDC.connect(alice).approve(testSwapIntegration, amount);
+      const exitTx = testSwapIntegration.connect(alice).exit(swapSuperStrategy, amount);
+
+      expect(exitTx).to.changeTokenBalance(superUSDC, alice, -amount);
+      expect(exitTx).to.changeTokenBalances(usdt, [curvePool, alice], [-amount, amount]);
+      expect(exitTx).to.changeTokenBalances(usdc, [erc4626Vault, curvePool], [-amount, amount]);
+    });
+
+    it("slippage tolerance", async function () {
+      const { testSwapIntegration, swapSuperStrategy, curveRouter, usdt, usdc, erc4626Vault, curvePool, superUSDC, signers } = await loadFixture(getMockedIntegrations);
+      const { alice } = signers;
+
+      const amount = parseUnits("300", 6);
+
+      // set rate in the pool to 0.95
+      const rate = parseEther("0.95");
+      await curvePool.setRate(rate);
+
+      await usdt.connect(alice).approve(testSwapIntegration, amount);
+      await expect(testSwapIntegration.connect(alice).allocate(swapSuperStrategy, amount))
+        .to.be.revertedWithCustomError(curveRouter, "Slippage");
+
+      await swapSuperStrategy.setSlippage(499); // 4.99% slippage tolerance
+
+      // still should revert, 4.99% < 5%
+      await expect(testSwapIntegration.connect(alice).allocate(swapSuperStrategy, amount))
+        .to.be.revertedWithCustomError(curveRouter, "Slippage");
+
+      await swapSuperStrategy.setSlippage(500);
+
+      const allocTx = testSwapIntegration.connect(alice).allocate(swapSuperStrategy, amount);
+
+      expect(allocTx).to.changeTokenBalances(usdt, [curvePool, alice], [amount, -amount]);
+
+      const expectedAmount = (amount * rate) / parseEther("1");
+      expect(allocTx).to.changeTokenBalances(usdc, [erc4626Vault, curvePool], [expectedAmount, -expectedAmount]);
+      expect(allocTx).to.changeTokenBalance(superUSDC, alice, expectedAmount);
     });
   });
 

@@ -4,13 +4,16 @@ pragma solidity =0.8.27;
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {ICurveRouterMinimal} from "../strategies/integrations/curve/interfaces/ICurveRouterMinimal.sol";
 
+import { ZeroAddress } from "../Errors.sol";
+
 //================================================================================================//
 //                                            Types                                               //
 //================================================================================================//
 
 struct PoolConfig {
-    uint8 nCoins;                  // 0 == “not cached”
-    mapping(address => uint8) idx; // token -> index
+    address[] tokenList;                    // list of token addresses
+    mapping(address => uint8) tokenIndex;   // map from token to index
+    mapping(address => bool) tokenExists;   // allow to easy check without looping
 }
 
 //================================================================================================//
@@ -26,8 +29,6 @@ struct CurveStorage {
 library LibCurve {
     bytes32 constant internal CURVE_STORAGE_POSITION
         = bytes32(uint256(keccak256("hyperstaking.curve-0.1.storage")) - 1);
-
-    error ZeroAddress();
 
     function diamondStorage() internal pure returns (CurveStorage storage s) {
         bytes32 position = CURVE_STORAGE_POSITION;

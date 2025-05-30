@@ -11,6 +11,8 @@ import {ICurveRouterMinimal} from "../../strategies/integrations/curve/interface
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import * as Errors from "../../Errors.sol";
+
 /**
  * @title CurveIntegration
  * @dev Diamond facet that wraps a single-hop Curve Router call
@@ -72,7 +74,7 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
 
     /// @inheritdoc ICurveIntegration
     function updateCurveRouter(address newRouter) external onlyStrategyManager {
-        require(newRouter != address(0), ZeroAddress());
+        require(newRouter != address(0), Errors.ZeroAddress());
         LibCurve.diamondStorage().curveRouter = ICurveRouterMinimal(newRouter);
 
         emit CurveRouterUpdated(newRouter);
@@ -84,9 +86,9 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
 
         // EnumerableSet returns a boolean indicating success
         if (status) {
-            require(s.swapStrategies.add(strategy), UpdateFailed());
+            require(s.swapStrategies.add(strategy), Errors.UpdateFailed());
         } else {
-            require(s.swapStrategies.remove(strategy), UpdateFailed());
+            require(s.swapStrategies.remove(strategy), Errors.UpdateFailed());
         }
 
         emit SwapStrategyUpdated(strategy, status);
@@ -103,10 +105,19 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
         require(nCoins > 1 && nCoins <= 8, PoolBadNCoins());
 
         PoolConfig storage pc = LibCurve.diamondStorage().poolsConfig[pool];
-        pc.nCoins = nCoins;
 
-        for (uint256 i; i < tokens.length; ++i) {
-            pc.idx[tokens[i]] = indexes[i];
+        // clean previous pool storage
+        for (uint256 i; i < pc.tokenList.length; ++i) {
+            delete pc.tokenIndex[pc.tokenList[i]]; // remove token index
+            delete pc.tokenExists[pc.tokenList[i]]; // remove info if token exists
+        }
+        delete pc.tokenList; // remove token list
+
+        for (uint256 i; i < nCoins; ++i) {
+            require(!pc.tokenExists[tokens[i]], PoolDuplicateToken());
+            pc.tokenList.push(tokens[i]);
+            pc.tokenIndex[tokens[i]] = indexes[i];
+            pc.tokenExists[tokens[i]] = true;
         }
 
         emit PoolRegistered(pool, nCoins);
@@ -152,11 +163,16 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
         return LibCurve.diamondStorage().swapStrategies.length();
     }
 
-    function poolConfig(address pool, address token) external view returns (uint8 index, uint8 nCoins) {
+    function poolConfig(
+        address pool
+    ) external view returns (address[] memory tokens, uint8[] memory indexes) {
         PoolConfig storage pc = LibCurve.diamondStorage().poolsConfig[pool];
+        tokens = pc.tokenList;
 
-        nCoins = pc.nCoins;
-        index = pc.idx[token];
+        indexes = new uint8[](tokens.length);
+        for (uint256 i; i < tokens.length; ++i) {
+            indexes[i] = pc.tokenIndex[tokens[i]];
+        }
     }
 
     //============================================================================================//
@@ -166,14 +182,14 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
     /// @dev Returns the registered index of `token` in `pool`; reverts if not set
     function _coinIndex(address pool, address token) internal view returns (uint8) {
         PoolConfig storage pc = LibCurve.diamondStorage().poolsConfig[pool];
-        uint8 idx = pc.idx[token];
-        require(idx < pc.nCoins, TokenNotRegistered());
-        return idx;
+
+        require(pc.tokenExists[token], TokenNotRegistered(token));
+        return pc.tokenIndex[token];
     }
 
-    /// @dev Returns the cached coin count for `pool`; reverts if unregistered
+    /// @dev Returns the coin count for `pool`; reverts if unregistered
     function _nCoins(address pool) internal view returns (uint8) {
-        uint8 n = LibCurve.diamondStorage().poolsConfig[pool].nCoins;
+        uint8 n = uint8(LibCurve.diamondStorage().poolsConfig[pool].tokenList.length);
         require(n != 0, PoolNotRegistered());
         return n;
     }
@@ -199,12 +215,13 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
         route[1] = pool;
         route[2] = tokenOut;
 
+        uint256 nCoins = _nCoins(pool);
+
         // coin indices inside the pool
         uint256 i = _coinIndex(pool, tokenIn);
         uint256 j = _coinIndex(pool, tokenOut);
         require(i != type(uint256).max && j != type(uint256).max, CoinNotInPool());
-
-        uint256 nCoins = _nCoins(pool);
+        // TODO issue with index 0;
 
         // params[0] = [i, j, swapType(1), poolType(1), nCoins]
         params[0][0] = i;

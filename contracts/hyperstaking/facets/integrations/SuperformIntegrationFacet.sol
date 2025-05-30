@@ -19,6 +19,8 @@ import {
 } from "../../../external/superform/core/types/DataTypes.sol";
 import {DataLib} from "../../../external/superform/core/libraries/DataLib.sol";
 
+import * as Errors from "../../Errors.sol";
+
 /**
  * @title SuperformIntegration
  * @dev Integration with Superform, providing deposits and withdrawals from single vaults
@@ -74,9 +76,9 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         SuperformStorage storage s = LibSuperform.diamondStorage();
 
         require(s.superformFactory.isSuperform(superformId), InvalidSuperformId(superformId));
-        require(receiver != address(0), ZeroAddress());
-        require(receiverSP != address(0), ZeroAddress());
-        require(assetAmount > 0, ZeroAmount());
+        require(receiver != address(0), Errors.ZeroAddress());
+        require(receiverSP != address(0), Errors.ZeroAddress());
+        require(assetAmount > 0, Errors.ZeroAmount());
 
         uint256 superPositionsBefore = s.superPositions.balanceOf(receiverSP, superformId);
 
@@ -124,9 +126,9 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         SuperformStorage storage s = LibSuperform.diamondStorage();
 
         require(s.superformFactory.isSuperform(superformId), InvalidSuperformId(superformId));
-        require(receiver != address(0), ZeroAddress());
-        require(receiverSP != address(0), ZeroAddress());
-        require(superPositionAmount > 0, ZeroAmount());
+        require(receiver != address(0), Errors.ZeroAddress());
+        require(receiverSP != address(0), Errors.ZeroAddress());
+        require(superPositionAmount > 0, Errors.ZeroAmount());
 
         IBaseForm superform = _getSuperform(superformId);
 
@@ -203,9 +205,9 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
 
         // EnumerableSet returns a boolean indicating success
         if (status) {
-            require(s.superformStrategies.add(strategy), UpdateFailed());
+            require(s.superformStrategies.add(strategy), Errors.UpdateFailed());
         } else {
-            require(s.superformStrategies.remove(strategy), UpdateFailed());
+            require(s.superformStrategies.remove(strategy), Errors.UpdateFailed());
         }
 
         emit SuperformStrategyUpdated(strategy, status);

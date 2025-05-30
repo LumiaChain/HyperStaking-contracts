@@ -10,7 +10,7 @@ import {ICurvePoolMinimal} from "../interfaces/ICurvePoolMinimal.sol";
 /**
  * @title MockCurvePool (USDC <-> USDT only)
  * @notice Mock pool with exactly 2 coins: coins(1)=USDC, coins(2)=USDT,
- * @dev Applies a fixed `rate` with configurable slippage (in bps).
+ * @dev Applies a fixed `rate` to simulate slippage
  */
 contract MockCurvePool is ICurvePoolMinimal {
     using SafeERC20 for IERC20;
@@ -20,10 +20,9 @@ contract MockCurvePool is ICurvePoolMinimal {
     IERC20 public immutable USDT;
 
     /// @dev 18-dec rate multiplier (1e18 = 100 %)
-    uint256 public rate = 1e18; // 1:1 by default
-
-    /// @dev Slippage tolerance in basis points (0–10 000)
-    uint16 public slippageBps;
+    ///      1:1 by default,
+    ///      1:1 is also used for quote to simulate slippage
+    uint256 public rate = 1e18;
 
     uint256 public lastDy;
 
@@ -33,7 +32,6 @@ contract MockCurvePool is ICurvePoolMinimal {
     error BadPair(int128 i, int128 j);
 
     error InsufficientLiquidity(address token, uint256 wanted, uint256 available);
-    error SlippageTooHigh(uint16 bps);
 
     // ========= Constructor ========= //
 
@@ -64,7 +62,8 @@ contract MockCurvePool is ICurvePoolMinimal {
 
         // actual exchange
         inTok.safeTransferFrom(msg.sender, address(this), inAmount);
-        dy = _quoteDy(inAmount);
+
+        dy = realDy(inAmount);
 
         uint256 bal = outTok.balanceOf(address(this));
         if (bal < dy) revert InsufficientLiquidity(address(outTok), dy, bal);
@@ -76,12 +75,6 @@ contract MockCurvePool is ICurvePoolMinimal {
     /// @dev Change rate (18 dec)
     function setRate(uint256 rate_) external {
         rate = rate_;
-    }
-
-    /// @notice Set slippage tolerance in basis points (max 100%)
-    function setSlippage(uint16 bps_) external {
-        if (bps_ > 10_000) revert SlippageTooHigh(bps_);
-        slippageBps = bps_;
     }
 
     // ========= View ========= //
@@ -98,32 +91,37 @@ contract MockCurvePool is ICurvePoolMinimal {
         int128 i,
         int128 j,
         uint256 inAmount
-    ) external view override returns (uint256 dy) {
+    ) external pure override returns (uint256 dy) {
         // i=1 -> USDC, i=2 -> USDT
         if (!((i == 1 && j == 2) || (i == 2 && j == 1)))
             revert BadPair(i, j);
 
-        dy = _quoteDy(inAmount);
+        dy = inAmount;
     }
 
     /// @notice Reverse-quote: how much input is needed for `outAmount`
+    /// @dev always 1:1
     function get_dx(
         int128 i,
         int128 j,
         uint256 outAmount
-    ) external view returns (uint256 dx) {
-        if (!((i == 1 && j == 2) || (i == 2 && j == 1))) revert BadPair(i, j);
-        // dx = outAmount * 1e18 / effectiveRate
-        uint256 effRate = (rate * (10_000 - slippageBps)) / 10_000;
-        dx = (outAmount * 1e18 + effRate - 1) / effRate; // round up
+    ) external pure returns (uint256 dx) {
+        // i=1 -> USDC, i=2 -> USDT
+        if (!((i == 1 && j == 2) || (i == 2 && j == 1)))
+            revert BadPair(i, j);
+
+        dx = outAmount;
     }
 
-    // ========= Interanl ========= //
+    /// @notice helper
+    /// @dev Applies rate
+    function realDy(uint256 inAmount) public view returns (uint256) {
+        return (inAmount * rate) / 1e18;
+    }
 
-    /// @notice get_dy helper
-    /// @dev Applies rate and slippage
-    function _quoteDy(uint256 amount_) internal view returns (uint256) {
-        uint256 effRate = (rate * (10_000 - slippageBps)) / 10_000;
-        return (amount_ * effRate) / 1e18;
+    /// @notice helper
+    /// @dev Applies rate
+    function realDx(uint256 outAmount) public view returns (uint256) {
+        return (outAmount * 1e18 + rate - 1) / rate; // round up
     }
 }

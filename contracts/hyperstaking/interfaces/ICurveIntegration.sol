@@ -20,17 +20,16 @@ interface ICurveIntegration {
     //                                          Errors                                            //
     //============================================================================================//
 
-    error ZeroAddress();
     error NotFromSwapStrategy(address);
-    error UpdateFailed();
 
     error SameCoinSwap();
     error CoinNotInPool();
 
     error PoolSizeMismatch();
     error PoolBadNCoins();
+    error PoolDuplicateToken();
 
-    error TokenNotRegistered();
+    error TokenNotRegistered(address);
     error PoolNotRegistered();
 
     //============================================================================================//
@@ -104,6 +103,8 @@ interface ICurveIntegration {
     /// @notice Total number of whitelisted swap strategies
     function swapStrategiesLength() external view returns (uint256);
 
-    /// @notice Registered data for a pool/token pair — coin index and pool’s nCoins
-    function poolConfig(address pool, address token) external view returns (uint8 index, uint8 nCoins);
+    /// @notice Registered data for a pool — token list and indexes
+    function poolConfig(
+        address pool
+    ) external view returns (address[] memory tokens, uint8[] memory indexes);
 }

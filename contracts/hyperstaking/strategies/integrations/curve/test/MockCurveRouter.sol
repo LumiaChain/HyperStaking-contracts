@@ -11,13 +11,10 @@ import {MockCurvePool} from "./MockCurvePool.sol";
 
 /**
  * @title MockCurveRouter (USDT <-> USDC only)
- * @notice Transfers real ERC20 tokens and applies a fixed `rate`; reverts if the
- *         contract’s balance can’t cover the output side
+ * @notice Transfers real ERC20 tokens, reverts if the pool’s balance can’t cover the output side
  */
 contract MockCurveRouter is ICurveRouterMinimal {
     using SafeERC20 for IERC20;
-
-    uint256 public rate = 1e18;
 
     /// @dev helpers for assertions
     uint256 public lastAmountIn;
@@ -57,10 +54,9 @@ contract MockCurveRouter is ICurveRouterMinimal {
         // compute indexes & quote
         int128 i = _coinIndex(pool, tokenIn);
         int128 j = _coinIndex(pool, tokenOut);
-        dy = ICurvePoolMinimal(pool).get_dy(i, j, amount);
 
         // get the quote
-        dy = ICurvePoolMinimal(pool).get_dy(i, j, amount);
+        dy = MockCurvePool(pool).realDy(amount);
         require(dy >= minDy, Slippage());
 
         // execute & forward

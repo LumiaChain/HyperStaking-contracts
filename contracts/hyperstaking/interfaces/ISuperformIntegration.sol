@@ -44,9 +44,6 @@ interface ISuperformIntegration is IERC1155Receiver {
     //============================================================================================//
 
     error InvalidSuperformId(uint256 superformId);
-    error ZeroAmount();
-    error ZeroAddress();
-    error UpdateFailed();
     error NotFromSuperStrategy(address);
     error AERC20NotRegistered();
 
