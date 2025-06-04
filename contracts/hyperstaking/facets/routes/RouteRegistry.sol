@@ -46,6 +46,7 @@ contract RouteRegistry is IRouteRegistry, HyperStakingAcl {
 
     // ========= View ========= //
 
+    /// @inheritdoc IRouteRegistry
     function quoteDispatchRouteRegistry(
         RouteRegistryData memory data
     ) external view returns (uint256) {
@@ -57,6 +58,7 @@ contract RouteRegistry is IRouteRegistry, HyperStakingAcl {
         );
     }
 
+    /// @inheritdoc IRouteRegistry
     function generateRouteRegistryBody(
         RouteRegistryData memory data
     ) public pure returns (bytes memory body) {
