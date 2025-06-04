@@ -2,9 +2,9 @@ import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-help
 import { expect } from "chai";
 import { parseEther, ZeroAddress } from "ethers";
 
-import * as shared from "./shared";
+import * as shared from "../shared";
 
-import { StakeRedeemDataStruct } from "../typechain-types/contracts/lumia-diamond/interfaces/IStakeRedeemRoute";
+import { StakeRedeemDataStruct } from "../../typechain-types/contracts/lumia-diamond/interfaces/IStakeRedeemRoute";
 
 async function deployHyperStaking() {
   const signers = await shared.getSigners();

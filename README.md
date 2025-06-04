@@ -18,9 +18,17 @@ This project introduces multiple staking pools and a range of yield-generating s
 Run the following to test contracts and check coverage:
 
 ```bash
-npm run test                        # Runs all contract tests
-REPORT_GAS=true npx hardhat test    # Runs tests with gas report
-npm run coverage                    # Generates test coverage report
+# Run unit tests
+npm run test:unit
+
+# Run integration tests against a forked network
+npm run test:fork
+
+# Run tests with a gas report
+REPORT_GAS=true npx hardhat test
+
+# Generate a coverage report
+npm run coverage
 ```
 
 ### Linting

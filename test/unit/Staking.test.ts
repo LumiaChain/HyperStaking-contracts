@@ -3,10 +3,10 @@ import { expect } from "chai";
 import { ethers, ignition } from "hardhat";
 import { parseEther } from "ethers";
 
-import DiamondModule from "../ignition/modules/Diamond";
-import RevertingContractModule from "../ignition/modules/test/RevertingContract";
+import DiamondModule from "../../ignition/modules/Diamond";
+import RevertingContractModule from "../../ignition/modules/test/RevertingContract";
 
-import * as shared from "./shared";
+import * as shared from "../shared";
 
 async function deployDiamond() {
   const [owner, alice] = await ethers.getSigners();

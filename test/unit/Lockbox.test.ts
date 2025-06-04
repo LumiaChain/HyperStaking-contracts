@@ -3,12 +3,12 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { parseEther, ZeroAddress } from "ethers";
 
-import * as shared from "./shared";
+import * as shared from "../shared";
 
-import { RouteRegistryDataStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IRouteRegistry";
-import { StakeInfoDataStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IStakeInfoRoute";
-import { StakeRewardDataStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IStakeRewardRoute";
-import { StakeRedeemDataStruct } from "../typechain-types/contracts/lumia-diamond/interfaces/IStakeRedeemRoute";
+import { RouteRegistryDataStruct } from "../../typechain-types/contracts/hyperstaking/interfaces/IRouteRegistry";
+import { StakeInfoDataStruct } from "../../typechain-types/contracts/hyperstaking/interfaces/IStakeInfoRoute";
+import { StakeRewardDataStruct } from "../../typechain-types/contracts/hyperstaking/interfaces/IStakeRewardRoute";
+import { StakeRedeemDataStruct } from "../../typechain-types/contracts/lumia-diamond/interfaces/IStakeRedeemRoute";
 
 async function deployHyperStaking() {
   const signers = await shared.getSigners();

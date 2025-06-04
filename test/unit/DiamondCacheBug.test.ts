@@ -2,13 +2,13 @@
 
 /* eslint-disable prefer-const */
 
-import DiamondModule from "../ignition/modules/Diamond";
-import { FacetCutAction } from "../scripts/libraries/diamond";
+import DiamondModule from "../../ignition/modules/Diamond";
+import { FacetCutAction } from "../../scripts/libraries/diamond";
 
 import { assert } from "chai";
 import { ethers, ignition } from "hardhat";
-import { DiamondLoupeFacet } from "../typechain-types/diamond/facets";
-import { Test1Facet } from "../typechain-types/contracts/test";
+import { DiamondLoupeFacet } from "../../typechain-types/diamond/facets";
+import { Test1Facet } from "../../typechain-types/contracts/test";
 
 // The diamond example comes with 8 function selectors
 // [cut, loupe, loupe, loupe, loupe, erc165, transferOwnership, owner]

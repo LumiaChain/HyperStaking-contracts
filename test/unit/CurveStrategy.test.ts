@@ -2,13 +2,13 @@ import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-help
 
 import { ethers, ignition } from "hardhat";
 import { parseEther, parseUnits, Contract, ZeroAddress } from "ethers";
-import SwapSuperStrategyModule from "../ignition/modules/SwapSuperStrategy";
-import TestSwapIntegrationModule from "../ignition/modules/test/TestSwapIntegration.ts";
+import SwapSuperStrategyModule from "../../ignition/modules/SwapSuperStrategy";
+import TestSwapIntegrationModule from "../../ignition/modules/test/TestSwapIntegration.ts";
 
-import { ISuperformIntegration } from "../typechain-types";
+import { ISuperformIntegration } from "../../typechain-types";
 
 import { expect } from "chai";
-import * as shared from "./shared";
+import * as shared from "../shared";
 
 const stableUnits = (val: string) => parseUnits(val, 6);
 
@@ -494,9 +494,9 @@ describe("CurveStrategy", function () {
       await superUSDC.connect(alice).approve(testSwapIntegration, amount);
       const exitTx = testSwapIntegration.connect(alice).exit(swapSuperStrategy, amount);
 
-      expect(exitTx).to.changeTokenBalance(superUSDC, alice, -amount);
-      expect(exitTx).to.changeTokenBalances(usdt, [curvePool, alice], [-amount, amount]);
-      expect(exitTx).to.changeTokenBalances(usdc, [erc4626Vault, curvePool], [-amount, amount]);
+      await expect(exitTx).to.changeTokenBalance(superUSDC, alice, -amount);
+      await expect(exitTx).to.changeTokenBalances(usdt, [curvePool, alice], [-amount, amount]);
+      await expect(exitTx).to.changeTokenBalances(usdc, [erc4626Vault, curvePool], [-amount, amount]);
     });
 
     it("slippage tolerance", async function () {
@@ -523,11 +523,11 @@ describe("CurveStrategy", function () {
 
       const allocTx = testSwapIntegration.connect(alice).allocate(swapSuperStrategy, amount);
 
-      expect(allocTx).to.changeTokenBalances(usdt, [curvePool, alice], [amount, -amount]);
+      await expect(allocTx).to.changeTokenBalances(usdt, [curvePool, alice], [amount, -amount]);
 
       const expectedAmount = (amount * rate) / parseEther("1");
-      expect(allocTx).to.changeTokenBalances(usdc, [erc4626Vault, curvePool], [expectedAmount, -expectedAmount]);
-      expect(allocTx).to.changeTokenBalance(superUSDC, alice, expectedAmount);
+      await expect(allocTx).to.changeTokenBalances(usdc, [erc4626Vault, curvePool], [expectedAmount, -expectedAmount]);
+      await expect(allocTx).to.changeTokenBalance(superUSDC, alice, expectedAmount);
     });
   });
 

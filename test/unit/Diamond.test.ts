@@ -1,19 +1,19 @@
 /* source: https://github.com/mudgen/diamond-3-hardhat */
 
-import DiamondModule from "../ignition/modules/Diamond";
+import DiamondModule from "../../ignition/modules/Diamond";
 import {
   getSelectors,
   FacetCutAction,
   removeSelectors,
   findAddressPositionInFacets,
-} from "../scripts/libraries/diamond";
+} from "../../scripts/libraries/diamond";
 
 import { assert } from "chai";
 import { Contract } from "ethers";
 import { ethers, ignition } from "hardhat";
 
-import { DiamondCutFacet, OwnershipFacet } from "../typechain-types";
-import { DiamondLoupeFacet } from "../typechain-types/diamond/facets";
+import { DiamondCutFacet, OwnershipFacet } from "../../typechain-types";
+import { DiamondLoupeFacet } from "../../typechain-types/diamond/facets";
 
 describe("DiamondTest", async function () {
   let diamond: Contract;

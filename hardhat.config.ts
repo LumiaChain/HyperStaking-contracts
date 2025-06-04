@@ -1,4 +1,5 @@
 import { HardhatUserConfig, task } from "hardhat/config";
+import { parseUnits } from "ethers";
 
 import "@nomicfoundation/hardhat-toolbox";
 import "@nomicfoundation/hardhat-foundry";
@@ -12,6 +13,15 @@ dotenv.config();
 
 const reportGas = process.env.REPORT_GAS?.toLowerCase() === "true";
 const reportSize = process.env.REPORT_SIZE?.toLowerCase() === "true";
+
+// If FORK=true, build a forking config; otherwise undefined.
+const FORK = process.env.FORK === "true";
+const forkingConfig = FORK
+  ? {
+      url: process.env.ETHEREUM_RPC_URL,
+      blockNumber: 22_000_000,
+    }
+  : undefined;
 
 task("accounts", "Prints the list of accounts with balances", async (_, hre): Promise<void> => {
   const accounts = await hre.ethers.getSigners();
@@ -48,17 +58,25 @@ const config: HardhatUserConfig = {
     hardhat: {
       allowUnlimitedContractSize: true,
       allowBlocksWithSameTimestamp: true,
+      forking: forkingConfig,
     },
     localhost: {
       url: process.env.LOCAL_RPC_URL,
+      accounts: [process.env.DEPLOYER_PRIVATE_KEY!],
       chainId: 31337,
     },
-    // ethereum: {
-    //   url: process.env.ETHEREUM_RPC_URL,
-    //   chainId: 1,
-    //   accounts: [process.env.DEPLOYER_PRIVATE_KEY!],
-    //   gasPrice: 20e9, // 20 Gwei
-    // },
+    ethereum: {
+      url: process.env.ETHEREUM_RPC_URL,
+      chainId: 1,
+      accounts: [process.env.DEPLOYER_PRIVATE_KEY!],
+      ignition: {
+        maxPriorityFeePerGas: parseUnits("0.1", "gwei"), // 0.1 Gwei
+        maxFeePerGasLimit: parseUnits("15.0", "gwei"), // 15 Gwei
+        // (optional) legacy‐style fallback
+        // gasPrice: ...,
+        // disableFeeBumping: false, (default: false)
+      },
+    },
     sepolia: {
       url: process.env.SEPOLIA_RPC_URL,
       chainId: 11155111,
@@ -92,6 +110,10 @@ const config: HardhatUserConfig = {
         mnemonic: process.env.WALLET_MNEMONIC,
       },
     },
+  },
+
+  mocha: {
+    timeout: 200_000, // 200 seconds
   },
 
   gasReporter: {

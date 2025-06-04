@@ -2,7 +2,7 @@ import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-help
 import { expect } from "chai";
 import { parseEther, ZeroAddress } from "ethers";
 
-import * as shared from "./shared";
+import * as shared from "../shared";
 
 async function deployHyperStaking() {
   const signers = await shared.getSigners();

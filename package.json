@@ -2,6 +2,8 @@
   "name": "HyperStaking-contracts",
   "scripts": {
     "test": "npx hardhat test",
+    "test:unit": "npx hardhat test test/unit/*",
+    "test:fork": "FORK=true npx hardhat test test/integration/*",
     "coverage": "npx hardhat coverage --solcoverjs .solcover.ts",
     "prettier": "prettier --write --plugin=prettier-plugin-solidity 'contracts/**/*.sol'",
     "lint": "prettier --list-different --plugin=prettier-plugin-solidity 'contracts/**/*.sol' || npx eslint . --ext .js,.ts",

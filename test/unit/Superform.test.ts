@@ -3,10 +3,10 @@ import { expect } from "chai";
 import { ethers, ignition, network } from "hardhat";
 import { Signer, parseUnits, parseEther, ZeroAddress } from "ethers";
 
-import SuperformStrategyModule from "../ignition/modules/SuperformStrategy";
+import SuperformStrategyModule from "../../ignition/modules/SuperformStrategy";
 
-import * as shared from "./shared";
-import { SingleDirectSingleVaultStateReqStruct } from "../typechain-types/contracts/external/superform/core/BaseRouter";
+import * as shared from "../shared";
+import { SingleDirectSingleVaultStateReqStruct } from "../../typechain-types/contracts/external/superform/core/BaseRouter";
 
 async function getMockedSuperform() {
   const [superManager, alice] = await ethers.getSigners();

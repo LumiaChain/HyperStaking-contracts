@@ -3,13 +3,13 @@ import { expect } from "chai";
 import { ethers, ignition } from "hardhat";
 import { parseEther } from "ethers";
 
-import DineroStrategyModule from "../ignition/modules/DineroStrategy";
-import PirexMockModule from "../ignition/modules/test/PirexMock";
+import DineroStrategyModule from "../../ignition/modules/DineroStrategy";
+import PirexMockModule from "../../ignition/modules/test/PirexMock";
 
-import * as shared from "./shared";
-// import TxCostTracker from "./txCostTracker";
-import { PirexEth } from "../typechain-types";
-import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/facets/HyperFactoryFacet";
+import * as shared from "../shared";
+// import TxCostTracker from "../txCostTracker";
+import { PirexEth } from "../../typechain-types";
+import { CurrencyStruct } from "../../typechain-types/contracts/hyperstaking/facets/HyperFactoryFacet";
 
 async function getMockedPirex() {
   const [, , rewardRecipient] = await ethers.getSigners();
