@@ -1,0 +1,15 @@
+{
+  "TestSwapIntegrationModule": {
+    "superformFactory": "0xD85ec15A9F814D6173bF1a89273bFB3964aAdaEC",
+    "superformRouter": "0xa195608C2306A26f727d5199D5A382a4508308DA",
+    "superPositions": "0x01dF6fb6a28a89d6bFa53b2b3F20644AbF417678",
+    "curveRouter": "0x45312ea0eFf7E09C83CBE249fa1d7598c4C8cd4e"
+  },
+  "SwapSuperStrategyModule": {
+    "diamond": "",
+    "curveInputToken": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+    "curvePool": "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7",
+    "superVault": "0xF7DE3c70F2db39a188A81052d2f3C8e3e217822a",
+    "superformInputToken": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+  }
+}
