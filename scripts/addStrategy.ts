@@ -3,7 +3,7 @@ import { parseEther } from "ethers";
 
 import * as holeskyAddresses from "../ignition/parameters.holesky.json";
 
-const REVENUE_FEE = parseEther("0.02"); // 2% fee
+const FEE_RATE = parseEther("0.02"); // 2% fee
 
 async function main() {
   const vaultManager = (await ethers.getSigners())[2];
@@ -15,30 +15,48 @@ async function main() {
   const diamond = holeskyAddresses.General.diamond;
   const strategy = holeskyAddresses.General.dineroStrategy;
   const vaultAsset = holeskyAddresses.DineroStrategyModule.autoPxEth;
-  const poolId = holeskyAddresses.General.defaultNativePool;
 
   console.log("diamond address:", diamond);
   console.log("strategy address:", strategy);
   console.log("vault asset:", vaultAsset);
-  console.log("pool id:", poolId);
-  console.log("revenue fee:", REVENUE_FEE.toString());
+  console.log("report fee:", FEE_RATE.toString());
 
-  const factoryFacet = await ethers.getContractAt("IVaultFactory", diamond);
+  const factoryFacet = await ethers.getContractAt("IHyperFactory", diamond);
 
   const vaultTokenName = "eth vault";
   const vaultTokenSymbol = "vETH";
 
-  const tx = await factoryFacet.connect(vaultManager).addStrategy(
+  let tx = await factoryFacet.connect(vaultManager).addStrategy(
     strategy,
     vaultTokenName,
     vaultTokenSymbol,
-    REVENUE_FEE,
   );
 
-  console.log("TX:", tx);
+  console.log("[addStrategy] TX:", tx.hash);
   const receipt = await tx.wait();
 
   console.log("Receipt:", receipt);
+
+  // Configuration
+
+  const allocationFacet = await ethers.getContractAt("IAllocation", diamond);
+  tx = await allocationFacet.connect(vaultManager).setFeeRecipient(
+    strategy,
+    vaultManager,
+  );
+
+  console.log("[setFeeRecipient] TX:", tx.hash);
+  await tx.wait();
+  console.log("Fee recipient set to:", vaultManager.address);
+
+  tx = await allocationFacet.connect(vaultManager).setFeeRate(
+    strategy,
+    FEE_RATE,
+  );
+
+  console.log("[setFeeRate] TX:", tx.hash);
+  await tx.wait();
+  console.log("Fee rate set to:", FEE_RATE.toString());
 }
 
 main().catch((error) => {
