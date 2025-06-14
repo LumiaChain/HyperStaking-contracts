@@ -200,7 +200,7 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
     //                                     Internal Functions                                     //
     //============================================================================================//
 
-    /// @dev leave actual implementation - without diamondInternal
+    /// @dev leave actual implementation - without diamondInternal & nonReentrant
     function _leave(
         address strategy,
         address user,

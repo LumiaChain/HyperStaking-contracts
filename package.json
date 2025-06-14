@@ -1,7 +1,6 @@
 {
   "name": "HyperStaking-contracts",
   "scripts": {
-    "test": "npx hardhat test",
     "test:unit": "npx hardhat test test/unit/*",
     "test:fork": "FORK=true npx hardhat test test/integration/*",
     "coverage": "npx hardhat coverage --testfiles test/unit --solcoverjs .solcover.ts",

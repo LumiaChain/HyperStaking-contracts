@@ -13,6 +13,26 @@ This project introduces multiple staking pools and a range of yield-generating s
 - **Hyperlane Integration**: Building a cross-chain bridge using Hyperlane for interaction between chains.
 - **Reward Distribution**: Introduces an inter-chain report system on the revenue generated from the underlying assets. Collected fees are distributed among shares token holders, boosting share value.
 
+### Dependencies
+
+JavaScript dependencies are installed using:
+
+```bash
+npm install
+```
+
+Solidity dependencies are **not** managed through npm. Instead, Git submodules are used (as with `foundry install` by default). They can be initialized with:
+
+```bash
+git submodule update --init --recursive
+```
+
+Environment variables must be defined in a `.env` file. A template is provided in `.env.example`
+
+```bash
+cp .env.example .env
+```
+
 ### Testing
 
 Run the following to test contracts and check coverage:
