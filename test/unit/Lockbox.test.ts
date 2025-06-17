@@ -235,6 +235,123 @@ describe("Lockbox", function () {
 
       expect(await vaultShares.balanceOf(alice)).to.eq(0);
     });
+
+    it("should store failed redeem when strategy reverts", async function () {
+      const {
+        hyperStaking, signers, reserveStrategy, vaultShares, mailboxFee,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit, lockbox, realAssets, stakeRedeemRoute } = hyperStaking;
+      const { alice, strategyManager } = signers;
+
+      const stakeAmount = parseEther("2");
+
+      await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, {
+        value: stakeAmount + mailboxFee,
+      });
+
+      // make strategy revert, by withdrawing all stake
+      const reserveStrategySupply = parseEther("50") + stakeAmount;
+      await reserveStrategy.connect(strategyManager).withdrawStakeAsset(reserveStrategySupply);
+
+      const shares = await vaultShares.balanceOf(alice);
+      await vaultShares.connect(alice).approve(realAssets, shares);
+
+      const stakeRedeemData: StakeRedeemDataStruct = {
+        strategy: reserveStrategy,
+        sender: alice,
+        redeemAmount: shares,
+      };
+      const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem(stakeRedeemData);
+
+      // triggers the message that will eventually cause revert on the origin chain strategy
+      await expect(realAssets.connect(alice).redeem(reserveStrategy, alice, alice, shares - 10n, { value: dispatchFee }))
+        .to.emit(lockbox, "StakeRedeemFailed")
+        .withArgs(reserveStrategy, alice, shares - 10n, 0n);
+
+      // second faliled redeem
+      await expect(realAssets.connect(alice).redeem(reserveStrategy, alice, alice, 10n, { value: dispatchFee }))
+        .to.emit(lockbox, "StakeRedeemFailed")
+        .withArgs(reserveStrategy, alice, 10n, 1n);
+
+      // check it was recorded
+      const count = await lockbox.getFailedRedeemCount();
+      expect(count).to.eq(2);
+
+      const ids = await lockbox.getUserFailedRedeemIds(alice);
+      expect(ids.length).to.eq(2);
+
+      const failed = await lockbox.getFailedRedeems([...ids]);
+      expect(failed[0].strategy).to.eq(reserveStrategy);
+      expect(failed[0].user).to.eq(alice);
+      expect(failed[0].amount).to.eq(shares - 10n);
+
+      expect(failed[1].strategy).to.eq(reserveStrategy);
+      expect(failed[1].user).to.eq(alice);
+      expect(failed[1].amount).to.eq(10n);
+    });
+
+    it("should allow re-executing a previously failed redeem", async function () {
+      const {
+        hyperStaking, signers, reserveStrategy, principalToken, vaultShares, mailboxFee, testReserveAsset, reserveAssetPrice,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit, lockbox, realAssets, stakeRedeemRoute } = hyperStaking;
+      const { owner, alice, strategyManager } = signers;
+
+      const stakeAmount = parseEther("2");
+      const expectedAllocation = stakeAmount * parseEther("1") / reserveAssetPrice;
+
+      await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, {
+        value: stakeAmount + mailboxFee,
+      });
+
+      const shares = await vaultShares.balanceOf(alice);
+      await vaultShares.connect(alice).approve(realAssets, shares);
+
+      const stakeRedeemData: StakeRedeemDataStruct = {
+        strategy: reserveStrategy,
+        sender: alice,
+        redeemAmount: shares,
+      };
+      const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem(stakeRedeemData);
+
+      // make strategy revert, by withdrawing all stake
+      const reserveStrategySupply = parseEther("50") + stakeAmount;
+      await reserveStrategy.connect(strategyManager).withdrawStakeAsset(reserveStrategySupply);
+
+      const redeemTx = realAssets.connect(alice).redeem(
+        reserveStrategy, alice, alice, shares, { value: dispatchFee },
+      );
+
+      await expect(redeemTx).to.emit(lockbox, "StakeRedeemFailed");
+
+      // failed redeem still moves the funds on the lumia side
+      await expect(redeemTx).to.changeTokenBalance(principalToken, vaultShares, -stakeAmount);
+
+      const id = (await lockbox.getUserFailedRedeemIds(alice.address))[0];
+
+      // now let the strategy succeed
+      await owner.sendTransaction({
+        to: reserveStrategy,
+        value: reserveStrategySupply,
+      });
+
+      const reexecuteTx = lockbox.connect(alice).reexecuteStakeRedeem(id);
+
+      await expect(reexecuteTx)
+        .to.emit(lockbox, "StakeRedeemReexecuted")
+        .withArgs(reserveStrategy, alice, shares, id);
+
+      // should move the funds
+      await expect(reexecuteTx).to.changeTokenBalance(testReserveAsset, lockbox, -expectedAllocation);
+      await expect(reexecuteTx).to.changeEtherBalances(
+        [lockbox, reserveStrategy],
+        [stakeAmount, -stakeAmount],
+      );
+
+      // should no longer be retrievable
+      const failed = await lockbox.getFailedRedeems([id]);
+      expect(failed[0].user).to.eq(ZeroAddress);
+    });
   });
 
   describe("Hyperlane Mailbox Messages", function () {

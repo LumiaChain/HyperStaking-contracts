@@ -21,7 +21,7 @@ JavaScript dependencies are installed using:
 npm install
 ```
 
-Solidity dependencies are **not** managed through npm. Instead, Git submodules are used (as with `foundry install` by default). They can be initialized with:
+Solidity dependencies are **not** managed through npm. Instead, Git submodules are used (as with `forge install` by default). They can be initialized with:
 
 ```bash
 git submodule update --init --recursive

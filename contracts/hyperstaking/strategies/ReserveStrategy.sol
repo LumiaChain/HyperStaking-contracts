@@ -49,6 +49,12 @@ contract ReserveStrategy is AbstractStrategy {
         uint256 amount
     );
 
+    event StakeAssetWithdraw(
+        address indexed to,
+        address indexed stakeToken,
+        uint256 amount
+    );
+
     event AssetPriceSet(
         address indexed from,
         address indexed asset,
@@ -118,6 +124,7 @@ contract ReserveStrategy is AbstractStrategy {
         assetReserve += exitAmount;
 
         IERC20(revenueAsset).transferFrom(DIAMOND, address(this), assetAllocation_);
+
         stake.transfer(DIAMOND, exitAmount);
 
         emit Exit(user_, assetAllocation_, exitAmount);
@@ -160,6 +167,12 @@ contract ReserveStrategy is AbstractStrategy {
         IERC20(revenueAsset).transfer(msg.sender, amount_);
 
         emit RevenueAssetWithdraw(msg.sender, revenueAsset, amount_);
+    }
+
+    function withdrawStakeAsset(uint256 amount_) external onlyStrategyManager {
+        stake.transfer(msg.sender, amount_);
+
+        emit StakeAssetWithdraw(msg.sender, stake.token, amount_);
     }
 
     function setAssetPrice(uint256 assetPrice_) external onlyStrategyManager {
