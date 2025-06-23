@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {LockboxData} from "../libraries/LibHyperStaking.sol";
+import {LockboxData, FailedRedeem} from "../libraries/LibHyperStaking.sol";
 
 /**
  * @title ILockbox
@@ -22,6 +22,14 @@ interface ILockbox {
     event MailboxUpdated(address indexed oldMailbox, address indexed newMailbox);
     event DestinationUpdated(uint32 indexed oldDestination, uint32 indexed newDestination);
     event LumiaFactoryUpdated(address indexed oldLumiaFactory, address indexed newLumiaFactory);
+
+    event StakeRedeemFailed(address indexed strategy, address indexed user, uint256 amount, uint256 id);
+    event StakeRedeemReexecuted(
+        address indexed strategy,
+        address indexed user,
+        uint256 amount,
+        uint256 id
+    );
 
     //===========================================================================================//
     //                                          Errors                                            //
@@ -65,6 +73,10 @@ interface ILockbox {
         bytes calldata data
     ) external payable;
 
+    /// @notice Re-executes a previously failed stake redeem operation
+    /// @param id The ID of the failed redeem to reattempt
+    function reexecuteStakeRedeem(uint256 id) external;
+
     /**
      * @notice Updates the mailbox address used for interchain messaging
      * @param mailbox The new mailbox address
@@ -89,4 +101,17 @@ interface ILockbox {
 
     /// @notice Returns Lockbox data, including mailbox address, destination, and recipient address
     function lockboxData() external view returns (LockboxData memory);
+
+    /// @notice Returns the total number of failed redeem attempts (counter)
+    function getFailedRedeemCount() external view returns (uint256);
+
+    /// @notice Returns failed redeem records by their IDs
+    /// @param ids The list of failed redeem IDs to fetch
+    function getFailedRedeems(uint256[] calldata ids)
+        external
+        view
+        returns (FailedRedeem[] memory);
+
+    /// @notice Returns list of failed redeem IDs associated with a given user
+    function getUserFailedRedeemIds(address user) external view returns (uint256[] memory);
 }

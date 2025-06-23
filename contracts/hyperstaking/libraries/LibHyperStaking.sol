@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-
 import {Currency} from "../libraries/CurrencyHandler.sol";
-
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
+
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 //================================================================================================//
 //                                            Types                                               //
@@ -61,6 +61,18 @@ struct LockboxData {
     HyperlaneMessage lastMessage; /// Information about last mailbox message received
 }
 
+struct FailedRedeem {
+    address strategy;
+    address user;
+    uint256 amount;
+}
+
+struct FailedRedeemData {
+    uint256 failedRedeemCount;
+    mapping(uint256 => FailedRedeem) failedRedeems;
+    mapping(address => EnumerableSet.UintSet) userToFailedIds;
+}
+
 //================================================================================================//
 //                                           Storage                                              //
 //================================================================================================//
@@ -83,6 +95,9 @@ struct HyperStakingStorage {
 
     /// @notice General lockbox data
     LockboxData lockboxData;
+
+    /// @notice Records failed redeem attempts for later re-execution
+    FailedRedeemData failedRedeems;
 }
 
 library LibHyperStaking {

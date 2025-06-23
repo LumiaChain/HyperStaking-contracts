@@ -16,7 +16,13 @@ import {
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
-import {LibHyperStaking, LockboxData} from "../libraries/LibHyperStaking.sol";
+import {NotAuthorized} from "../Errors.sol";
+
+import {
+    LibHyperStaking, LockboxData, FailedRedeem, FailedRedeemData
+} from "../libraries/LibHyperStaking.sol";
+
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 /**
  * @title LockboxFacet
@@ -26,6 +32,7 @@ import {LibHyperStaking, LockboxData} from "../libraries/LibHyperStaking.sol";
  */
 contract LockboxFacet is ILockbox, HyperStakingAcl {
     using HyperlaneMailboxMessages for bytes;
+    using EnumerableSet for EnumerableSet.UintSet;
 
     //============================================================================================//
     //                                         Modifiers                                          //
@@ -111,7 +118,33 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         revert UnsupportedMessage();
     }
 
-    /* ========== ACL  ========== */
+    /* ========== Reexecute ========== */
+
+    /// @inheritdoc ILockbox
+    function reexecuteStakeRedeem(uint256 id) external {
+        FailedRedeemData storage failedRedeems = LibHyperStaking.diamondStorage().failedRedeems;
+        FailedRedeem memory fr = failedRedeems.failedRedeems[id];
+
+        // both user or vault manager can reexecute
+        require(
+            hasRole(VAULT_MANAGER_ROLE(), msg.sender) ||
+            msg.sender == fr.user,
+            NotAuthorized(msg.sender)
+        );
+
+        delete failedRedeems.failedRedeems[id];
+        failedRedeems.userToFailedIds[fr.user].remove(id);
+
+        if (IStrategy(fr.strategy).isDirectStakeStrategy()) {
+            IDeposit(address(this)).queueWithdraw(fr.strategy, fr.user, fr.amount);
+        } else {
+            IAllocation(address(this)).leave(fr.strategy, fr.user, fr.amount);
+        }
+
+        emit StakeRedeemReexecuted(fr.strategy, fr.user, fr.amount, id);
+    }
+
+    /* ========== ACL ========== */
 
     /// @inheritdoc ILockbox
     function setMailbox(address mailbox) external onlyVaultManager {
@@ -149,20 +182,83 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         return LibHyperStaking.diamondStorage().lockboxData;
     }
 
+    /// @inheritdoc ILockbox
+    function getFailedRedeemCount() external view returns (uint256) {
+        return LibHyperStaking.diamondStorage().failedRedeems.failedRedeemCount;
+    }
+
+    /// @inheritdoc ILockbox
+    function getFailedRedeems(uint256[] calldata ids)
+        external
+        view
+        returns (FailedRedeem[] memory)
+    {
+        FailedRedeemData storage s = LibHyperStaking.diamondStorage().failedRedeems;
+        uint256 len = ids.length;
+
+        FailedRedeem[] memory results = new FailedRedeem[](len);
+        for (uint256 i = 0; i < len; ++i) {
+            results[i] = s.failedRedeems[ids[i]];
+        }
+
+        return results;
+    }
+
+    /// @inheritdoc ILockbox
+    function getUserFailedRedeemIds(address user) external view returns (uint256[] memory) {
+        return LibHyperStaking.diamondStorage().failedRedeems.userToFailedIds[user].values();
+    }
+
     //============================================================================================//
     //                                     Internal Functions                                     //
     //============================================================================================//
 
     /// @notice Handle specific StakeRedeem message
+    /// @dev On failure, the action is stored for re-execution
     function _handleStakeRedeem(bytes calldata data) internal {
         address strategy = data.strategy();
         address user = data.sender(); // sender -> actual hyperstaking user
         uint256 stake = data.redeemAmount(); // amount -> amount of rwa asset / stake
 
-        if (IStrategy(strategy).isDirectStakeStrategy()) {
-            IDeposit(address(this)).queueWithdraw(strategy, user, stake);
-        } else {
-            IAllocation(address(this)).leave(strategy, user, stake);
-        }
+        try IStrategy(strategy).isDirectStakeStrategy() returns (bool isDirect) {
+            if (isDirect) {
+                    // solhint-disable-next-line no-empty-blocks
+                    try IDeposit(address(this)).queueWithdraw(strategy, user, stake) {
+                        // success, nothing to do
+                    } catch {
+                        _storeFailedRedeem(strategy, user, stake);
+                    }
+                } else {
+                    // solhint-disable-next-line no-empty-blocks
+                    try IAllocation(address(this)).leave(strategy, user, stake) {
+                        // success, nothing to do
+                    } catch {
+                        _storeFailedRedeem(strategy, user, stake);
+                    }
+                }
+            } catch {
+                _storeFailedRedeem(strategy, user, stake);
+            }
+    }
+
+    /// @notice Stores a failed redeem operation for later re-execution
+    function _storeFailedRedeem(
+        address strategy,
+        address user,
+        uint256 amount
+    ) internal {
+        FailedRedeemData storage failedRedeems = LibHyperStaking.diamondStorage().failedRedeems;
+
+        uint256 id = failedRedeems.failedRedeemCount++;
+
+        failedRedeems.failedRedeems[id] = FailedRedeem({
+            strategy: strategy,
+            user: user,
+            amount: amount
+        });
+
+        failedRedeems.userToFailedIds[user].add(id);
+
+        emit StakeRedeemFailed(strategy, user, amount, id);
     }
 }
