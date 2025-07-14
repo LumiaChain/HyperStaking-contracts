@@ -618,5 +618,84 @@ describe("CurveStrategy", function () {
 
       expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
     });
+
+    it("check on redeem vulnerability", async function () {
+      const { hyperStaking, swapSuperStrategy, vaultShares, superUSDC, signers } = await loadFixture(deployHyperStaking);
+      const { testUSDC, testUSDT, erc4626Vault, curvePool, deposit, defaultWithdrawDelay, allocation, hyperFactory, lockbox, hyperlaneHandler, realAssets } = hyperStaking;
+      const { alice, bob } = signers;
+
+      const amount = parseUnits("2000", 6);
+
+      await testUSDT.connect(alice).approve(deposit, amount);
+      const depositTx = deposit.connect(alice).stakeDeposit(swapSuperStrategy, alice, amount);
+
+      await expect(depositTx).to.changeTokenBalances(testUSDT,
+        [alice, curvePool], [-amount, amount]);
+
+      // USDC/USDT 1:1 rate
+      await expect(depositTx).to.changeTokenBalances(testUSDC,
+        [curvePool, erc4626Vault], [-amount, amount]);
+
+      expect(await superUSDC.totalSupply()).to.equal(amount);
+      expect(await superUSDC.balanceOf(allocation)).to.equal(amount);
+
+      // there should be no allowance for the swap strategy,
+      // (allocate gives it, but is used indirectly)
+      expect(await testUSDT.allowance(deposit, swapSuperStrategy)).to.eq(0);
+
+      const [enabled] = await hyperFactory.vaultInfo(swapSuperStrategy, alice);
+      expect(enabled).to.be.eq(true);
+
+      const routeInfo = await hyperlaneHandler.getRouteInfo(swapSuperStrategy);
+      expect(routeInfo.vaultShares).to.be.eq(vaultShares);
+
+      // lpToken on the Lumia chain side
+      const rwaBalance = await vaultShares.balanceOf(alice);
+      expect(rwaBalance).to.be.eq(amount);
+
+      await vaultShares.connect(alice).approve(realAssets, rwaBalance);
+      await deposit.connect(alice).pendingWithdraw(alice, swapSuperStrategy);
+      await deposit.connect(alice).pendingWithdraw(bob, swapSuperStrategy);
+
+      // At this step, bob saws alice's redeem request in mempool and
+      // sends redeem from alice to bob with higher gas price
+      await expect(realAssets.connect(bob).redeem(swapSuperStrategy, alice, bob, rwaBalance))
+      // but fails because of missing allowance
+        .to.be.revertedWithCustomError(vaultShares, "ERC20InsufficientAllowance")
+        .withArgs(bob, 0n, rwaBalance);
+
+      // bob needs approval to redeem from alice
+      await vaultShares.connect(alice).approve(bob, rwaBalance);
+      const redeemTx = realAssets.connect(bob).redeem(swapSuperStrategy, alice, bob, rwaBalance);
+
+      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
+
+      await deposit.connect(alice).pendingWithdraw(alice, swapSuperStrategy);
+      await deposit.connect(alice).pendingWithdraw(bob, swapSuperStrategy);
+
+      await expect(redeemTx)
+        .to.changeTokenBalance(vaultShares, alice, -rwaBalance);
+
+      await expect(redeemTx)
+        .to.changeTokenBalances(testUSDC,
+          [curvePool, erc4626Vault], [amount, -amount]);
+
+      await expect(redeemTx)
+        .to.changeTokenBalances(testUSDT,
+          [lockbox, curvePool], [amount, -amount]);
+
+      await time.setNextBlockTimestamp(expectedUnlock);
+
+      await expect(deposit.connect(bob).claimWithdraw(swapSuperStrategy, bob))
+        .to.changeTokenBalances(testUSDT,
+          [bob, lockbox],
+          [amount, -amount],
+        );
+
+      expect(await testUSDT.allowance(deposit, swapSuperStrategy)).to.eq(0);
+
+      expect(await vaultShares.balanceOf(bob)).to.be.eq(0);
+      expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
+    });
   });
 });

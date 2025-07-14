@@ -3,9 +3,10 @@ pragma solidity =0.8.27;
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 
-import {IERC20, IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+
+import {ILumiaVaultShares} from "../interfaces/ILumiaVaultShares.sol";
 
 //================================================================================================//
 //                                            Types                                               //
@@ -24,7 +25,7 @@ struct RouteInfo {
     uint32 originDestination;
     address originLockbox;
     IERC20 assetToken;
-    IERC4626 vaultShares;
+    ILumiaVaultShares vaultShares;
 }
 
 struct LastMessage {

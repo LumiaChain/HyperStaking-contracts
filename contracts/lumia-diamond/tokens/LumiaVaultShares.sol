@@ -78,6 +78,21 @@ contract LumiaVaultShares is ERC4626, Ownable2Step {
         return super.redeem(shares, receiver, owner);
     }
 
+    /**
+     * @dev See {ERC20 _spendAllowance}
+     * @notice Allows to spend approvals on behalf of others, enabling a third party
+     *         to redeem ERC4626 shares
+     *
+     * Revert if not enough allowance is available.
+     */
+    function spendAllowance(
+        address owner,
+        address caller,
+        uint256 shares
+    ) public virtual onlyOwner {
+        _spendAllowance(owner, caller, shares);
+    }
+
     //============================================================================================//
     //                                     Internal Functions                                     //
     //============================================================================================//

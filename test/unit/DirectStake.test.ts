@@ -119,7 +119,7 @@ describe("Direct Stake", function () {
 
     await vaultShares.connect(alice).approve(realAssets, stakeAmount);
     const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
-    await expect(realAssets.redeem(directStakeStrategy, alice, bob, stakeAmount))
+    await expect(realAssets.connect(alice).redeem(directStakeStrategy, alice, bob, stakeAmount))
       .to.emit(realAssets, "RwaRedeem")
       .withArgs(directStakeStrategy.target, alice, bob, stakeAmount, stakeAmount);
 
@@ -165,6 +165,6 @@ describe("Direct Stake", function () {
 
     // OK from alice
     await vaultShares.connect(alice).approve(realAssets, initBalance);
-    await realAssets.redeem(directStakeStrategy, alice, alice, stakeAmount);
+    await realAssets.connect(alice).redeem(directStakeStrategy, alice, alice, stakeAmount);
   });
 });

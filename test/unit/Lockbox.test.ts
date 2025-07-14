@@ -176,6 +176,44 @@ describe("Lockbox", function () {
       );
     });
 
+    it("it should not be possible to frontrun redeem", async function () {
+      const { hyperStaking, reserveStrategy, vaultShares, mailboxFee, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, stakeRedeemRoute, realAssets } = hyperStaking;
+      const { alice, bob } = signers;
+
+      const stakeAmount = parseEther("3");
+
+      await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee });
+
+      const sharesAfter = await vaultShares.balanceOf(alice);
+      expect(sharesAfter).to.be.gt(0);
+
+      await vaultShares.connect(alice).approve(realAssets, sharesAfter);
+
+      const stakeRedeemData: StakeRedeemDataStruct = {
+        strategy: reserveStrategy,
+        sender: alice,
+        redeemAmount: sharesAfter,
+      };
+      const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem(stakeRedeemData);
+
+      await expect(realAssets.connect(bob).redeem(
+        reserveStrategy, alice, bob, sharesAfter, { value: dispatchFee },
+      ))
+        .to.be.revertedWithCustomError(vaultShares, "ERC20InsufficientAllowance")
+        .withArgs(bob, 0n, sharesAfter);
+
+      // approve the shares to bob
+      await vaultShares.connect(alice).approve(bob, sharesAfter);
+
+      // now bob can redeem
+      await expect(realAssets.connect(bob).redeem(
+        reserveStrategy, alice, bob, sharesAfter, { value: dispatchFee },
+      ))
+        .to.emit(realAssets, "RwaRedeem")
+        .withArgs(reserveStrategy, alice, bob, stakeAmount, sharesAfter);
+    });
+
     it("redeem the should triger leave on the origin chain - non-zero mailbox fee", async function () {
       const { hyperStaking, reserveStrategy, principalToken, vaultShares, testReserveAsset, reserveAssetPrice, mailboxFee, signers } = await loadFixture(deployHyperStaking);
       const { deposit, defaultWithdrawDelay, lockbox, realAssets, stakeRedeemRoute, mailbox } = hyperStaking;

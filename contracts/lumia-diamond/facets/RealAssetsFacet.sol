@@ -103,6 +103,10 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
 
         RouteInfo storage r = ifs.routes[strategy];
 
+        if (from != msg.sender) {
+            r.vaultShares.spendAllowance(from, msg.sender, shares);
+        }
+
         // redeem shares `from` to this contract (require user allowance to burn shares)
         uint256 assets = r.vaultShares.redeem(shares, address(this), from);
 

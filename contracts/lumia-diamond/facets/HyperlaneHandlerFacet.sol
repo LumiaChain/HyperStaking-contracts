@@ -7,7 +7,9 @@ import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
 import {LumiaPrincipal} from "../tokens/LumiaPrincipal.sol";
 import {LumiaVaultShares} from "../tokens/LumiaVaultShares.sol";
 
-import {IERC20, IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
+import {ILumiaVaultShares} from "../interfaces/ILumiaVaultShares.sol";
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
@@ -163,7 +165,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         RouteInfo storage r = ifs.routes[strategy];
         require(r.exists == false, RouteAlreadyExist());
 
-        (IERC20 assetToken, IERC4626 vaultShares) = _deployLumiaTokens(
+        (IERC20 assetToken, ILumiaVaultShares vaultShares) = _deployLumiaTokens(
             strategy,
             name,
             symbol,
@@ -188,7 +190,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
     }
 
     /**
-     * @notice Deploys a new asset Token and Vault ERC4626 token for a given strategy
+     * @notice Deploys a new asset Token and Lumia Vault ERC4626 token for a given strategy
      * @param strategy The address of the strategy
      * @param name The name of the vault token (and used for asset too) to be deployed
      * @param symbol The symbol of the vault token (and asset) to be deployed
@@ -199,7 +201,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         string memory name,
         string memory symbol,
         uint8 decimals
-    ) internal returns (IERC20 assetToken, IERC4626 vaultShares) {
+    ) internal returns (IERC20 assetToken, ILumiaVaultShares vaultShares) {
         assetToken = new LumiaPrincipal(
             address(this),
             string.concat("Principal ", name),
@@ -207,12 +209,12 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
             decimals
         );
 
-        vaultShares = new LumiaVaultShares(
+        vaultShares = ILumiaVaultShares(address(new LumiaVaultShares(
             address(this),
             strategy,
             assetToken,
             name,
             symbol
-        );
+        )));
     }
 }
