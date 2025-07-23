@@ -454,8 +454,12 @@ describe("Staking", function () {
         let assetPrice = await reserveStrategy1.assetPrice();
         await reserveStrategy1.connect(strategyManager).setAssetPrice(assetPrice * 12n / 10n); // 20% increase
 
+        // check more than 20% fee rate
+        await expect(allocation.connect(vaultManager).setFeeRate(reserveStrategy1, parseEther("0.2" + 1n)))
+          .to.be.revertedWithCustomError(allocation, "FeeRateTooHigh");
+
         // set 10% revenue protocol fee
-        const feeRate = parseEther("1");
+        const feeRate = parseEther("0.1");
         await allocation.connect(vaultManager).setFeeRate(reserveStrategy1, feeRate);
 
         let expectedRevenue = await allocation.checkRevenue(reserveStrategy1);
@@ -508,7 +512,7 @@ describe("Staking", function () {
         );
 
         // after reporting, the revenue is zero
-        expect(await allocation.checkRevenue(reserveStrategy1)).to.be.eq(precisionError);
+        expect(await allocation.checkRevenue(reserveStrategy1)).to.be.eq(0);
       });
     });
 

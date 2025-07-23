@@ -106,6 +106,7 @@ library LibHyperStaking {
 
     // 1e18 as a scaling factor, e.g. for allocation, percent, e.g. 0.1 ETH (1e17) == 10%
     uint256 constant internal PERCENT_PRECISION = 1e18; // represent 100%
+    uint256 constant internal MAX_FEE_RATE = 2e17; // 20%
 
     function diamondStorage() internal pure returns (HyperStakingStorage storage s) {
         bytes32 position = HYPERSTAKING_STORAGE_POSITION;

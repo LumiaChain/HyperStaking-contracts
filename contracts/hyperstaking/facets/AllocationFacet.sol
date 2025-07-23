@@ -150,7 +150,7 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
 
     /// @inheritdoc IAllocation
     function setFeeRate(address strategy, uint256 newRate) external onlyVaultManager {
-        require(newRate <= LibHyperStaking.PERCENT_PRECISION, FeeRateTooHigh());
+        require(newRate <= LibHyperStaking.MAX_FEE_RATE, FeeRateTooHigh());
 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
