@@ -1,21 +1,23 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {IStrategy} from "../interfaces/IStrategy.sol";
-import {AbstractStrategy} from "./AbstractStrategy.sol";
+import {IStrategy} from "../hyperstaking/interfaces/IStrategy.sol";
+import {AbstractStrategy} from "../hyperstaking/strategies/AbstractStrategy.sol";
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
+import {Currency, CurrencyHandler} from "../hyperstaking/libraries/CurrencyHandler.sol";
+
+// ⚠️WARNING: Mock strategy for testing only. Not for production use.
 
 /**
- * @title ReserveStrategy
+ * @title MockReserveStrategy
  * @notice This contract generate yield by managing liquidity of a single asset
  *
  * @dev Contract used mainly in tests
  */
-contract ReserveStrategy is AbstractStrategy {
+contract MockReserveStrategy is AbstractStrategy {
     using CurrencyHandler for Currency;
     using SafeERC20 for IERC20;
 

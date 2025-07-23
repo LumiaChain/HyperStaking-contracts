@@ -7,7 +7,7 @@ const ReserveStrategyModule = buildModule("ReserveStrategyModule", (m) => {
   const asset = m.getParameter("asset", "0x");
   const assetPrice = m.getParameter("assetPrice", parseEther("1"));
 
-  const reserveStrategy = m.contract("ReserveStrategy", [
+  const reserveStrategy = m.contract("MockReserveStrategy", [
     diamond, { token: stake }, asset, assetPrice,
   ]);
   return { reserveStrategy };

@@ -8,7 +8,7 @@ import SuperformMockModule from "../ignition/modules/test/SuperformMock";
 import CurveMockModule from "../ignition/modules/test/CurveMock.ts";
 
 import TestERC20Module from "../ignition/modules/test/TestERC20";
-import ReserveStrategyModule from "../ignition/modules/ReserveStrategy";
+import ReserveStrategyModule from "../ignition/modules/test/MockReserveStrategy";
 import DirectStakeStrategyModule from "../ignition/modules/DirectStakeStrategy";
 
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IHyperFactory";

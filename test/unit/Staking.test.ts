@@ -203,12 +203,12 @@ describe("Staking", function () {
       await lumiaTokens1.vaultShares.approve(realAssets, withdrawAmount);
 
       let blockTime = await shared.getCurrentBlockTimestamp();
-      let expectedUnlock = blockTime + defaultWithdrawDelay;
       await expect(realAssets.redeem(reserveStrategy1, owner, owner, withdrawAmount))
         .to.changeEtherBalances(
           [lockbox, reserveStrategy1],
           [withdrawAmount, -withdrawAmount],
         );
+      let expectedUnlock = blockTime + defaultWithdrawDelay;
 
       blockTime = await shared.getCurrentBlockTimestamp();
       await expect(deposit.claimWithdraw(reserveStrategy1, owner))
