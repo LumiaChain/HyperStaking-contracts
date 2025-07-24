@@ -16,6 +16,8 @@ contract LumiaVaultShares is ERC4626, Ownable2Step {
     /// Lumia Strategy associated with this token
     address public immutable STRATEGY;
 
+    error ZeroAddress();
+
     //============================================================================================//
     //                                        Constructor                                         //
     //============================================================================================//
@@ -30,6 +32,9 @@ contract LumiaVaultShares is ERC4626, Ownable2Step {
         string memory sharesName,
         string memory sharesSymbol
     ) ERC4626(asset) ERC20(sharesName, sharesSymbol) Ownable(diamond) {
+        require(address(asset) != address(0), ZeroAddress());
+        require(address(strategy) != address(0), ZeroAddress());
+
         STRATEGY = strategy;
     }
 
