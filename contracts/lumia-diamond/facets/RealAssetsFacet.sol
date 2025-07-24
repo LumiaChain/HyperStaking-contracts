@@ -28,19 +28,6 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
     using HyperlaneMailboxMessages for bytes;
 
     //============================================================================================//
-    //                                         Modifiers                                          //
-    //============================================================================================//
-
-    modifier onlyVaultToken(address strategy) {
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        RouteInfo storage r = ifs.routes[strategy];
-
-        require(msg.sender == address(r.vaultShares), NotVaultToken());
-        _;
-    }
-
-
-    //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
 
