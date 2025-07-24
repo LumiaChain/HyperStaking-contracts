@@ -163,7 +163,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
 
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
         RouteInfo storage r = ifs.routes[strategy];
-        require(r.exists == false, RouteAlreadyExist());
+        require(!r.exists, RouteAlreadyExist());
 
         (IERC20 assetToken, ILumiaVaultShares vaultShares) = _deployLumiaTokens(
             strategy,
