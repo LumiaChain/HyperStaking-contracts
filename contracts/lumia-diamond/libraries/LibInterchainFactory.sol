@@ -64,9 +64,6 @@ library LibInterchainFactory {
     bytes32 constant internal INTERCHAIN_FACTORY_STORAGE_POSITION
         = bytes32(uint256(keccak256("lumia-diamond.interchain-factory-0.1.storage")) - 1);
 
-    // 1e18 as a scaling factor, e.g. 0.1 ETH (1e17) == 10%
-    uint256 constant internal PERCENT_PRECISION = 1e18; // represent 100%
-
     // -------------------- Checks
 
     /// @notice Checks whether route exists
