@@ -117,6 +117,50 @@ describe("Lockbox", function () {
         .withArgs(lumiaFactoryManager, true, 123);
     });
 
+    it("proposes and applies mailbox and lumiaFactory updates after delay", async function () {
+      const { hyperStaking, signers, principalToken, vaultShares } = await loadFixture(deployHyperStaking);
+      const { lockbox, mailbox, hyperlaneHandler } = hyperStaking;
+      const { vaultManager } = signers;
+
+      const DELAY = 60 * 60 * 24; // 1 day
+
+      const dummyMailbox = principalToken.target;
+      const dummyFactory = vaultShares.target;
+
+      // only vault manager can propose changes
+      await expect(lockbox.proposeMailbox(dummyMailbox)).to.be.reverted;
+      await expect(lockbox.proposeLumiaFactory(dummyFactory)).to.be.reverted;
+
+      await expect(lockbox.connect(vaultManager).proposeMailbox(dummyMailbox))
+        .to.emit(lockbox, "MailboxChangeProposed")
+        .withArgs(dummyMailbox, await time.latest() + DELAY);
+
+      await expect(lockbox.connect(vaultManager).proposeLumiaFactory(dummyFactory))
+        .to.emit(lockbox, "LumiaFactoryChangeProposed")
+        .withArgs(dummyFactory, await time.latest() + DELAY);
+
+      // Too soon
+
+      await expect(lockbox.connect(vaultManager).applyMailbox())
+        .to.be.revertedWithCustomError(lockbox, "PendingChangeFailed");
+
+      await expect(lockbox.connect(vaultManager).applyLumiaFactory())
+        .to.be.revertedWithCustomError(lockbox, "PendingChangeFailed");
+
+      // Fast forward time
+      await time.increase(DELAY + 1);
+
+      // OK
+
+      await expect(lockbox.connect(vaultManager).applyMailbox())
+        .to.emit(lockbox, "MailboxUpdated")
+        .withArgs(mailbox, dummyMailbox);
+
+      await expect(lockbox.connect(vaultManager).applyLumiaFactory())
+        .to.emit(lockbox, "LumiaFactoryUpdated")
+        .withArgs(hyperlaneHandler, dummyFactory);
+    });
+
     it("stake deposit with non-zero mailbox fee", async function () {
       const { hyperStaking, reserveStrategy, vaultShares, mailboxFee, signers } = await loadFixture(deployHyperStaking);
       const { deposit } = hyperStaking;

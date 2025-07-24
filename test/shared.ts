@@ -1,5 +1,6 @@
 import { ignition, ethers, network } from "hardhat";
 import { Contract, ZeroAddress, parseEther, parseUnits } from "ethers";
+import { time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 
 import HyperStakingModule from "../ignition/modules/HyperStaking";
 import LumiaDiamondModule from "../ignition/modules/LumiaDiamond";
@@ -148,7 +149,9 @@ export async function deployTestHyperStaking(mailboxFee: bigint) {
   // -------------------- Other/Configuration --------------------
 
   // finish setup for hyperstaking
-  await lockbox.connect(vaultManager).setLumiaFactory(hyperlaneHandler);
+  await lockbox.connect(vaultManager).proposeLumiaFactory(hyperlaneHandler);
+  await time.setNextBlockTimestamp(await getCurrentBlockTimestamp() + 3600 * 24); // 1 day later
+  await lockbox.connect(vaultManager).applyLumiaFactory();
 
   // finish setup for lumia diamond
   const authorized = true;

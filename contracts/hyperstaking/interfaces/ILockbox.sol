@@ -19,9 +19,13 @@ interface ILockbox {
         string message
     );
 
-    event MailboxUpdated(address indexed oldMailbox, address indexed newMailbox);
     event DestinationUpdated(uint32 indexed oldDestination, uint32 indexed newDestination);
+
+    event MailboxUpdated(address indexed oldMailbox, address indexed newMailbox);
+    event MailboxChangeProposed(address newMailbox, uint256 applyAfter);
+
     event LumiaFactoryUpdated(address indexed oldLumiaFactory, address indexed newLumiaFactory);
+    event LumiaFactoryChangeProposed(address newLumiaFactory, uint256 applyAfter);
 
     event StakeRedeemFailed(address indexed strategy, address indexed user, uint256 amount, uint256 id);
     event StakeRedeemReexecuted(
@@ -39,7 +43,7 @@ interface ILockbox {
     error InvalidMailbox(address badMailbox);
     error InvalidLumiaFactory(address badLumiaFactory);
 
-    // error RecipientUnset();
+    error PendingChangeFailed(address, uint256 applyAfter);
 
     error NotFromMailbox(address from);
     error NotFromLumiaFactory(address sender);
@@ -78,22 +82,32 @@ interface ILockbox {
     function reexecuteStakeRedeem(uint256 id) external;
 
     /**
-     * @notice Updates the mailbox address used for interchain messaging
-     * @param mailbox The new mailbox address
-     */
-    function setMailbox(address mailbox) external;
-
-    /**
      * @notice Updates the destination chain ID for the route
      * @param destination The new destination chain ID
      */
     function setDestination(uint32 destination) external;
 
     /**
-     * @notice Updates the lumia factory contract recipient address for mailbox messages
-     * @param lumiaFactory The new recipient address
+     * @notice Proposes a new mailbox address with delayed application
+     * @param mailbox The new mailbox contract address
      */
-    function setLumiaFactory(address lumiaFactory) external;
+    function proposeMailbox(address mailbox) external;
+
+    /**
+     * @notice Applies the proposed mailbox address after the delay
+     */
+    function applyMailbox() external;
+
+    /**
+     * @notice Proposes a new lumia factory address with delayed application
+     * @param lumiaFactory The new factory address
+     */
+    function proposeLumiaFactory(address lumiaFactory) external;
+
+    /**
+     * @notice Applies the proposed lumia factory address after the delay
+     */
+    function applyLumiaFactory() external;
 
     //============================================================================================//
     //                                           View                                             //

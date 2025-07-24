@@ -19,7 +19,7 @@ import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 import {NotAuthorized} from "../Errors.sol";
 
 import {
-    LibHyperStaking, LockboxData, FailedRedeem, FailedRedeemData
+    LibHyperStaking, LockboxData, FailedRedeem, FailedRedeemData, PendingMailbox, PendingLumiaFactory
 } from "../libraries/LibHyperStaking.sol";
 
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
@@ -147,18 +147,6 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     /* ========== ACL ========== */
 
     /// @inheritdoc ILockbox
-    function setMailbox(address mailbox) external onlyVaultManager {
-        require(
-            mailbox != address(0) && mailbox.code.length > 0,
-            InvalidMailbox(mailbox)
-        );
-        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
-
-        emit MailboxUpdated(address(box.mailbox), mailbox);
-        box.mailbox = IMailbox(mailbox);
-    }
-
-    /// @inheritdoc ILockbox
     function setDestination(uint32 destination) external onlyVaultManager {
         LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
 
@@ -167,12 +155,69 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     }
 
     /// @inheritdoc ILockbox
-    function setLumiaFactory(address lumiaFactory) public onlyVaultManager {
-        require(lumiaFactory != address(0), InvalidLumiaFactory(lumiaFactory));
+    function proposeMailbox(address newMailbox) external onlyVaultManager {
+        require(
+            newMailbox != address(0) && newMailbox.code.length > 0,
+            InvalidMailbox(newMailbox)
+        );
+
+        PendingMailbox memory pendingMailbox = PendingMailbox({
+            newMailbox: newMailbox,
+            applyAfter: block.timestamp + LibHyperStaking.PENDING_CHANGE_DELAY
+        });
+
+        LibHyperStaking.diamondStorage().pendingMailbox = pendingMailbox;
+
+        emit MailboxChangeProposed(newMailbox, pendingMailbox.applyAfter);
+    }
+
+    /// @inheritdoc ILockbox
+    function applyMailbox() external onlyVaultManager {
+        PendingMailbox storage pendingMailbox = LibHyperStaking.diamondStorage().pendingMailbox;
+        require(
+            pendingMailbox.newMailbox != address(0) && block.timestamp >= pendingMailbox.applyAfter,
+            PendingChangeFailed(pendingMailbox.newMailbox, pendingMailbox.applyAfter)
+        );
+
         LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
 
-        emit LumiaFactoryUpdated(box.lumiaFactory, lumiaFactory);
-        box.lumiaFactory = lumiaFactory;
+        address oldMailbox = address(box.mailbox);
+        box.mailbox = IMailbox(pendingMailbox.newMailbox);
+
+        emit MailboxUpdated(oldMailbox, pendingMailbox.newMailbox);
+        delete LibHyperStaking.diamondStorage().pendingMailbox;
+    }
+
+    /// @inheritdoc ILockbox
+    function proposeLumiaFactory(address newFactory) external onlyVaultManager {
+        require(newFactory != address(0), InvalidLumiaFactory(newFactory));
+
+        PendingLumiaFactory memory pendingFactory = PendingLumiaFactory({
+            newFactory: newFactory,
+            applyAfter: block.timestamp + LibHyperStaking.PENDING_CHANGE_DELAY
+        });
+
+        LibHyperStaking.diamondStorage().pendingLumiaFactory = pendingFactory;
+
+        emit LumiaFactoryChangeProposed(newFactory, pendingFactory.applyAfter);
+    }
+
+    /// @inheritdoc ILockbox
+    function applyLumiaFactory() external onlyVaultManager {
+        PendingLumiaFactory storage pendingFactory =
+            LibHyperStaking.diamondStorage().pendingLumiaFactory;
+
+        require(
+            pendingFactory.newFactory != address(0) && block.timestamp >= pendingFactory.applyAfter,
+            PendingChangeFailed(pendingFactory.newFactory, pendingFactory.applyAfter)
+        );
+
+        LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
+        address oldFactory = box.lumiaFactory;
+        box.lumiaFactory = pendingFactory.newFactory;
+
+        emit LumiaFactoryUpdated(oldFactory, pendingFactory.newFactory);
+        delete LibHyperStaking.diamondStorage().pendingLumiaFactory;
     }
 
     // ========= View ========= //

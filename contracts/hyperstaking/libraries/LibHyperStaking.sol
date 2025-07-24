@@ -61,6 +61,16 @@ struct LockboxData {
     HyperlaneMessage lastMessage; /// Information about last mailbox message received
 }
 
+struct PendingMailbox {
+    address newMailbox;
+    uint256 applyAfter;
+}
+
+struct PendingLumiaFactory {
+    address newFactory;
+    uint256 applyAfter;
+}
+
 struct FailedRedeem {
     address strategy;
     address user;
@@ -96,6 +106,12 @@ struct HyperStakingStorage {
     /// @notice General lockbox data
     LockboxData lockboxData;
 
+    /// @notice Pending lockbox mailbox update
+    PendingMailbox pendingMailbox;
+
+    /// @notice Pending lockbox lumia factory update
+    PendingLumiaFactory pendingLumiaFactory;
+
     /// @notice Records failed redeem attempts for later re-execution
     FailedRedeemData failedRedeems;
 }
@@ -107,6 +123,8 @@ library LibHyperStaking {
     // 1e18 as a scaling factor, e.g. for allocation, percent, e.g. 0.1 ETH (1e17) == 10%
     uint256 constant internal PERCENT_PRECISION = 1e18; // represent 100%
     uint256 constant internal MAX_FEE_RATE = 2e17; // 20%
+
+    uint256 constant internal PENDING_CHANGE_DELAY = 1 days;
 
     function diamondStorage() internal pure returns (HyperStakingStorage storage s) {
         bytes32 position = HYPERSTAKING_STORAGE_POSITION;
