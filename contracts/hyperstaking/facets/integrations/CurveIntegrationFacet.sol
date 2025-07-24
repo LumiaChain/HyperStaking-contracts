@@ -107,7 +107,8 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
         PoolConfig storage pc = LibCurve.diamondStorage().poolsConfig[pool];
 
         // clean previous pool storage
-        for (uint256 i; i < pc.tokenList.length; ++i) {
+        uint256 tokenListLen = pc.tokenList.length; // cache array len
+        for (uint256 i; i < tokenListLen; ++i) {
             delete pc.tokenIndex[pc.tokenList[i]]; // remove token index
             delete pc.tokenExists[pc.tokenList[i]]; // remove info if token exists
         }
@@ -170,7 +171,8 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
         tokens = pc.tokenList;
 
         indexes = new uint8[](tokens.length);
-        for (uint256 i; i < tokens.length; ++i) {
+        uint256 tokensLen = tokens.length; // cache array len
+        for (uint256 i; i < tokensLen; ++i) {
             indexes[i] = pc.tokenIndex[tokens[i]];
         }
     }
