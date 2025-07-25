@@ -58,7 +58,7 @@ contract DineroStrategy is AbstractStrategy, PirexIntegration {
         uint256 shares_,
         address user_
     ) external onlyLumiaDiamond returns (uint256 exitAmount) {
-        IERC20(AUTO_PX_ETH).transferFrom(DIAMOND, address(this), shares_);
+        IERC20(AUTO_PX_ETH).safeTransferFrom(DIAMOND, address(this), shares_);
 
         exitAmount = redeem(shares_, DIAMOND); // transfer amount back to the Diamond
 
