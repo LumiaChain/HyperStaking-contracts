@@ -156,6 +156,23 @@ describe("Staking", function () {
       expect(await deposit.withdrawDelay()).to.equal(month - 1);
     });
 
+    it("renounceOwnership should revert on both LumiaPrincipal and LumiaVaultShares", async function () {
+      const { testERC20, reserveStrategy1, signers } = await loadFixture(deployHyperStaking);
+      const { owner } = signers;
+
+      const Principal = await ethers.getContractFactory("LumiaPrincipal");
+      const principal = await Principal.deploy(owner, "Lumia Principal Token", "LPT", 18);
+
+      const VaultShares = await ethers.getContractFactory("LumiaVaultShares");
+      const shares = await VaultShares.deploy(owner, reserveStrategy1, testERC20, "Lumia Vault Shares", "LVS");
+
+      await expect(principal.renounceOwnership())
+        .to.be.revertedWithCustomError(principal, "RenounceOwnershipDisabled");
+
+      await expect(shares.renounceOwnership())
+        .to.be.revertedWithCustomError(shares, "RenounceOwnershipDisabled");
+    });
+
     it("should be able to deposit stake", async function () {
       const { hyperStaking, reserveStrategy1, signers } = await loadFixture(deployHyperStaking);
       const { deposit, allocation } = hyperStaking;

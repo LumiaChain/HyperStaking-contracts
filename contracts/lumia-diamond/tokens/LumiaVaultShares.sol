@@ -17,6 +17,7 @@ contract LumiaVaultShares is ERC4626, Ownable2Step {
     address public immutable STRATEGY;
 
     error ZeroAddress();
+    error RenounceOwnershipDisabled();
 
     //============================================================================================//
     //                                        Constructor                                         //
@@ -96,6 +97,11 @@ contract LumiaVaultShares is ERC4626, Ownable2Step {
         uint256 shares
     ) public virtual onlyOwner {
         _spendAllowance(owner, caller, shares);
+    }
+
+    /// @notice Disable renouncing ownership
+    function renounceOwnership() public view override onlyOwner {
+        revert RenounceOwnershipDisabled();
     }
 
     //============================================================================================//

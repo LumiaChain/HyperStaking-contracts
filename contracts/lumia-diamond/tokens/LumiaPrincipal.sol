@@ -15,6 +15,8 @@ contract LumiaPrincipal is Ownable, ERC20Burnable {
 
     address public lumiaDiamond;
 
+    error RenounceOwnershipDisabled();
+
     constructor(
         address lumiaDiamond_,
         string memory name_,
@@ -33,6 +35,11 @@ contract LumiaPrincipal is Ownable, ERC20Burnable {
 
     function mint(address to_, uint256 amount_) public onlyOwner {
         _mint(to_, amount_);
+    }
+
+    /// @notice Disable renouncing ownership
+    function renounceOwnership() public view override onlyOwner {
+        revert RenounceOwnershipDisabled();
     }
 
     // ========= View ========= //
