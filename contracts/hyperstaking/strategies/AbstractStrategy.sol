@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {IStrategy} from "../interfaces/IStrategy.sol";
+import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {IHyperStakingRoles} from "../interfaces/IHyperStakingRoles.sol";
 
@@ -13,6 +13,12 @@ abstract contract AbstractStrategy is IStrategy {
 
     /// Diamond deployment address
     address public immutable DIAMOND;
+
+    /// Stores all requests both allocations and exits
+    mapping(uint256 id => StrategyRequest) internal _req;
+
+    /// Next request ID
+    uint256 internal _nextId; // starts at 0, first id will be 1
 
     //============================================================================================//
     //                                          Events                                            //
@@ -34,6 +40,11 @@ abstract contract AbstractStrategy is IStrategy {
 
     error NotLumiaDiamond();
     error NotStrategyManager();
+    error DontSupportArrays();
+
+    error AlreadyClaimed();
+    error NotReady();
+    error WrongKind();
 
     //============================================================================================//
     //                                         Modifiers                                          //
@@ -68,6 +79,8 @@ abstract contract AbstractStrategy is IStrategy {
     //                                      Public Functions                                      //
     //============================================================================================//
 
+    // ========= Flags ========= //
+
     /// @inheritdoc IStrategy
     function isDirectStakeStrategy() external pure virtual returns (bool) {
         return false;
@@ -76,6 +89,61 @@ abstract contract AbstractStrategy is IStrategy {
     /// @inheritdoc IStrategy
     function isIntegratedStakeStrategy() external pure virtual returns (bool) {
         return false;
+    }
+
+    // ========= Requests ========= //
+
+    function requestInfo(uint256 id_)
+        external
+        view
+        returns (
+            address user,
+            bool isExit,
+            uint256 amount,
+            uint64 readyAt,
+            bool claimable,
+            bool claimed
+        )
+    {
+        StrategyRequest memory r = _req[id_];
+        user = r.user;
+        isExit = (r.kind == StrategyKind.Exit);
+        amount = r.amount;
+        readyAt = r.readyAt;
+        claimed = r.claimed;
+        claimable = (!claimed && block.timestamp >= readyAt);
+    }
+
+    /// @dev Batched requestInfo for multiple ids; arrays match ids_.length
+    function requestInfoBatch(uint256[] calldata ids_)
+        external
+        view
+        returns (
+            address[] memory users,
+            bool[] memory isExits,
+            uint256[] memory amounts,
+            uint64[] memory readyAts,
+            bool[] memory claimables,
+            bool[] memory claimedArr
+        )
+    {
+        uint256 n = ids_.length;
+        users = new address[](n);
+        isExits = new bool[](n);
+        amounts = new uint256[](n);
+        readyAts = new uint64[](n);
+        claimables = new bool[](n);
+        claimedArr = new bool[](n);
+
+        for (uint256 i; i < n; ++i) {
+            StrategyRequest memory r = _req[ids_[i]];
+            users[i] = r.user;
+            isExits[i] = (r.kind == StrategyKind.Exit);
+            amounts[i] = r.amount;
+            readyAts[i] = r.readyAt;
+            claimedArr[i] = r.claimed;
+            claimables[i] = (!r.claimed && block.timestamp >= r.readyAt);
+        }
     }
 
     // ========= StrategyManager ========= //
@@ -95,5 +163,64 @@ abstract contract AbstractStrategy is IStrategy {
     ) external onlyStrategyManager {
         currency_.transfer(to_, amount_);
         emit EmergencyWithdraw(msg.sender, currency_.token, amount_, to_);
+    }
+
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
+    // ========= Request Helpers ========= //
+
+    /// @dev Generates the next request ID
+    function _newId() internal returns (uint256 id) {
+        unchecked { id = ++_nextId; } // monotonic
+    }
+
+    /// @dev Stores a new allocation request in _req mapping
+    function _storeAllocationRequest(
+        address user_,
+        uint256 amount_,
+        uint64 readyAt_
+    ) internal returns (uint256 id) {
+        id = _newId();
+        _req[id] = StrategyRequest({
+            user: user_,
+            kind: StrategyKind.Allocation,
+            claimed: false,
+            amount: amount_,
+            readyAt: readyAt_
+        });
+    }
+
+    /// @dev Stores a new exit request in _req mapping
+    function _storeExitRequest(
+        address user_,
+        uint256 shares_,
+        uint64 readyAt_
+    ) internal returns (uint256 id) {
+        id = _newId();
+        _req[id] = StrategyRequest({
+            user: user_,
+            kind: StrategyKind.Exit,
+            claimed: false,
+            amount: shares_,
+            readyAt: readyAt_
+        });
+    }
+
+    /// @dev Loads a request and pre-validates it
+    function _loadClaimable(
+        uint256 id_,
+        StrategyKind expected_
+    ) internal view returns (StrategyRequest memory r) {
+        r = _req[id_];
+        if (r.claimed) revert AlreadyClaimed();
+        if (r.kind != expected_) revert WrongKind();
+        if (block.timestamp < r.readyAt) revert NotReady();
+    }
+
+    /// @dev Marks a request as claimed
+    function _markClaimed(uint256 id_) internal {
+        _req[id_].claimed = true;
     }
 }
