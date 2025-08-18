@@ -38,29 +38,7 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         address user,
         uint256 stake
     ) external payable diamondInternal {
-        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        VaultInfo storage vault = v.vaultInfo[strategy];
-        StakeInfo storage si = v.stakeInfo[strategy];
-
-        // allocate stake amount in strategy
-        // and receive allocation
-        uint256 allocation;
-
-        // Integrated strategy: all asset movements are handled internally by the IntegrationFacet
-        if (IStrategy(strategy).isIntegratedStakeStrategy()) {
-            // no-vaule and without increaseAllowance
-            allocation = IStrategy(strategy).allocate(stake, user);
-        } else {
-            if (vault.stakeCurrency.isNativeCoin()) {
-                allocation = IStrategy(strategy).allocate{value: stake}(stake, user);
-            } else {
-                vault.stakeCurrency.increaseAllowance(strategy, stake);
-                allocation = IStrategy(strategy).allocate(stake, user);
-            }
-        }
-
-        // save information
-        si.totalAllocation += allocation;
+        uint256 allocation = _allocate(strategy, user, stake);
 
         // bridge stakeInfo message to the Lumia diamond
         ILockbox(address(this)).bridgeStakeInfo(strategy, user, stake);
@@ -211,26 +189,54 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         VaultInfo storage vault = v.vaultInfo[strategy];
         StakeInfo storage si = v.stakeInfo[strategy];
 
-        allocation = IStrategy(strategy).previewAllocation(stake);
+        if (IStrategy(strategy).isDirectStakeStrategy()) {
+            allocation = stake;
+        } else {
+            allocation = IStrategy(strategy).previewAllocation(stake);
 
-        // save information
-        si.totalAllocation -= allocation;
+            // save non-direct stake information
+            si.totalAllocation -= allocation;
+        }
 
-
-        // Integrated strategy does not require allowance
+        // integrated strategy does not require allowance
         if (!IStrategy(strategy).isIntegratedStakeStrategy()) {
             vault.revenueAsset.safeIncreaseAllowance(strategy, allocation);
         }
-        // exit strategy with given allocation
-        uint256 exitStake = IStrategy(strategy).exit(allocation, user);
 
-        if (feeWithdraw) {
-            IDeposit(address(this)).feeWithdraw(vault, user, exitStake);
+        IDeposit(address(this)).queueWithdraw(strategy, user, stake, allocation, feeWithdraw);
+
+        emit Leave(strategy, user, stake, allocation);
+    }
+
+    /// @notice Function responsible for allocation in the strategy
+    function _allocate(address strategy, address user, uint256 stake) internal returns (uint256 allocation) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+        StakeInfo storage si = v.stakeInfo[strategy];
+
+        uint64 readyAt;
+        uint256 requestId = LibHyperStaking.newRequestId();
+
+        // IntegrationFacet handles movements (no msg.value, no allowance)
+        if (IStrategy(strategy).isIntegratedStakeStrategy()) {
+            readyAt = IStrategy(strategy).requestAllocation(requestId, stake, user);
         } else {
-            IDeposit(address(this)).queueWithdraw(strategy, user, exitStake);
+            if (vault.stakeCurrency.isNativeCoin()) {
+                readyAt = IStrategy(strategy).requestAllocation{value: stake}(requestId, stake, user);
+            } else {
+                vault.stakeCurrency.increaseAllowance(strategy, stake);
+                readyAt = IStrategy(strategy).requestAllocation(requestId, stake, user);
+            }
         }
 
-        emit Leave(strategy, user, stake, exitStake, allocation);
+        require(readyAt == 0, AsyncAllocationNotSupported());
+
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = requestId;
+        allocation = IStrategy(strategy).claimAllocation(ids, address(this));
+
+        // save information
+        si.totalAllocation += allocation;
     }
 
     /// @notice helper check function, strategy validation
