@@ -70,22 +70,22 @@ contract PirexIntegration {
     //                                      Public Functions                                      //
     //============================================================================================//
 
-    function depositCompound(address receiver_) public payable returns (uint256 apxEthReceived) {
+    function depositCompound(address receiver_, uint256 value) public payable returns (uint256 apxEthReceived) {
         require(receiver_ != address(0), ZeroAddressPx());
-        require(msg.value > 0, ZeroAmountPx());
+        require(value > 0, ZeroAmountPx());
 
         // Retrieve this value before making the compound deposit, as it will alter the vault ratio
-        apxEthReceived = _convertEthToApxEth(msg.value);
+        apxEthReceived = _convertEthToApxEth(value);
 
         bool compound = true;
         (uint256 postFeeAmount, uint256 feeAmount) = PirexEth(PIREX_ETH).deposit{
-            value: msg.value
+            value: value
         }(
             receiver_,
             compound
         );
 
-        emit PirexDepositCompound(receiver_, msg.value, postFeeAmount, feeAmount, apxEthReceived);
+        emit PirexDepositCompound(receiver_, value, postFeeAmount, feeAmount, apxEthReceived);
     }
 
     // shares - apxEth amount

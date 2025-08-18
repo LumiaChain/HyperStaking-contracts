@@ -223,7 +223,6 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
         uint256 i = _coinIndex(pool, tokenIn);
         uint256 j = _coinIndex(pool, tokenOut);
         require(i != type(uint256).max && j != type(uint256).max, CoinNotInPool());
-        // TODO issue with index 0;
 
         // params[0] = [i, j, swapType(1), poolType(1), nCoins]
         params[0][0] = i;
