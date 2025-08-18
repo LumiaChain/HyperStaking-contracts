@@ -43,10 +43,17 @@ struct StakeInfo {
     uint256 totalAllocation;
 }
 
+// @param strategy That produced this claim
 // @param unlockTime Timestamp when claim becomes withdrawable
+// @param eligible Address allowed to execute the claim
+// @param expectedAmount The amount of stake expected to be withdrawn in this claim
+// @param feeWithdraw Whether protocol-fee claims (true) or user claims (false)
 struct Claim {
-    uint256 amount;
+    address strategy;
     uint64 unlockTime;
+    address eligible;
+    uint256 expectedAmount;
+    bool feeWithdraw;
 }
 
 struct HyperlaneMessage {
@@ -98,10 +105,16 @@ struct HyperStakingStorage {
     mapping (address strategy => DirectStakeInfo) directStakeInfo;
 
     /// @notice Global delay, in seconds, that must elapse after a claim is queued
-    uint64 withdrawDelay;
+    uint64 defaultWithdrawDelay;
 
-    /// @notice Pending claims for each user and strategy
-    mapping(address user => mapping(address strategy => Claim)) pendingClaims;
+    /// @notice Next request ID for strategy operations
+    uint256 nextRequestId;
+
+    /// @notice Pending claims by requestId
+    mapping(uint256 requestId => Claim) pendingClaims;
+
+    /// @notice Pending withdrawal IDs by strategy and user
+    mapping(address strategy => mapping(address user => uint256[])) groupedClaimIds;
 
     /// @notice General lockbox data
     LockboxData lockboxData;
@@ -125,6 +138,12 @@ library LibHyperStaking {
     uint256 constant internal MAX_FEE_RATE = 2e17; // 20%
 
     uint256 constant internal PENDING_CHANGE_DELAY = 1 days;
+
+    /// @dev Generates the next request ID
+    function newRequestId() internal returns (uint256 id) {
+        HyperStakingStorage storage s = diamondStorage();
+        unchecked { id = ++s.nextRequestId; } // starts at 0, first id will be 1
+    }
 
     function diamondStorage() internal pure returns (HyperStakingStorage storage s) {
         bytes32 position = HYPERSTAKING_STORAGE_POSITION;

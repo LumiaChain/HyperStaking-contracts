@@ -33,7 +33,11 @@ interface IStrategy {
     );
 
     /// @notice Emitted when a deposit request is claimed (stake -> shares)
-    event AllocationClaimed(uint256 indexed id, uint256 assetAllocation);
+    event AllocationClaimed(
+        uint256 indexed id,
+        address receiver,
+        uint256 assetAllocation
+    );
 
     /// @notice Emitted when an exit request is created
     event ExitRequested(
@@ -44,7 +48,11 @@ interface IStrategy {
     );
 
     /// @notice Emitted when an exit request is claimed (shares -> stake)
-    event ExitClaimed(uint256 indexed id, uint256 exitStakeAmount);
+    event ExitClaimed(
+        uint256 indexed id,
+        address receiver,
+        uint256 exitStakeAmount
+    );
 
     //============================================================================================//
     //                                          Mutable                                           //
@@ -53,45 +61,45 @@ interface IStrategy {
     /**
      * @notice Enqueues a deposit of stake currency into the strategy
      * @dev If `readyAt` is 0, the request can be claimed immediately (sync deposit)
+     * @param requestId_ Unique request ID generated outside the strategy
      * @param stakeAmount_ Amount of stake currency to deposit
      * @param user_ The address of the user making the allocation
-     * @return id Unique request identifier
      * @return readyAt Earliest timestamp when the request can be claimed (0 = now)
      */
-    function requestAllocation(uint256 stakeAmount_, address user_)
+    function requestAllocation(uint256 requestId_, uint256 stakeAmount_, address user_)
         external
         payable
-        returns (uint256 id, uint64 readyAt);
+        returns (uint64 readyAt);
 
     /**
      * @notice Claims one or more allocation requests after they become claimable
      * @param ids_ Array of request IDs to claim
-     * @param recipient The address that will receive allocation (shares)
+     * @param receiver_ The address that will receive allocation (shares)
      * @return totalAssetAllocation Total number of shares allocated across all claimed requests
      */
-    function claimAllocation(uint256[] calldata ids_, address recipient_)
+    function claimAllocation(uint256[] calldata ids_, address receiver_)
         external
         returns (uint256 totalAssetAllocation);
 
     /**
      * @notice Enqueues redemption of strategy allocation (shares) into stake currency
      * @dev If `readyAt` is 0, the request can be claimed immediately (sync redemption)
+     * @param requestId_ Unique request ID generated outside the strategy
      * @param assetAllocation_ Amount of strategy-specific asset (shares) to redeem
      * @param user_ The address of the user requesting the exit
-     * @return id Unique request identifier
      * @return readyAt Earliest timestamp when the request can be claimed (0 = now)
      */
-    function requestExit(uint256 assetAllocation_, address user_)
+    function requestExit(uint256 requestId_, uint256 assetAllocation_, address user_)
         external
-        returns (uint256 id, uint64 readyAt);
+        returns (uint64 readyAt);
 
     /**
      * @notice Claims one or more exit requests after they become claimable
      * @param ids_ Array of request IDs to claim
-     * @param recipient The address that will receive stake back
+     * @param receiver_ The address that will receive stake back
      * @return totalExitStakeAmount Total stake currency redeemed across all claimed requests
      */
-    function claimExit(uint256[] calldata ids_, address recipient_)
+    function claimExit(uint256[] calldata ids_, address receiver_)
         external
         returns (uint256 totalExitStakeAmount);
 

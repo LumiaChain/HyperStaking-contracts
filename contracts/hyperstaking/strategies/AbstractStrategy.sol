@@ -17,9 +17,6 @@ abstract contract AbstractStrategy is IStrategy {
     /// Stores all requests both allocations and exits
     mapping(uint256 id => StrategyRequest) internal _req;
 
-    /// Next request ID
-    uint256 internal _nextId; // starts at 0, first id will be 1
-
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
@@ -37,6 +34,9 @@ abstract contract AbstractStrategy is IStrategy {
 
     error ZeroAddress();
     error ZeroAmount();
+
+    error ZeroUser();
+    error RequestIdExists(uint256 id);
 
     error NotLumiaDiamond();
     error NotStrategyManager();
@@ -171,19 +171,17 @@ abstract contract AbstractStrategy is IStrategy {
 
     // ========= Request Helpers ========= //
 
-    /// @dev Generates the next request ID
-    function _newId() internal returns (uint256 id) {
-        unchecked { id = ++_nextId; } // monotonic
-    }
-
     /// @dev Stores a new allocation request in _req mapping
     function _storeAllocationRequest(
+        uint256 id_,
         address user_,
         uint256 amount_,
         uint64 readyAt_
-    ) internal returns (uint256 id) {
-        id = _newId();
-        _req[id] = StrategyRequest({
+    ) internal {
+        if (user_ == address(0)) revert ZeroUser();
+        if (_req[id_].user != address(0)) revert RequestIdExists(id_);
+
+        _req[id_] = StrategyRequest({
             user: user_,
             kind: StrategyKind.Allocation,
             claimed: false,
@@ -194,12 +192,15 @@ abstract contract AbstractStrategy is IStrategy {
 
     /// @dev Stores a new exit request in _req mapping
     function _storeExitRequest(
+        uint256 id_,
         address user_,
         uint256 shares_,
         uint64 readyAt_
-    ) internal returns (uint256 id) {
-        id = _newId();
-        _req[id] = StrategyRequest({
+    ) internal {
+        if (user_ == address(0)) revert ZeroUser();
+        if (_req[id_].user != address(0)) revert RequestIdExists(id_);
+
+        _req[id_] = StrategyRequest({
             user: user_,
             kind: StrategyKind.Exit,
             claimed: false,
