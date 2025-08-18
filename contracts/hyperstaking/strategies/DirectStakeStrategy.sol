@@ -54,7 +54,7 @@ contract DirectStakeStrategy is AbstractStrategy {
         uint256 requestId_,
         uint256 shares_,
         address user_) external returns (uint64 readyAt) {
-        // just manage request & without transfers
+        // just store request, without transfers
 
         readyAt = 0; // claimable immediately
         _storeExitRequest(
@@ -97,13 +97,17 @@ contract DirectStakeStrategy is AbstractStrategy {
         revert DirectStakeMisused();
     }
 
-    /// Price = 1:1
-    function previewAllocation(uint256) public pure returns (uint256) {
-        revert DirectStakeMisused();
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
+    /// 1:1
+    function _previewAllocationRaw(uint256 stake_) internal pure override returns (uint256) {
+        return stake_;
     }
 
-    /// Price = 1:1
-    function previewExit(uint256) public pure returns (uint256) {
-        revert DirectStakeMisused();
+    /// 1:1
+    function _previewExitRaw(uint256 allocation_) internal pure override returns (uint256) {
+        return allocation_;
     }
 }

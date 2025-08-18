@@ -35,6 +35,8 @@ contract MockReserveStrategy is AbstractStrategy {
     /// Price of the asset
     uint256 public assetReserve;
 
+    error MissingCollateral();
+
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
@@ -133,8 +135,11 @@ contract MockReserveStrategy is AbstractStrategy {
         uint256 assetAllocation_,
         address user_
     ) external onlyLumiaDiamond returns (uint64 readyAt) {
-        // fetch allocation (shares)
-        IERC20(revenueAsset).transferFrom(DIAMOND, address(this), assetAllocation_);
+        // extra check used for testing reexecute
+        require(
+            stake.balanceOf(address(this)) >= _previewExitRaw(assetAllocation_),
+            MissingCollateral()
+        );
 
         readyAt = 0; // claimable immediately
         _storeExitRequest(
@@ -143,6 +148,9 @@ contract MockReserveStrategy is AbstractStrategy {
             assetAllocation_,
             readyAt
         );
+
+        // fetch allocation (shares)
+        IERC20(revenueAsset).transferFrom(DIAMOND, address(this), assetAllocation_);
 
         emit ExitRequested(requestId_, user_, assetAllocation_, readyAt);
     }
@@ -177,16 +185,6 @@ contract MockReserveStrategy is AbstractStrategy {
         return stake;
     }
 
-    /// Return current stake to asset conversion (amount * price)
-    function previewAllocation(uint256 stakeAmount_) public view returns (uint256) {
-        return stakeAmount_ * PRECISSION_FACTOR / assetPrice;
-    }
-
-    /// Return current asset to stake conversion (amount / price)
-    function previewExit(uint256 assetAllocation_) public view returns (uint256) {
-        return assetAllocation_ * assetPrice / PRECISSION_FACTOR;
-    }
-
     // ========= Admin ========= //
 
     function supplyRevenueAsset(uint256 amount_) external onlyStrategyManager {
@@ -215,5 +213,19 @@ contract MockReserveStrategy is AbstractStrategy {
         assetPrice = assetPrice_;
 
         emit AssetPriceSet(msg.sender, revenueAsset, assetPrice_);
+    }
+
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
+    /// Return current stake to asset conversion (amount * price)
+    function _previewAllocationRaw(uint256 stake_) internal view override returns (uint256) {
+        return stake_ * PRECISSION_FACTOR / assetPrice;
+    }
+
+    /// Return current asset to stake conversion (amount / price)
+    function _previewExitRaw(uint256 allocation_) internal view override returns (uint256) {
+        return allocation_ * assetPrice / PRECISSION_FACTOR;
     }
 }

@@ -124,13 +124,17 @@ contract DineroStrategy is AbstractStrategy, PirexIntegration {
         return AUTO_PX_ETH;
     }
 
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
     /// Return current stake to asset ratio (eth/apxEth price)
-    function previewAllocation(uint256 stakeAmount_) public view returns (uint256) {
-        return _convertEthToApxEth(stakeAmount_);
+    function _previewAllocationRaw(uint256 stake_) internal view override returns (uint256) {
+        return _convertEthToApxEth(stake_);
     }
 
     /// Return current asset to stake ratio (apxEth/eth price)
-    function previewExit(uint256 assetAllocation_) public view returns (uint256) {
-        return _convertApxEthToEth(assetAllocation_);
+    function _previewExitRaw(uint256 allocation_) internal view override returns (uint256) {
+        return _convertApxEthToEth(allocation_);
     }
 }

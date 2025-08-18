@@ -79,6 +79,33 @@ abstract contract AbstractStrategy is IStrategy {
     //                                      Public Functions                                      //
     //============================================================================================//
 
+    // ========= Previews ========= //
+
+    /// @dev Raw conversion without invariants (strategy-specific)
+    function _previewAllocationRaw(uint256 stake_) internal view virtual returns (uint256);
+
+    /// @dev Raw reverse conversion without invariants (strategy-specific)
+    function _previewExitRaw(uint256 allocation_) internal view virtual returns (uint256);
+
+    /// @inheritdoc IStrategy
+    function previewAllocation(
+        uint256 stake_
+    ) public view virtual override returns (uint256 allocation) {
+        allocation = _previewAllocationRaw(stake_);
+
+        // round up by 1 wei if needed to avoid loss on conversion (ceil adjustment)
+        if (_previewExitRaw(allocation) < stake_) {
+            unchecked { ++allocation; }
+        }
+    }
+
+    /// @inheritdoc IStrategy
+    function previewExit(
+        uint256 allocation_
+    ) public view virtual override returns (uint256 stake) {
+        stake = _previewExitRaw(allocation_);
+    }
+
     // ========= Flags ========= //
 
     /// @inheritdoc IStrategy
@@ -93,6 +120,7 @@ abstract contract AbstractStrategy is IStrategy {
 
     // ========= Requests ========= //
 
+    /// @dev Returns requestInfo for a given id
     function requestInfo(uint256 id_)
         external
         view

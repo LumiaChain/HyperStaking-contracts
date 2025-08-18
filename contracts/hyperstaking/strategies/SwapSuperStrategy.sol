@@ -177,37 +177,38 @@ contract SwapSuperStrategy is SuperformStrategy {
         return super.revenueAsset();
     }
 
-    /// @inheritdoc IStrategy
+    /// @return Current slippage setting in basis points
+    function slippage() external view returns (uint256) {
+        return slippageBps;
+    }
+
+
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
     /// @dev Converts the incoming stake (CURVE_INPUT_TOKEN) amount to its Curve quote
     ///      (SUPERFORM_INPUT_TOKEN), then feeds that into the parent (Superform Strategy) preview
-    function previewAllocation(
-        uint256 stakeAmount_
-    ) public view override returns (uint256 allocation) {
+    function _previewAllocationRaw(uint256 stake_) internal view override returns (uint256 allocation) {
         uint256 superformInput = curveIntegration.quote(
             address(CURVE_INPUT_TOKEN),     // tokenIn
             CURVE_POOL,
             address(SUPERFORM_INPUT_TOKEN), // tokenOut
-            stakeAmount_
+            stake_
         );
-        allocation = super.previewAllocation(superformInput);
+        allocation = super._previewAllocationRaw(superformInput);
     }
 
-    /// @inheritdoc IStrategy
     /// @dev Works in reverse: first asks the parent (Superform Strategy) how many SUPERFORM_INPUT_TOKEN
     ///      are returned, then quotes Curve for the final exit amount
-    function previewExit(uint256 assetAllocation_) public view override returns (uint256 stakeAmount) {
-        uint256 superformOutput = super.previewExit(assetAllocation_);
+    function _previewExitRaw(uint256 allocation_) internal view override returns (uint256 stake) {
+        uint256 superformOutput = super._previewExitRaw(allocation_);
 
-        stakeAmount = curveIntegration.quote(
+        stake = curveIntegration.quote(
             address(SUPERFORM_INPUT_TOKEN), // tokenIn
             CURVE_POOL,
             address(CURVE_INPUT_TOKEN),     // tokenOut
             superformOutput
         );
-    }
-
-    /// @return Current slippage setting in basis points
-    function slippage() external view returns (uint256) {
-        return slippageBps;
     }
 }

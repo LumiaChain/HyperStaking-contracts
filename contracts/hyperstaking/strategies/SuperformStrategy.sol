@@ -207,16 +207,6 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
         return superformIntegration.aERC20Token(SUPERFORM_ID);
     }
 
-    /// @inheritdoc IStrategy
-    function previewAllocation(uint256 stakeAmount_) public view virtual returns (uint256) {
-        return superformIntegration.previewDepositTo(SUPERFORM_ID, stakeAmount_);
-    }
-
-    /// @inheritdoc IStrategy
-    function previewExit(uint256 assetAllocation_) public view virtual returns (uint256 stakeAmount) {
-        return superformIntegration.previewWithdrawFrom(SUPERFORM_ID, assetAllocation_);
-    }
-
     /// @inheritdoc IERC1155Receiver
     function onERC1155Received(
         address,
@@ -252,5 +242,19 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     /// @inheritdoc IERC165
     function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
         return interfaceId == type(IERC165).interfaceId || interfaceId == type(IERC1155Receiver).interfaceId;
+    }
+
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
+    /// @notice Uses superformIntegration to preview allocation
+    function _previewAllocationRaw(uint256 stake_) internal view virtual override returns (uint256) {
+        return superformIntegration.previewDepositTo(SUPERFORM_ID, stake_);
+    }
+
+    /// @notice Uses superformIntegration to preview exit
+    function _previewExitRaw(uint256 allocation_) internal view virtual override returns (uint256) {
+        return superformIntegration.previewWithdrawFrom(SUPERFORM_ID, allocation_);
     }
 }
