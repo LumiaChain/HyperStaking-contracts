@@ -192,15 +192,16 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         if (IStrategy(strategy).isDirectStakeStrategy()) {
             allocation = stake;
         } else {
+
             allocation = IStrategy(strategy).previewAllocation(stake);
 
             // save non-direct stake information
             si.totalAllocation -= allocation;
-        }
 
-        // integrated strategy does not require allowance
-        if (!IStrategy(strategy).isIntegratedStakeStrategy()) {
-            vault.revenueAsset.safeIncreaseAllowance(strategy, allocation);
+            // integrated strategy does not require allowance
+            if (!IStrategy(strategy).isIntegratedStakeStrategy()) {
+                vault.revenueAsset.safeIncreaseAllowance(strategy, allocation);
+            }
         }
 
         IDeposit(address(this)).queueWithdraw(strategy, user, stake, allocation, feeWithdraw);

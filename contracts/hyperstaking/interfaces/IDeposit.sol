@@ -34,14 +34,16 @@ interface IDeposit {
         address indexed from,
         address to,
         uint256 stake,
+        uint256 exitAmount,
         DepositType indexed depositType
     );
 
     event FeeWithdrawClaimed(
         address indexed strategy,
-        uint256 fee,
         address indexed feeRecipient,
-        address to
+        address to,
+        uint256 fee,
+        uint256 exitAmount
     );
 
     event WithdrawQueued(
@@ -57,6 +59,12 @@ interface IDeposit {
         address indexed stakingManager,
         uint256 previousDelay,
         uint256 newDelay
+    );
+
+    event AllowedProtocolLossSet(
+        address indexed stakingManager,
+        uint256 previousAllowedLoss,
+        uint256 newAllowedLoss
     );
 
     //============================================================================================//
@@ -92,6 +100,13 @@ interface IDeposit {
 
     /// @notice Thrown when trying to set too high withdraw delay
     error WithdrawDelayTooHigh(uint64 newDelay);
+
+    /// @notice Thrown when attempting to set protocol loss tolerance above 100%
+    error ProtocolLossTooHigh();
+
+    /// @notice Thrown when protocol loss exceeds the allowed tolerance
+    error ProtocolLossExceeded(uint256 expected, uint256 actual);
+
 
     //============================================================================================//
     //                                          Mutable                                           //
@@ -164,6 +179,12 @@ interface IDeposit {
      */
     function setWithdrawDelay(uint64 newDelay) external;
 
+    /**
+      * @notice Sets the allowed loss tolerance for exit claims
+      * @dev (1e18 = 100%)
+      */
+    function setAllowedProtocolLoss(uint256 newAllowedLoss) external;
+
     /// @notice Pauses stake functionalities
     function pauseDeposit() external;
 
@@ -179,6 +200,9 @@ interface IDeposit {
 
     /// @notice Cool‑down in seconds that must elapse before a queued claim can be withdrawn
     function withdrawDelay() external view returns (uint64);
+
+    /// @notice Returns the current allowed loss tolerance
+    function allowedProtocolLoss() external view returns (uint256);
 
     /// @notice Returns claims for given requestIds; chooses fee/user mapping by flag
     function pendingWithdraws(uint256[] calldata requestIds)

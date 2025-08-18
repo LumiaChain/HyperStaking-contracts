@@ -107,6 +107,9 @@ struct HyperStakingStorage {
     /// @notice Global delay, in seconds, that must elapse after a claim is queued
     uint64 defaultWithdrawDelay;
 
+    /// @notice Allowed loss tolerance for exit claims
+    uint256 allowedProtocolLoss;
+
     /// @notice Next request ID for strategy operations
     uint256 nextRequestId;
 

@@ -107,7 +107,6 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     /// @inheritdoc IDeposit
     function claimWithdraws(uint256[] calldata requestIds, address to) external {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-
         uint256 n = requestIds.length;
 
         require(n > 0, EmptyClaim());
@@ -116,6 +115,9 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         for (uint256 i = 0; i < n; ++i) {
             uint256 id = requestIds[i];
             Claim memory c = v.pendingClaims[id];
+            VaultInfo storage vault = v.vaultInfo[c.strategy];
+
+            uint256 stake = c.expectedAmount;
 
             require(c.strategy != address(0), ClaimNotFound(id));
             require(msg.sender == c.eligible, NotEligible(id, c.eligible, msg.sender));
@@ -129,27 +131,39 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             // claim one by one, as strategy may not support array claims
             uint256[] memory ids = new uint256[](1);
             ids[0] = id;
-            uint256 stake = IStrategy(c.strategy).claimExit(ids, to);
+
+            // The final exitAmount may differ from the expected stake
+            // because of possible price changes between request and claim,
+            // any difference remains in the protocol
+            uint256 exitAmount = IStrategy(c.strategy).claimExit(ids, address(this));
+
+            // In case of lose, ensure protocol does not cover more than allowed,
+            // user always receives full stake
+            if (exitAmount < stake) {
+                uint256 loss = stake - exitAmount;
+                uint256 maxLoss = (stake * v.allowedProtocolLoss) / LibHyperStaking.PERCENT_PRECISION;
+                require(maxLoss >= loss, ProtocolLossExceeded(stake, exitAmount));
+            }
 
             if (c.feeWithdraw) {
-                emit FeeWithdrawClaimed(c.strategy, stake, msg.sender, to);
-                continue;
+                vault.stakeCurrency.transfer(to, stake);
+
+                emit FeeWithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount);
+                continue; // fee withdrawal does not affect the total stake
             }
 
             DepositType depositType;
             if (IStrategy(c.strategy).isDirectStakeStrategy()) {
                 depositType = DepositType.Direct;
-                v.directStakeInfo[c.strategy].totalStake -= stake;
-
-                // for direct transfer must be managed outside of the strategy
-                Currency memory stakeCurrency = IStrategy(c.strategy).stakeCurrency();
-                stakeCurrency.transfer(to, stake);
+                v.directStakeInfo[c.strategy].totalStake -= c.expectedAmount;
             } else {
                 depositType = DepositType.Active;
-                v.stakeInfo[c.strategy].totalStake -= stake;
+                v.stakeInfo[c.strategy].totalStake -= c.expectedAmount;
             }
 
-            emit WithdrawClaimed(c.strategy, msg.sender, to, stake, depositType);
+            vault.stakeCurrency.transfer(to, stake);
+
+            emit WithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount, depositType);
         }
     }
 
@@ -199,6 +213,18 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         emit WithdrawDelaySet(msg.sender, previousDelay, newDelay);
     }
 
+    /// @notice Sets the allowed loss tolerance (1e18 = 100%)
+    /// @inheritdoc IDeposit
+    function setAllowedProtocolLoss(uint256 newAllowedLoss) external onlyStakingManager {
+        require(newAllowedLoss <= 1e18, ProtocolLossTooHigh());
+
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        uint256 previousAllowedLoss = v.allowedProtocolLoss;
+        v.allowedProtocolLoss = newAllowedLoss;
+
+        emit AllowedProtocolLossSet(msg.sender, previousAllowedLoss, newAllowedLoss);
+    }
+
     /// @inheritdoc IDeposit
     function pauseDeposit() external onlyStakingManager whenNotPaused {
         _pause();
@@ -215,6 +241,11 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     function withdrawDelay() external view returns (uint64) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         return v.defaultWithdrawDelay;
+    }
+
+    /// @inheritdoc IDeposit
+    function allowedProtocolLoss() external view returns (uint256) {
+        return LibHyperStaking.diamondStorage().allowedProtocolLoss;
     }
 
     /// @inheritdoc IDeposit
