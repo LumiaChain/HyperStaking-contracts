@@ -245,16 +245,21 @@ describe("VaultShares", function () {
       // alice withdraw for bob
       await vaultShares.connect(alice).approve(realAssets, stakeAmount);
       const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
+
       await expect(realAssets.connect(alice).redeem(
         reserveStrategy, alice, bob, stakeAmount, { value: dispatchFee },
-      )).to.changeEtherBalance(lockbox, stakeAmount);
+      )).to.changeTokenBalances(testReserveAsset,
+        [lockbox, reserveStrategy],
+        [-expectedAllocation, expectedAllocation],
+      );
 
       expect(await vaultShares.allowance(alice, bob)).to.be.eq(0);
       expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
       expect(await vaultShares.balanceOf(bob)).to.be.eq(0);
 
+      const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy, bob);
       await time.setNextBlockTimestamp(expectedUnlock);
-      await expect(deposit.connect(bob).claimWithdraw(reserveStrategy, bob))
+      await expect(deposit.connect(bob).claimWithdraws([lastClaimId], bob))
         .to.changeEtherBalance(bob, stakeAmount);
 
       expect(await testReserveAsset.balanceOf(lockbox)).to.be.eq(0);

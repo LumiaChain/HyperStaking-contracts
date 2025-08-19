@@ -123,8 +123,9 @@ describe("Direct Stake", function () {
       .to.emit(realAssets, "RwaRedeem")
       .withArgs(directStakeStrategy.target, alice, bob, stakeAmount, stakeAmount);
 
+    const lastClaimId = await shared.getLastClaimId(deposit, directStakeStrategy, bob);
     await time.setNextBlockTimestamp(expectedUnlock);
-    await deposit.connect(bob).claimWithdraw(directStakeStrategy, bob);
+    await deposit.connect(bob).claimWithdraws([lastClaimId], bob);
 
     expect((await deposit.directStakeInfo(directStakeStrategy)).totalStake).to.equal(0);
 

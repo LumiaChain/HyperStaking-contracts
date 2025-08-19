@@ -594,25 +594,26 @@ describe("CurveStrategy", function () {
       await vaultShares.connect(alice).approve(realAssets, rwaBalance);
       const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
 
+      const revenueAsset = await shared.getRevenueAsset(swapSuperStrategy);
       const redeemTx = realAssets.connect(alice).redeem(swapSuperStrategy, alice, alice, rwaBalance);
 
       await expect(redeemTx)
         .to.changeTokenBalance(vaultShares, alice, -rwaBalance);
 
-      await expect(redeemTx)
+      const lastClaimId = await shared.getLastClaimId(deposit, swapSuperStrategy, alice);
+      await time.setNextBlockTimestamp(expectedUnlock);
+      const claimTx = deposit.connect(alice).claimWithdraws([lastClaimId], alice);
+
+      await expect(claimTx)
+        .to.changeTokenBalance(revenueAsset, lockbox, -rwaBalance);
+
+      await expect(claimTx)
         .to.changeTokenBalances(testUSDC,
           [curvePool, erc4626Vault], [amount, -amount]);
 
-      await expect(redeemTx)
+      await expect(claimTx)
         .to.changeTokenBalances(testUSDT,
-          [lockbox, curvePool], [amount, -amount]);
-
-      await time.setNextBlockTimestamp(expectedUnlock);
-      await expect(deposit.connect(alice).claimWithdraw(swapSuperStrategy, alice))
-        .to.changeTokenBalances(testUSDT,
-          [alice, lockbox],
-          [amount, -amount],
-        );
+          [alice, curvePool], [amount, -amount]);
 
       expect(await testUSDT.allowance(deposit, swapSuperStrategy)).to.eq(0);
 
@@ -621,7 +622,7 @@ describe("CurveStrategy", function () {
 
     it("check on redeem vulnerability", async function () {
       const { hyperStaking, swapSuperStrategy, vaultShares, superUSDC, signers } = await loadFixture(deployHyperStaking);
-      const { testUSDC, testUSDT, erc4626Vault, curvePool, deposit, defaultWithdrawDelay, allocation, hyperFactory, lockbox, hyperlaneHandler, realAssets } = hyperStaking;
+      const { testUSDC, testUSDT, erc4626Vault, curvePool, deposit, defaultWithdrawDelay, allocation, hyperFactory, hyperlaneHandler, realAssets } = hyperStaking;
       const { alice, bob } = signers;
 
       const amount = parseUnits("2000", 6);
@@ -654,42 +655,32 @@ describe("CurveStrategy", function () {
       expect(rwaBalance).to.be.eq(amount);
 
       await vaultShares.connect(alice).approve(realAssets, rwaBalance);
-      await deposit.connect(alice).pendingWithdraw(alice, swapSuperStrategy);
-      await deposit.connect(alice).pendingWithdraw(bob, swapSuperStrategy);
 
       // At this step, bob saws alice's redeem request in mempool and
       // sends redeem from alice to bob with higher gas price
       await expect(realAssets.connect(bob).redeem(swapSuperStrategy, alice, bob, rwaBalance))
-      // but fails because of missing allowance
+      // but fails because of missing allowance - OK
         .to.be.revertedWithCustomError(vaultShares, "ERC20InsufficientAllowance")
         .withArgs(bob, 0n, rwaBalance);
 
       // bob needs approval to redeem from alice
       await vaultShares.connect(alice).approve(bob, rwaBalance);
-      const redeemTx = realAssets.connect(bob).redeem(swapSuperStrategy, alice, bob, rwaBalance);
+      await expect(realAssets.connect(bob).redeem(swapSuperStrategy, alice, bob, rwaBalance))
+        .to.changeTokenBalance(vaultShares, alice, -rwaBalance);
 
       const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
 
-      await deposit.connect(alice).pendingWithdraw(alice, swapSuperStrategy);
-      await deposit.connect(alice).pendingWithdraw(bob, swapSuperStrategy);
+      const lastClaimId = await shared.getLastClaimId(deposit, swapSuperStrategy, bob);
+      await time.setNextBlockTimestamp(expectedUnlock);
+      const claimTx = deposit.connect(bob).claimWithdraws([lastClaimId], bob);
 
-      await expect(redeemTx)
-        .to.changeTokenBalance(vaultShares, alice, -rwaBalance);
-
-      await expect(redeemTx)
+      await expect(claimTx)
         .to.changeTokenBalances(testUSDC,
           [curvePool, erc4626Vault], [amount, -amount]);
 
-      await expect(redeemTx)
+      await expect(claimTx)
         .to.changeTokenBalances(testUSDT,
-          [lockbox, curvePool], [amount, -amount]);
-
-      await time.setNextBlockTimestamp(expectedUnlock);
-
-      await expect(deposit.connect(bob).claimWithdraw(swapSuperStrategy, bob))
-        .to.changeTokenBalances(testUSDT,
-          [bob, lockbox],
-          [amount, -amount],
+          [bob, curvePool], [amount, -amount],
         );
 
       expect(await testUSDT.allowance(deposit, swapSuperStrategy)).to.eq(0);
