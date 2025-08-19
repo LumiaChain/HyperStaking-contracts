@@ -130,7 +130,7 @@ contract SwapSuperStrategy is SuperformStrategy {
         address receiver_
     ) public override onlyLumiaDiamond returns (uint256 exitAmount) {
         // redeem from Superform – tokens land in this contract
-        uint256 superformOut = super.claimExit(ids_, address(this));
+        uint256 superformOut = super.claimExit(ids_, address(curveIntegration));
 
         // slippage-adjusted quote
         uint256 expected = curveIntegration.quote(

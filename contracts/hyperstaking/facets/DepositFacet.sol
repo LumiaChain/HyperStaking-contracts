@@ -115,7 +115,6 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         for (uint256 i = 0; i < n; ++i) {
             uint256 id = requestIds[i];
             Claim memory c = v.pendingClaims[id];
-            VaultInfo storage vault = v.vaultInfo[c.strategy];
 
             uint256 stake = c.expectedAmount;
 
@@ -134,20 +133,16 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
             // The final exitAmount may differ from the expected stake
             // because of possible price changes between request and claim,
-            // any difference remains in the protocol
-            uint256 exitAmount = IStrategy(c.strategy).claimExit(ids, address(this));
+            uint256 exitAmount = IStrategy(c.strategy).claimExit(ids, to);
 
-            // In case of lose, ensure protocol does not cover more than allowed,
-            // user always receives full stake
+            // In case of lose, ensure protocol does not allow loss more than allowedWithdrawLoss
             if (exitAmount < stake) {
                 uint256 loss = stake - exitAmount;
-                uint256 maxLoss = (stake * v.allowedProtocolLoss) / LibHyperStaking.PERCENT_PRECISION;
-                require(maxLoss >= loss, ProtocolLossExceeded(stake, exitAmount));
+                uint256 maxLoss = (stake * v.allowedWithdrawLoss) / LibHyperStaking.PERCENT_PRECISION;
+                require(maxLoss >= loss, WithdrawLossExceeded(stake, exitAmount));
             }
 
             if (c.feeWithdraw) {
-                vault.stakeCurrency.transfer(to, stake);
-
                 emit FeeWithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount);
                 continue; // fee withdrawal does not affect the total stake
             }
@@ -155,13 +150,11 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             DepositType depositType;
             if (IStrategy(c.strategy).isDirectStakeStrategy()) {
                 depositType = DepositType.Direct;
-                v.directStakeInfo[c.strategy].totalStake -= c.expectedAmount;
+                v.directStakeInfo[c.strategy].totalStake -= stake;
             } else {
                 depositType = DepositType.Active;
-                v.stakeInfo[c.strategy].totalStake -= c.expectedAmount;
+                v.stakeInfo[c.strategy].totalStake -= stake;
             }
-
-            vault.stakeCurrency.transfer(to, stake);
 
             emit WithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount, depositType);
         }
@@ -215,14 +208,14 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
     /// @notice Sets the allowed loss tolerance (1e18 = 100%)
     /// @inheritdoc IDeposit
-    function setAllowedProtocolLoss(uint256 newAllowedLoss) external onlyStakingManager {
-        require(newAllowedLoss <= 1e18, ProtocolLossTooHigh());
+    function setAllowedWithdrawLoss(uint256 newAllowedLoss) external onlyStakingManager {
+        require(newAllowedLoss <= 1e18, WithdrawLossTooHigh());
 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        uint256 previousAllowedLoss = v.allowedProtocolLoss;
-        v.allowedProtocolLoss = newAllowedLoss;
+        uint256 previousAllowedLoss = v.allowedWithdrawLoss;
+        v.allowedWithdrawLoss = newAllowedLoss;
 
-        emit AllowedProtocolLossSet(msg.sender, previousAllowedLoss, newAllowedLoss);
+        emit AllowedWithdrawLossSet(msg.sender, previousAllowedLoss, newAllowedLoss);
     }
 
     /// @inheritdoc IDeposit
@@ -244,8 +237,8 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     }
 
     /// @inheritdoc IDeposit
-    function allowedProtocolLoss() external view returns (uint256) {
-        return LibHyperStaking.diamondStorage().allowedProtocolLoss;
+    function allowedWithdrawLoss() external view returns (uint256) {
+        return LibHyperStaking.diamondStorage().allowedWithdrawLoss;
     }
 
     /// @inheritdoc IDeposit

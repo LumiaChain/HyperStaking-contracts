@@ -61,7 +61,7 @@ interface IDeposit {
         uint256 newDelay
     );
 
-    event AllowedProtocolLossSet(
+    event AllowedWithdrawLossSet(
         address indexed stakingManager,
         uint256 previousAllowedLoss,
         uint256 newAllowedLoss
@@ -101,11 +101,11 @@ interface IDeposit {
     /// @notice Thrown when trying to set too high withdraw delay
     error WithdrawDelayTooHigh(uint64 newDelay);
 
-    /// @notice Thrown when attempting to set protocol loss tolerance above 100%
-    error ProtocolLossTooHigh();
+    /// @notice Thrown when attempting to set withdraw loss tolerance above 100%
+    error WithdrawLossTooHigh();
 
-    /// @notice Thrown when protocol loss exceeds the allowed tolerance
-    error ProtocolLossExceeded(uint256 expected, uint256 actual);
+    /// @notice Thrown when withdraw loss exceeds the allowed tolerance
+    error WithdrawLossExceeded(uint256 expected, uint256 actual);
 
 
     //============================================================================================//
@@ -183,7 +183,7 @@ interface IDeposit {
       * @notice Sets the allowed loss tolerance for exit claims
       * @dev (1e18 = 100%)
       */
-    function setAllowedProtocolLoss(uint256 newAllowedLoss) external;
+    function setAllowedWithdrawLoss(uint256 newAllowedLoss) external;
 
     /// @notice Pauses stake functionalities
     function pauseDeposit() external;
@@ -202,7 +202,7 @@ interface IDeposit {
     function withdrawDelay() external view returns (uint64);
 
     /// @notice Returns the current allowed loss tolerance
-    function allowedProtocolLoss() external view returns (uint256);
+    function allowedWithdrawLoss() external view returns (uint256);
 
     /// @notice Returns claims for given requestIds; chooses fee/user mapping by flag
     function pendingWithdraws(uint256[] calldata requestIds)

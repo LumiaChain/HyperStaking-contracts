@@ -263,6 +263,15 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
     /// @inheritdoc ISuperformIntegration
     function previewWithdrawFrom(
         uint256 superformId,
+        uint256 assetAmount
+    ) external view returns (uint256) {
+        IBaseForm superform = _getSuperform(superformId);
+        return superform.previewWithdrawFrom(assetAmount);
+    }
+
+    /// @inheritdoc ISuperformIntegration
+    function previewRedeemFrom(
+        uint256 superformId,
         uint256 superPositionAmount
     ) external view returns (uint256) {
         IBaseForm superform = _getSuperform(superformId);

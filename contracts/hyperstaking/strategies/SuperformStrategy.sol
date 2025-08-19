@@ -255,6 +255,6 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
 
     /// @notice Uses superformIntegration to preview exit
     function _previewExitRaw(uint256 allocation_) internal view virtual override returns (uint256) {
-        return superformIntegration.previewWithdrawFrom(SUPERFORM_ID, allocation_);
+        return superformIntegration.previewRedeemFrom(SUPERFORM_ID, allocation_);
     }
 }

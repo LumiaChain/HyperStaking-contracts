@@ -108,7 +108,7 @@ struct HyperStakingStorage {
     uint64 defaultWithdrawDelay;
 
     /// @notice Allowed loss tolerance for exit claims
-    uint256 allowedProtocolLoss;
+    uint256 allowedWithdrawLoss;
 
     /// @notice Next request ID for strategy operations
     uint256 nextRequestId;

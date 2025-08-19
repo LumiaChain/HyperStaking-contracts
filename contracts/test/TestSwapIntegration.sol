@@ -67,7 +67,6 @@ contract TestSwapIntegration is SuperformIntegrationFacet, CurveIntegrationFacet
     }
 
     function exit(address strategy, uint256 amount) external returns (uint256 exitStake) {
-        Currency memory stakeCurrency = IStrategy(strategy).stakeCurrency();
         address revenueAsset = IStrategy(strategy).revenueAsset();
 
         // fetch asset to this contract
@@ -82,7 +81,5 @@ contract TestSwapIntegration is SuperformIntegrationFacet, CurveIntegrationFacet
 
         // claim exit & send stake to the user
         exitStake = IStrategy(strategy).claimExit(ids, msg.sender);
-
-        stakeCurrency.transfer(msg.sender, exitStake);
     }
 }

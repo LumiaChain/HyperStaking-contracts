@@ -118,6 +118,12 @@ interface ISuperformIntegration is IERC1155Receiver {
     /// @dev Using the underlying superform function with the same name
     function previewWithdrawFrom(
         uint256 superformId,
+        uint256 assetAmount
+    ) external view returns (uint256);
+
+    /// @dev Using the underlying superform function with the same name
+    function previewRedeemFrom(
+        uint256 superformId,
         uint256 superPositionAmount
     ) external view returns (uint256);
 
