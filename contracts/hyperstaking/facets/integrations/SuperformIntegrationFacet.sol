@@ -170,7 +170,6 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         );
     }
 
-    /// TODO remove owner and receiver?
     /// @inheritdoc ISuperformIntegration
     function transmuteToERC20(
         address owner,
@@ -183,7 +182,6 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         );
     }
 
-    /// TODO remove owner and receiver?
     /// @inheritdoc ISuperformIntegration
     function transmuteToERC1155A(
         address owner,

@@ -144,6 +144,57 @@ describe("Strategy", function () {
       expect(await testWstETH.balanceOf(hyperFactory)).to.equal((ownerAmount + aliceAmount) * parseEther("1") / reserveAssetPrice);
     });
 
+    it("requestInfo & requestInfoBatch reflect queued withdraws", async function () {
+      const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, hyperlaneHandler, realAssets } = hyperStaking;
+      const { alice } = signers;
+
+      const stakeAmount = parseEther("5");
+
+      await deposit.connect(alice).stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
+
+      const readyAt = 0;
+      const id1 = 1; // allocation request
+
+      // single
+      const info = await reserveStrategy.requestInfo(id1);
+      expect(info.user).to.eq(alice);
+      expect(info.isExit).to.eq(false);
+      expect(info.amount).to.eq(stakeAmount);
+      expect(info.readyAt).to.eq(readyAt);
+      expect(info.claimed).to.eq(true);
+      expect(info.claimable).to.eq(false);
+
+      // queue withdraw
+      const withdraw = parseEther("1");
+
+      const vaultSharesAddress = (await hyperlaneHandler.getRouteInfo(reserveStrategy)).vaultShares;
+      const vaultShares = await ethers.getContractAt("LumiaVaultShares", vaultSharesAddress);
+
+      const expectedAllocation = await reserveStrategy.previewAllocation(withdraw);
+
+      await vaultShares.connect(alice).approve(realAssets, withdraw);
+      await realAssets.connect(alice).redeem(reserveStrategy, alice, alice, withdraw);
+
+      const id2 = await shared.getLastClaimId(deposit, reserveStrategy, alice);
+
+      // batch
+      const res = await reserveStrategy.requestInfoBatch([id1, id2]);
+      expect(res.users[0]).to.eq(alice);
+      expect(res.isExits[0]).to.eq(false);
+      expect(res.amounts[0]).to.eq(stakeAmount);
+      expect(res.readyAts[0]).to.eq(readyAt);
+      expect(res.claimedArr[0]).to.eq(true);
+      expect(res.claimables[0]).to.eq(false);
+
+      expect(res.users[1]).to.eq(alice);
+      expect(res.isExits[1]).to.eq(true);
+      expect(res.amounts[1]).to.eq(expectedAllocation);
+      expect(res.readyAts[1]).to.eq(readyAt);
+      expect(res.claimedArr[1]).to.eq(false);
+      expect(res.claimables[1]).to.eq(true);
+    });
+
     it("there should be a possibility of emergency withdraw", async function () {
       const { reserveStrategy, signers } = await loadFixture(deployHyperStaking);
       const { owner, alice, strategyManager } = signers;
