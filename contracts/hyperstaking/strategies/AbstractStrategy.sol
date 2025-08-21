@@ -206,8 +206,8 @@ abstract contract AbstractStrategy is IStrategy {
         uint256 amount_,
         uint64 readyAt_
     ) internal {
-        if (user_ == address(0)) revert ZeroUser();
-        if (_req[id_].user != address(0)) revert RequestIdExists(id_);
+        require(user_ != address(0), ZeroUser());
+        require(_req[id_].user == address(0), RequestIdExists(id_));
 
         _req[id_] = StrategyRequest({
             user: user_,
@@ -225,8 +225,8 @@ abstract contract AbstractStrategy is IStrategy {
         uint256 shares_,
         uint64 readyAt_
     ) internal {
-        if (user_ == address(0)) revert ZeroUser();
-        if (_req[id_].user != address(0)) revert RequestIdExists(id_);
+        require(user_ != address(0), ZeroUser());
+        require(_req[id_].user == address(0), RequestIdExists(id_));
 
         _req[id_] = StrategyRequest({
             user: user_,
@@ -243,9 +243,9 @@ abstract contract AbstractStrategy is IStrategy {
         StrategyKind expected_
     ) internal view returns (StrategyRequest memory r) {
         r = _req[id_];
-        if (r.claimed) revert AlreadyClaimed();
-        if (r.kind != expected_) revert WrongKind();
-        if (block.timestamp < r.readyAt) revert NotReady();
+        require(!r.claimed, AlreadyClaimed());
+        require(r.kind == expected_, WrongKind());
+        require(block.timestamp >= r.readyAt, NotReady());
     }
 
     /// @dev Marks a request as claimed

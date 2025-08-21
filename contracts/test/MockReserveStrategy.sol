@@ -91,6 +91,7 @@ contract MockReserveStrategy is AbstractStrategy {
     //                                      Public Functions                                      //
     //============================================================================================//
 
+    /// @inheritdoc IStrategy
     function requestAllocation(
         uint256 requestId_,
         uint256 stakeAmount_,

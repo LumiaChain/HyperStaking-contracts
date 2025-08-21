@@ -132,10 +132,10 @@ interface IStrategy {
     function isIntegratedStakeStrategy() external view returns (bool);
 
     /// @return Currency used for allocation into strategy (stake)
-    function stakeCurrency() external view returns(Currency calldata);
+    function stakeCurrency() external view returns (Currency calldata);
 
     /// @return The address of the revenue-accumulating asset (allocation asset)
-    function revenueAsset() external view returns(address);
+    function revenueAsset() external view returns (address);
 
     /// @dev Preview the asset allocation for a given stake amount
     function previewAllocation(uint256 stakeAmount_) external view returns (uint256 allocation);
