@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {IStrategy} from "../interfaces/IStrategy.sol";
+import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
 import {AbstractStrategy} from "./AbstractStrategy.sol";
 
 import {ISuperformIntegration} from "../interfaces/ISuperformIntegration.sol";
@@ -90,16 +90,37 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
 
     // ========= Diamond ========= //
 
-    /// @inheritdoc IStrategy
-    function allocate(
+    function requestAllocation(
+        uint256 requestId_,
         uint256 amount_,
         address user_
-    ) public payable virtual onlyLumiaDiamond returns (uint256 allocation) {
+    ) public payable virtual onlyLumiaDiamond returns (uint64 readyAt) {
         require(amount_ > 0, ZeroAmount());
+
+        readyAt = 0; // claimable immediately
+        _storeAllocationRequest(
+            requestId_,
+            user_,
+            amount_,
+            readyAt
+        );
+
+        emit AllocationRequested(requestId_, user_, amount_, readyAt);
+    }
+
+    /// @inheritdoc IStrategy
+    function claimAllocation(
+        uint256[] calldata ids_, address receiver_
+    ) public virtual onlyLumiaDiamond returns (uint256 allocation) {
+        require(ids_.length == 1, DontSupportArrays());
+        uint256 id = ids_[0];
+
+        StrategyRequest memory r = _loadClaimable(id, StrategyKind.Allocation);
+        _markClaimed(id);
 
         allocation = superformIntegration.singleVaultDeposit(
             SUPERFORM_ID,
-            amount_,
+            r.amount,
             msg.sender,
             address(this)
         );
@@ -116,31 +137,55 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
         );
 
         // transfer allocation
-        IERC20(revenueAsset()).safeTransfer(msg.sender, allocation);
+        IERC20(revenueAsset()).safeTransfer(receiver_, allocation);
 
-        emit Allocate(user_, amount_, allocation);
+        emit AllocationClaimed(id, receiver_, allocation);
     }
 
     /// @inheritdoc IStrategy
-    function exit(
+    function requestExit(
+        uint256 requestId_,
         uint256 shares_,
         address user_
+    ) public virtual onlyLumiaDiamond returns (uint64 readyAt) {
+        require(shares_ > 0, ZeroAmount());
+
+        readyAt = 0; // claimable immediately
+        _storeExitRequest(
+            requestId_,
+            user_,
+            shares_,
+            readyAt
+        );
+
+        emit ExitRequested(requestId_, user_, shares_, readyAt);
+    }
+
+    /// @inheritdoc IStrategy
+    function claimExit(
+        uint256[] calldata ids_, address receiver_
     ) public virtual onlyLumiaDiamond returns (uint256 exitAmount) {
+        require(ids_.length == 1, DontSupportArrays());
+        uint256 id = ids_[0];
+
+        StrategyRequest memory r = _loadClaimable(id, StrategyKind.Exit);
+        _markClaimed(id);
+
         superformIntegration.transmuteToERC1155A(
             msg.sender,
             SUPERFORM_ID,
-            shares_,
+            r.amount,
             msg.sender
         );
 
         exitAmount = superformIntegration.singleVaultWithdraw(
             SUPERFORM_ID,
-            shares_,
-            msg.sender,
-            msg.sender
+            r.amount,
+            receiver_,
+            receiver_
         );
 
-        emit Exit(user_, shares_, exitAmount);
+        emit ExitClaimed(id, receiver_, exitAmount);
     }
 
     /// @inheritdoc IStrategy
@@ -160,16 +205,6 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     /// @inheritdoc IStrategy
     function revenueAsset() public view virtual returns(address) {
         return superformIntegration.aERC20Token(SUPERFORM_ID);
-    }
-
-    /// @inheritdoc IStrategy
-    function previewAllocation(uint256 stakeAmount_) public view virtual returns (uint256) {
-        return superformIntegration.previewDepositTo(SUPERFORM_ID, stakeAmount_);
-    }
-
-    /// @inheritdoc IStrategy
-    function previewExit(uint256 assetAllocation_) public view virtual returns (uint256 stakeAmount) {
-        return superformIntegration.previewWithdrawFrom(SUPERFORM_ID, assetAllocation_);
     }
 
     /// @inheritdoc IERC1155Receiver
@@ -207,5 +242,19 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     /// @inheritdoc IERC165
     function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
         return interfaceId == type(IERC165).interfaceId || interfaceId == type(IERC1155Receiver).interfaceId;
+    }
+
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
+    /// @notice Uses superformIntegration to preview allocation
+    function _previewAllocationRaw(uint256 stake_) internal view virtual override returns (uint256) {
+        return superformIntegration.previewDepositTo(SUPERFORM_ID, stake_);
+    }
+
+    /// @notice Uses superformIntegration to preview exit
+    function _previewExitRaw(uint256 allocation_) internal view virtual override returns (uint256) {
+        return superformIntegration.previewRedeemFrom(SUPERFORM_ID, allocation_);
     }
 }

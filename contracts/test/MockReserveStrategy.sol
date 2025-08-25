@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {IStrategy} from "../hyperstaking/interfaces/IStrategy.sol";
+import {StrategyKind, StrategyRequest, IStrategy} from "../hyperstaking/interfaces/IStrategy.sol";
 import {AbstractStrategy} from "../hyperstaking/strategies/AbstractStrategy.sol";
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -9,7 +9,7 @@ import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 
 import {Currency, CurrencyHandler} from "../hyperstaking/libraries/CurrencyHandler.sol";
 
-// ⚠️WARNING: Mock strategy for testing only. Not for production use.
+// WARNING: Mock strategy for testing only. Not for production use.
 
 /**
  * @title MockReserveStrategy
@@ -34,6 +34,8 @@ contract MockReserveStrategy is AbstractStrategy {
 
     /// Price of the asset
     uint256 public assetReserve;
+
+    error MissingCollateral();
 
     //============================================================================================//
     //                                          Events                                            //
@@ -90,36 +92,87 @@ contract MockReserveStrategy is AbstractStrategy {
     //============================================================================================//
 
     /// @inheritdoc IStrategy
-    function allocate(
+    function requestAllocation(
+        uint256 requestId_,
         uint256 stakeAmount_,
         address user_
-    ) external payable onlyLumiaDiamond returns (uint256 allocation) {
-        allocation = previewAllocation(stakeAmount_);
-        assetReserve -= allocation;
-
+    ) external payable onlyLumiaDiamond returns (uint64 readyAt) {
         // fetch stake
         stake.transferFrom(DIAMOND, address(this), stakeAmount_);
 
-        // transfer allocation
-        IERC20(revenueAsset).safeTransfer(DIAMOND, allocation);
+        readyAt = 0; // claimable immediately
+        _storeAllocationRequest(
+            requestId_,
+            user_,
+            stakeAmount_,
+            readyAt
+        );
 
-        emit Allocate(user_, stakeAmount_, allocation);
+        emit AllocationRequested(requestId_, user_, stakeAmount_, readyAt);
     }
 
+    /// @inheritdoc IStrategy
+    function claimAllocation(
+        uint256[] calldata ids_, address receiver_
+    ) external onlyLumiaDiamond returns (uint256 allocation) {
+        require(ids_.length == 1, DontSupportArrays());
+        uint256 id = ids_[0];
+
+        StrategyRequest memory r = _loadClaimable(id, StrategyKind.Allocation);
+        _markClaimed(id);
+
+        allocation = previewAllocation(r.amount);
+        assetReserve -= allocation;
+
+        // transfer allocation
+        IERC20(revenueAsset).safeTransfer(receiver_, allocation);
+
+        emit AllocationClaimed(id, receiver_, allocation);
+    }
 
     /// @inheritdoc IStrategy
-    function exit(
+    function requestExit(
+        uint256 requestId_,
         uint256 assetAllocation_,
         address user_
-    ) external onlyLumiaDiamond returns (uint256 exitAmount) {
-        exitAmount = previewExit(assetAllocation_);
-        assetReserve += exitAmount;
+    ) external onlyLumiaDiamond returns (uint64 readyAt) {
+        // extra check used for testing reexecute
+        require(
+            stake.balanceOf(address(this)) >= _previewExitRaw(assetAllocation_),
+            MissingCollateral()
+        );
 
+        readyAt = 0; // claimable immediately
+        _storeExitRequest(
+            requestId_,
+            user_,
+            assetAllocation_,
+            readyAt
+        );
+
+        // fetch allocation (shares)
         IERC20(revenueAsset).transferFrom(DIAMOND, address(this), assetAllocation_);
 
-        stake.transfer(DIAMOND, exitAmount);
+        emit ExitRequested(requestId_, user_, assetAllocation_, readyAt);
+    }
 
-        emit Exit(user_, assetAllocation_, exitAmount);
+    /// @inheritdoc IStrategy
+    function claimExit(
+        uint256[] calldata ids_, address receiver_
+    ) external onlyLumiaDiamond returns (uint256 exitAmount) {
+        require(ids_.length == 1, DontSupportArrays());
+        uint256 id = ids_[0];
+
+        StrategyRequest memory r = _loadClaimable(id, StrategyKind.Exit);
+        _markClaimed(id);
+
+        exitAmount = previewExit(r.amount);
+        assetReserve += exitAmount;
+
+        // transfer stake
+        stake.transfer(receiver_, exitAmount);
+
+        emit ExitClaimed(id, receiver_, exitAmount);
     }
 
     receive() external payable {
@@ -131,16 +184,6 @@ contract MockReserveStrategy is AbstractStrategy {
     /// @inheritdoc IStrategy
     function stakeCurrency() external view returns(Currency memory) {
         return stake;
-    }
-
-    /// Return current stake to asset conversion (amount * price)
-    function previewAllocation(uint256 stakeAmount_) public view returns (uint256) {
-        return stakeAmount_ * PRECISSION_FACTOR / assetPrice;
-    }
-
-    /// Return current asset to stake conversion (amount / price)
-    function previewExit(uint256 assetAllocation_) public view returns (uint256) {
-        return assetAllocation_ * assetPrice / PRECISSION_FACTOR;
     }
 
     // ========= Admin ========= //
@@ -171,5 +214,19 @@ contract MockReserveStrategy is AbstractStrategy {
         assetPrice = assetPrice_;
 
         emit AssetPriceSet(msg.sender, revenueAsset, assetPrice_);
+    }
+
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
+    /// Return current stake to asset conversion (amount * price)
+    function _previewAllocationRaw(uint256 stake_) internal view override returns (uint256) {
+        return stake_ * PRECISSION_FACTOR / assetPrice;
+    }
+
+    /// Return current asset to stake conversion (amount / price)
+    function _previewExitRaw(uint256 allocation_) internal view override returns (uint256) {
+        return allocation_ * assetPrice / PRECISSION_FACTOR;
     }
 }

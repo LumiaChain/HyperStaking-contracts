@@ -22,6 +22,8 @@ contract TestSwapIntegration is SuperformIntegrationFacet, CurveIntegrationFacet
     using SafeERC20 for IERC20;
     using CurrencyHandler for Currency;
 
+    error UnsupportedAsyncCall();
+
     //============================================================================================//
     //                                        Constructor                                         //
     //============================================================================================//
@@ -49,29 +51,35 @@ contract TestSwapIntegration is SuperformIntegrationFacet, CurveIntegrationFacet
 
     function allocate(address strategy, uint256 amount) external returns (uint256 allocation) {
         Currency memory stakeCurrency = IStrategy(strategy).stakeCurrency();
-        address revenueAsset = IStrategy(strategy).revenueAsset();
 
         // fetch stake to this contract
         stakeCurrency.transferFrom(msg.sender, address(this), amount);
 
-        // allocation
-        allocation = IStrategy(strategy).allocate(amount, msg.sender);
+        // request allocation
+        uint256 requestId = 1;
+        uint64 readyAt = IStrategy(strategy).requestAllocation(requestId, amount, address(this));
 
-        // send asset to the user
-        IERC20(revenueAsset).safeTransfer(msg.sender, allocation);
+        require(readyAt == 0, UnsupportedAsyncCall());
+        uint256[] memory ids = new uint256[](1); ids[0] = requestId;
+
+        // claim & send asset to the user
+        allocation = IStrategy(strategy).claimAllocation(ids, msg.sender);
     }
 
     function exit(address strategy, uint256 amount) external returns (uint256 exitStake) {
-        Currency memory stakeCurrency = IStrategy(strategy).stakeCurrency();
         address revenueAsset = IStrategy(strategy).revenueAsset();
 
         // fetch asset to this contract
         IERC20(revenueAsset).transferFrom(msg.sender, address(this), amount);
 
-        // exit
-        exitStake = IStrategy(strategy).exit(amount, msg.sender);
+        // request exit
+        uint256 requestId = 2;
+        uint64 readyAt = IStrategy(strategy).requestExit(requestId, amount, address(this));
 
-        // send stake to the user
-        stakeCurrency.transfer(msg.sender, exitStake);
+        require(readyAt == 0, UnsupportedAsyncCall());
+        uint256[] memory ids = new uint256[](1); ids[0] = requestId;
+
+        // claim exit & send stake to the user
+        exitStake = IStrategy(strategy).claimExit(ids, msg.sender);
     }
 }

@@ -300,18 +300,20 @@ describe("Lockbox", function () {
       );
 
       // lpToken -> vaultAsset -> strategy allocation -> stake withdraw
-      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
-      await expect(redeemTx).to.changeTokenBalance(testReserveAsset, lockbox, -expectedAllocation);
+      await expect(redeemTx).to.changeTokenBalance(vaultShares, alice, -sharesAfter);
       await expect(redeemTx).to.changeTokenBalance(principalToken, vaultShares, -stakeAmount);
-      await expect(redeemTx).to.changeEtherBalances(
+
+      await expect(redeemTx).to.changeTokenBalances(testReserveAsset,
         [lockbox, reserveStrategy],
-        [stakeAmount, -stakeAmount],
+        [-expectedAllocation, expectedAllocation],
       );
 
+      const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy, alice);
+      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await time.setNextBlockTimestamp(expectedUnlock);
-      await expect(deposit.connect(alice).claimWithdraw(reserveStrategy, alice))
+      await expect(deposit.connect(alice).claimWithdraws([lastClaimId], alice))
         .to.changeEtherBalances(
-          [alice, lockbox],
+          [alice, reserveStrategy],
           [stakeAmount, -stakeAmount],
         );
 
@@ -425,9 +427,9 @@ describe("Lockbox", function () {
 
       // should move the funds
       await expect(reexecuteTx).to.changeTokenBalance(testReserveAsset, lockbox, -expectedAllocation);
-      await expect(reexecuteTx).to.changeEtherBalances(
+      await expect(reexecuteTx).to.changeTokenBalances(testReserveAsset,
         [lockbox, reserveStrategy],
-        [stakeAmount, -stakeAmount],
+        [-expectedAllocation, expectedAllocation],
       );
 
       // should no longer be retrievable

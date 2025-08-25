@@ -324,19 +324,23 @@ describe("Superform", function () {
       const rwaBalance = await vaultShares.balanceOf(alice);
       expect(rwaBalance).to.be.eq(amount);
 
+      const reqId = 2;
       await vaultShares.connect(alice).approve(realAssets, rwaBalance);
       const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await expect(realAssets.connect(alice).redeem(superformStrategy, alice, alice, rwaBalance))
-        .to.changeTokenBalances(testUSDC,
-          [lockbox, erc4626Vault], [amount, -amount]);
+        .to.emit(superformStrategy, "ExitRequested")
+        .withArgs(reqId, alice, amount, 0);
 
       expect(await aerc20.allowance(deposit, superformStrategy)).to.eq(0);
-
       await time.setNextBlockTimestamp(expectedUnlock);
-      await expect(deposit.connect(alice).claimWithdraw(superformStrategy, alice))
+      const claimTx = deposit.connect(alice).claimWithdraws([reqId], alice);
+
+      await expect(claimTx)
+        .to.changeTokenBalance(aerc20, lockbox, -amount);
+
+      await expect(claimTx)
         .to.changeTokenBalances(testUSDC,
-          [alice, lockbox],
-          [amount, -amount],
+          [alice, erc4626Vault], [amount, -amount],
         );
 
       expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
@@ -346,7 +350,7 @@ describe("Superform", function () {
       const {
         hyperStaking, superVault, superformStrategy, superform, vaultShares, signers, principalToken,
       } = await loadFixture(deployHyperStaking);
-      const { testUSDC, erc4626Vault, deposit, defaultWithdrawDelay, hyperFactory, allocation, lockbox, realAssets } = hyperStaking;
+      const { testUSDC, erc4626Vault, deposit, defaultWithdrawDelay, hyperFactory, allocation, realAssets } = hyperStaking;
       const { vaultManager, alice, bob } = signers;
 
       // needed for simulate yield generation
@@ -366,22 +370,19 @@ describe("Superform", function () {
       await testUSDC.approve(tokenizedStrategy, currentVaultAssets); // double the assets
       await tokenizedStrategy.simulateYieldGeneration(erc4626Vault, currentVaultAssets);
 
-      const precisionError = 1n;
-
       await vaultShares.connect(alice).approve(realAssets, rwaBalance);
       const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
-      await expect(realAssets.connect(alice).redeem(superformStrategy, alice, alice, rwaBalance))
-        .to.changeTokenBalances(testUSDC,
-          [lockbox, erc4626Vault], [amount - precisionError, -amount + precisionError]);
+      await realAssets.connect(alice).redeem(superformStrategy, alice, alice, rwaBalance);
 
+      const lastClaimId = await shared.getLastClaimId(deposit, superformStrategy, alice);
       await time.setNextBlockTimestamp(expectedUnlock);
-      await deposit.connect(alice).claimWithdraw(superformStrategy, alice);
+      await deposit.connect(alice).claimWithdraws([lastClaimId], alice);
 
       // Report revenue
 
       // everything has been withdrawn, and vault has double the assets,
       // so the revenue is the same as the amount
-      const expectedRevenue = amount - precisionError;
+      const expectedRevenue = amount;
       expect(await allocation.checkRevenue(superformStrategy)).to.be.eq(expectedRevenue);
 
       await expect(allocation.connect(vaultManager).report(superformStrategy))

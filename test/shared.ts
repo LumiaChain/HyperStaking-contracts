@@ -1,5 +1,5 @@
 import { ignition, ethers, network } from "hardhat";
-import { Contract, ZeroAddress, parseEther, parseUnits } from "ethers";
+import { Contract, ZeroAddress, parseEther, parseUnits, Addressable } from "ethers";
 import { time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 
 import HyperStakingModule from "../ignition/modules/HyperStaking";
@@ -307,6 +307,19 @@ export async function registerAERC20(
 };
 
 // -------------------- Other Helpers --------------------
+
+export async function getLastClaimId(deposit: Contract, reserveStrategy1: Addressable, owner: Addressable) {
+  const lastClaims = await deposit.lastClaims(reserveStrategy1, owner, 1);
+  return lastClaims[0] as bigint; // return only the claimId
+}
+
+export async function getRevenueAsset(strategy: Contract) {
+  const revenueAssetAddress = await strategy.revenueAsset();
+  return ethers.getContractAt(
+    "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20",
+    revenueAssetAddress,
+  );
+}
 
 export async function getDerivedTokens(hyperlaneHandler: Contract, strategy: string) {
   const principalTokenAddress = (await hyperlaneHandler.getRouteInfo(strategy)).assetToken;

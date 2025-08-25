@@ -4,7 +4,7 @@ pragma solidity =0.8.27;
 // solhint-disable func-name-mixedcase
 
 import {DirectStakeInfo} from "../libraries/LibHyperStaking.sol";
-import {VaultInfo} from "../libraries/LibHyperStaking.sol";
+import {Claim} from "../libraries/LibHyperStaking.sol";
 
 /**
  * @title IDeposit
@@ -31,22 +31,28 @@ interface IDeposit {
 
     event WithdrawClaimed(
         address indexed strategy,
-        address indexed to,
+        address indexed from,
+        address to,
         uint256 stake,
+        uint256 exitAmount,
         DepositType indexed depositType
+    );
+
+    event FeeWithdrawClaimed(
+        address indexed strategy,
+        address indexed feeRecipient,
+        address to,
+        uint256 fee,
+        uint256 exitAmount
     );
 
     event WithdrawQueued(
         address indexed strategy,
         address indexed to,
-        uint256 stake,
-        uint64 unlockTime
-    );
-
-    event FeeWithdraw(
-        address indexed feeRecipient,
-        address indexed strategy,
-        uint256 fee
+        uint256 requestId,
+        uint64 unlockTime,
+        uint256 expectedAmount,
+        bool indexed feeWithdraw
     );
 
     event WithdrawDelaySet(
@@ -55,15 +61,18 @@ interface IDeposit {
         uint256 newDelay
     );
 
+    event AllowedWithdrawLossSet(
+        address indexed stakingManager,
+        uint256 previousAllowedLoss,
+        uint256 newAllowedLoss
+    );
+
     //============================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
 
     /// @notice Thrown when attempting to stake zero amount
     error ZeroStake();
-
-    /// @notice Thrown when attempting to claim zero amount
-    error ZeroClaim();
 
     /// @notice Thrown when attempting to stake to disabled strategy
     error StrategyDisabled(address strategy);
@@ -77,8 +86,27 @@ interface IDeposit {
     /// @notice Thrown when trying to claim still locked stake
     error ClaimTooEarly(uint64 time, uint64 unlockTime);
 
+    /// @notice Thrown when attempting to claim without providing any request IDs
+    error EmptyClaim();
+
+    /// @notice Thrown when attempting to claim to the zero address
+    error ClaimToZeroAddress();
+
+    /// @notice Thrown when a pending claim with the given ID does not exist
+    error ClaimNotFound(uint256 id);
+
+    /// @notice Thrown when the sender is not the eligible address for the claim
+    error NotEligible(uint256 id, address eligible, address sender);
+
     /// @notice Thrown when trying to set too high withdraw delay
     error WithdrawDelayTooHigh(uint64 newDelay);
+
+    /// @notice Thrown when attempting to set withdraw loss tolerance above 100%
+    error WithdrawLossTooHigh();
+
+    /// @notice Thrown when withdraw loss exceeds the allowed tolerance
+    error WithdrawLossExceeded(uint256 expected, uint256 actual);
+
 
     //============================================================================================//
     //                                          Mutable                                           //
@@ -116,39 +144,30 @@ interface IDeposit {
     /* ========== Stake Withdraw  ========== */
 
     /**
-     * @notice Withdraws all tokens whose claim‑delay has elapsed
-     * @dev Reverts if nothing is yet claimable
-     * @param strategy The address of the strategy
-     * @param to Claim recipient address
+     * @notice Withdraws stake for the given requests
+     * @dev Reverts if any of the requests are not currently claimable
+     * @param requestIds IDs of withdrawal requests to claim
+     * @param to Recipient address for the withdrawn stake
      */
-    function claimWithdraw(address strategy, address to) external;
+    function claimWithdraws(uint256[] calldata requestIds, address to) external;
 
     /**
-     * @notice Queues a stake withdrawal and starts the claim‐delay timer
+     * @notice Queues a stake withdrawal
      * @dev Called internally once the cross‑chain `StakeRedeem` message is verified
      *      It **does not** transfer tokens; it just records a pending withdrawal
      *      for the user that becomes available after `withdrawDelay`
-     * @param strategy Address of the strategy
-     * @param to Address that will be able to claim the tokens
-     * @param stake Amount of the currecy to queue for claim
+     * @param strategy Strategy address that produced the request
+     * @param user Address eligible to claim the withdrawal
+     * @param stake The amount of stake to withdraw
+     * @param allocation The amount of asset allocation in strategy
+     * @param feeWithdraw True for protocol-fee withdrawals
      */
     function queueWithdraw(
         address strategy,
-        address to,
-        uint256 stake
-    ) external;
-
-    /**
-     * @notice Withdraws protocol fee
-     * @dev Used internally after report with non-zero feeRate
-     * @param vault VaultInfo of the strategy
-     * @param feeRecipient The address of fee recipient
-     * @param fee The amount of fee to withdraw
-     */
-    function feeWithdraw(
-        VaultInfo calldata vault,
-        address feeRecipient,
-        uint256 fee
+        address user,
+        uint256 stake,
+        uint256 allocation,
+        bool feeWithdraw
     ) external;
 
     /* ========== */
@@ -159,6 +178,12 @@ interface IDeposit {
      * @param newDelay Delay in seconds (e.g. 2 days → 172_800)
      */
     function setWithdrawDelay(uint64 newDelay) external;
+
+    /**
+      * @notice Sets the allowed loss tolerance for exit claims
+      * @dev (1e18 = 100%)
+      */
+    function setAllowedWithdrawLoss(uint256 newAllowedLoss) external;
 
     /// @notice Pauses stake functionalities
     function pauseDeposit() external;
@@ -176,16 +201,21 @@ interface IDeposit {
     /// @notice Cool‑down in seconds that must elapse before a queued claim can be withdrawn
     function withdrawDelay() external view returns (uint64);
 
-    /**
-     * @notice Returns the user’s queued‑but‑not‑yet‑withdrawable amount
-     * @param user Address to query
-     * @return amount Amount of currency that will become withdrawable
-     * @return unlockTime Timestamp, after which `claimWithdraw` succeeds
-     */
-    function pendingWithdraw(
-        address user,
-        address strategy
-    ) external view returns (uint256 amount, uint256 unlockTime);
+    /// @notice Returns the current allowed loss tolerance
+    function allowedWithdrawLoss() external view returns (uint256);
+
+    /// @notice Returns claims for given requestIds; chooses fee/user mapping by flag
+    function pendingWithdraws(uint256[] calldata requestIds)
+        external
+        view
+        returns (Claim[] memory claims);
+
+    /// @notice Returns up to `limit` most recent claim IDs for a strategy and user
+    /// @dev Newest IDs first
+    function lastClaims(address strategy, address user, uint256 limit)
+        external
+        view
+        returns (uint256[] memory ids);
 
     /// @notice Retrieves information about all direct stakes for a specified strategy
     function directStakeInfo(address strategy) external view returns (DirectStakeInfo memory);

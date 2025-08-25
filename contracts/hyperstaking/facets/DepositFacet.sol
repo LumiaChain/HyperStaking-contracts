@@ -105,71 +105,92 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     /* ========== Stake Withdraw ========== */
 
     /// @inheritdoc IDeposit
-    function claimWithdraw(address strategy, address to) external {
+    function claimWithdraws(uint256[] calldata requestIds, address to) external {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        Claim storage claim = v.pendingClaims[msg.sender][strategy];
+        uint256 n = requestIds.length;
 
-        // sender may withdraw only their own pending claim, but can forward it to any address (`to`)
-        require(claim.amount > 0, ZeroClaim());
-        require(
-            block.timestamp >= claim.unlockTime,
-            ClaimTooEarly(uint64(block.timestamp), claim.unlockTime)
-        );
+        require(n > 0, EmptyClaim());
+        require(to != address(0), ClaimToZeroAddress());
 
-        VaultInfo storage vault = v.vaultInfo[strategy];
-        uint256 stake = claim.amount;
+        for (uint256 i = 0; i < n; ++i) {
+            uint256 id = requestIds[i];
+            Claim memory c = v.pendingClaims[id];
 
-        DepositType depositType;
-        if (IStrategy(strategy).isDirectStakeStrategy()) {
-            depositType = DepositType.Direct;
-            v.directStakeInfo[strategy].totalStake -= stake;
-        } else {
-            depositType = DepositType.Active;
-            v.stakeInfo[strategy].totalStake -= stake;
+            uint256 stake = c.expectedAmount;
+
+            require(c.strategy != address(0), ClaimNotFound(id));
+            require(msg.sender == c.eligible, NotEligible(id, c.eligible, msg.sender));
+            require(
+                block.timestamp >= c.unlockTime,
+                ClaimTooEarly(uint64(block.timestamp), c.unlockTime)
+            );
+
+            delete v.pendingClaims[id]; // remove realized claim
+
+            // claim one by one, as strategy may not support array claims
+            uint256[] memory ids = new uint256[](1);
+            ids[0] = id;
+
+            // The final exitAmount may differ from the expected stake
+            // because of possible price changes between request and claim,
+            uint256 exitAmount = IStrategy(c.strategy).claimExit(ids, to);
+
+            // In case of lose, ensure protocol does not allow loss more than allowedWithdrawLoss
+            if (exitAmount < stake) {
+                uint256 loss = stake - exitAmount;
+                uint256 maxLoss = (stake * v.allowedWithdrawLoss) / LibHyperStaking.PERCENT_PRECISION;
+                require(maxLoss >= loss, WithdrawLossExceeded(stake, exitAmount));
+            }
+
+            if (c.feeWithdraw) {
+                emit FeeWithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount);
+                continue; // fee withdrawal does not affect the total stake
+            }
+
+            DepositType depositType;
+            if (IStrategy(c.strategy).isDirectStakeStrategy()) {
+                depositType = DepositType.Direct;
+                v.directStakeInfo[c.strategy].totalStake -= stake;
+            } else {
+                depositType = DepositType.Active;
+                v.stakeInfo[c.strategy].totalStake -= stake;
+            }
+
+            emit WithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount, depositType);
         }
-
-        // reset claim
-        claim.amount = 0;
-        claim.unlockTime = 0;
-
-        vault.stakeCurrency.transfer(
-            to,
-            stake
-        );
-
-        emit WithdrawClaimed(strategy, to, stake, depositType);
     }
 
-    /// @notice Queues a stake withdrawal (internal)
+    /// @notice Queues a withdrawal (internal)
     /// @inheritdoc IDeposit
     function queueWithdraw(
         address strategy,
-        address to,
-        uint256 stake
+        address user,
+        uint256 stake,
+        uint256 allocation,
+        bool feeWithdraw
     ) external diamondInternal {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
 
-        uint64 unlockTime = uint64(block.timestamp) + v.withdrawDelay;
-        v.pendingClaims[to][strategy] = Claim({
-            amount: stake,
-            unlockTime: unlockTime
+        // request exit from the strategy with given allocation
+        uint256 requestId = LibHyperStaking.newRequestId();
+        uint64 readyAt = IStrategy(strategy).requestExit(requestId, allocation, user);
+
+        if (readyAt == 0 && !feeWithdraw) {
+            readyAt = uint64(block.timestamp) + v.defaultWithdrawDelay;
+        }
+
+        v.pendingClaims[requestId] = Claim({
+            strategy: strategy,
+            unlockTime: readyAt,
+            eligible: user,
+            expectedAmount: stake,
+            feeWithdraw: feeWithdraw
         });
 
-        emit WithdrawQueued(strategy, to, stake, unlockTime);
-    }
+        // data used for filtering
+        v.groupedClaimIds[strategy][user].push(requestId);
 
-    /// @notice Withdraw function for protocol fee (internal)
-    /// @inheritdoc IDeposit
-    function feeWithdraw(VaultInfo calldata vault, address feeRecipient, uint256 fee)
-        external
-        diamondInternal
-    {
-        vault.stakeCurrency.transfer(
-            feeRecipient,
-            fee
-        );
-
-        emit FeeWithdraw(feeRecipient, vault.strategy, fee);
+        emit WithdrawQueued(strategy, user, requestId, readyAt, stake, feeWithdraw);
     }
 
     /* ========== ACL ========== */
@@ -179,10 +200,22 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         require(newDelay < MAX_WITHDRAW_DELAY, WithdrawDelayTooHigh(newDelay));
 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        uint64 previousDelay = v.withdrawDelay;
-        v.withdrawDelay = newDelay;
+        uint64 previousDelay = v.defaultWithdrawDelay;
+        v.defaultWithdrawDelay = newDelay;
 
         emit WithdrawDelaySet(msg.sender, previousDelay, newDelay);
+    }
+
+    /// @notice Sets the allowed loss tolerance (1e18 = 100%)
+    /// @inheritdoc IDeposit
+    function setAllowedWithdrawLoss(uint256 newAllowedLoss) external onlyStakingManager {
+        require(newAllowedLoss <= 1e18, WithdrawLossTooHigh());
+
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        uint256 previousAllowedLoss = v.allowedWithdrawLoss;
+        v.allowedWithdrawLoss = newAllowedLoss;
+
+        emit AllowedWithdrawLossSet(msg.sender, previousAllowedLoss, newAllowedLoss);
     }
 
     /// @inheritdoc IDeposit
@@ -200,17 +233,47 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     /// @inheritdoc IDeposit
     function withdrawDelay() external view returns (uint64) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        return v.withdrawDelay;
+        return v.defaultWithdrawDelay;
     }
 
     /// @inheritdoc IDeposit
-    function pendingWithdraw(
-        address user,
-        address strategy
-    ) external view returns (uint256 amount, uint256 unlockTime) {
+    function allowedWithdrawLoss() external view returns (uint256) {
+        return LibHyperStaking.diamondStorage().allowedWithdrawLoss;
+    }
+
+    /// @inheritdoc IDeposit
+    function pendingWithdraws(
+        uint256[] calldata requestIds
+    ) external view returns (Claim[] memory claims) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        Claim storage claim = v.pendingClaims[user][strategy];
-        return (claim.amount, claim.unlockTime);
+
+        uint256 n = requestIds.length;
+        claims = new Claim[](n);
+
+        for (uint256 i = 0; i < n; ++i) {
+            uint256 requestId = requestIds[i];
+            claims[i] = v.pendingClaims[requestId];
+        }
+    }
+
+    /// @inheritdoc IDeposit
+    function lastClaims(
+        address strategy,
+        address user,
+        uint256 limit
+    ) external view returns (uint256[] memory ids) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        uint256[] storage arr = v.groupedClaimIds[strategy][user];
+
+        uint256 len = arr.length;
+        if (limit > len) {
+            limit = len;
+        }
+
+        ids = new uint256[](limit);
+        for (uint256 i; i < limit; ++i) {
+            ids[i] = arr[len - 1 - i];
+        }
     }
 
     /// @inheritdoc IDeposit

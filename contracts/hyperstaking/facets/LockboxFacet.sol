@@ -2,9 +2,7 @@
 pragma solidity =0.8.27;
 
 import {ILockbox} from "../interfaces/ILockbox.sol";
-import {IDeposit} from "../interfaces/IDeposit.sol";
 import {IAllocation} from "../interfaces/IAllocation.sol";
-import {IStrategy} from "../interfaces/IStrategy.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {IStakeInfoRoute} from "../interfaces/IStakeInfoRoute.sol";
@@ -135,11 +133,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         delete failedRedeems.failedRedeems[id];
         failedRedeems.userToFailedIds[fr.user].remove(id);
 
-        if (IStrategy(fr.strategy).isDirectStakeStrategy()) {
-            IDeposit(address(this)).queueWithdraw(fr.strategy, fr.user, fr.amount);
-        } else {
-            IAllocation(address(this)).leave(fr.strategy, fr.user, fr.amount);
-        }
+        IAllocation(address(this)).leave(fr.strategy, fr.user, fr.amount);
 
         emit StakeRedeemReexecuted(fr.strategy, fr.user, fr.amount, id);
     }
@@ -265,25 +259,12 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         address user = data.sender(); // sender -> actual hyperstaking user
         uint256 stake = data.redeemAmount(); // amount -> amount of rwa asset / stake
 
-        try IStrategy(strategy).isDirectStakeStrategy() returns (bool isDirect) {
-            if (isDirect) {
-                    // solhint-disable-next-line no-empty-blocks
-                    try IDeposit(address(this)).queueWithdraw(strategy, user, stake) {
-                        // success, nothing to do
-                    } catch {
-                        _storeFailedRedeem(strategy, user, stake);
-                    }
-                } else {
-                    // solhint-disable-next-line no-empty-blocks
-                    try IAllocation(address(this)).leave(strategy, user, stake) {
-                        // success, nothing to do
-                    } catch {
-                        _storeFailedRedeem(strategy, user, stake);
-                    }
-                }
-            } catch {
-                _storeFailedRedeem(strategy, user, stake);
-            }
+        // solhint-disable-next-line no-empty-blocks
+        try IAllocation(address(this)).leave(strategy, user, stake) {
+            // success, nothing to do
+        } catch {
+            _storeFailedRedeem(strategy, user, stake);
+        }
     }
 
     /// @notice Stores a failed redeem operation for later re-execution

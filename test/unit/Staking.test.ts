@@ -1,12 +1,13 @@
 import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import { ethers, ignition } from "hardhat";
-import { parseEther } from "ethers";
+import { parseEther, ZeroAddress } from "ethers";
 
 import DiamondModule from "../../ignition/modules/Diamond";
 import RevertingContractModule from "../../ignition/modules/test/RevertingContract";
 
 import * as shared from "../shared";
+import { ClaimStruct } from "../../typechain-types/contracts/hyperstaking/facets/DepositFacet";
 
 async function deployDiamond() {
   const [owner, alice] = await ethers.getSigners();
@@ -218,65 +219,85 @@ describe("Staking", function () {
       await deposit.stakeDeposit(reserveStrategy1, owner, stakeAmount, { value: stakeAmount });
 
       await lumiaTokens1.vaultShares.approve(realAssets, withdrawAmount);
-
       let blockTime = await shared.getCurrentBlockTimestamp();
+
+      const revenueAsset = await shared.getRevenueAsset(reserveStrategy1);
       await expect(realAssets.redeem(reserveStrategy1, owner, owner, withdrawAmount))
-        .to.changeEtherBalances(
+        .to.changeTokenBalances(revenueAsset,
           [lockbox, reserveStrategy1],
-          [withdrawAmount, -withdrawAmount],
+          [-withdrawAmount, withdrawAmount],
         );
+
+      const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy1, owner);
       let expectedUnlock = blockTime + defaultWithdrawDelay;
 
+      const claim = (await deposit.pendingWithdraws([lastClaimId]))[0] as ClaimStruct;
+      expect(claim.strategy).to.equal(reserveStrategy1);
+      expect(claim.unlockTime).to.equal(expectedUnlock);
+      expect(claim.eligible).to.equal(owner);
+      expect(claim.expectedAmount).to.equal(withdrawAmount);
+      expect(claim.feeWithdraw).to.eq(false);
+
       blockTime = await shared.getCurrentBlockTimestamp();
-      await expect(deposit.claimWithdraw(reserveStrategy1, owner))
+      await expect(deposit.claimWithdraws([lastClaimId], owner))
         .to.be.revertedWithCustomError(deposit, "ClaimTooEarly")
         .withArgs(blockTime, expectedUnlock);
 
-      expect((await deposit.pendingWithdraw(owner, reserveStrategy1)).amount).to.equal(withdrawAmount);
-      expect((await deposit.pendingWithdraw(owner, reserveStrategy1)).unlockTime).to.equal(expectedUnlock);
-
       await time.setNextBlockTimestamp(expectedUnlock);
-      await expect(deposit.claimWithdraw(reserveStrategy1, owner))
+      await expect(deposit.claimWithdraws([lastClaimId], owner))
         .to.changeEtherBalances(
-          [owner, lockbox],
+          [owner, reserveStrategy1],
           [withdrawAmount, -withdrawAmount],
         );
+
+      const deletedClaim = (await deposit.pendingWithdraws([lastClaimId]))[0] as ClaimStruct;
+      expect(deletedClaim.strategy).to.equal(ZeroAddress);
+      expect(deletedClaim.unlockTime).to.equal(0);
+      expect(deletedClaim.eligible).to.equal(ZeroAddress);
+      expect(deletedClaim.expectedAmount).to.equal(0);
+      expect(deletedClaim.feeWithdraw).to.eq(false);
 
       await lumiaTokens1.vaultShares.approve(realAssets, withdrawAmount);
       expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await expect(realAssets.redeem(reserveStrategy1, owner, owner, withdrawAmount))
         .to.emit(deposit, "WithdrawQueued")
-        .withArgs(reserveStrategy1, owner, withdrawAmount, expectedUnlock);
+        .withArgs(reserveStrategy1, owner, lastClaimId + 1n, expectedUnlock, withdrawAmount, false);
+
+      const lastClaimId2 = await shared.getLastClaimId(deposit, reserveStrategy1, owner);
+      expect(lastClaimId2).to.equal(lastClaimId + 1n);
+
+      const claim2 = (await deposit.pendingWithdraws([lastClaimId2]))[0] as ClaimStruct;
+      expect(claim2.unlockTime).to.equal(expectedUnlock);
+      expect(claim2.expectedAmount).to.equal(withdrawAmount);
 
       await time.setNextBlockTimestamp(expectedUnlock);
-      await deposit.claimWithdraw(reserveStrategy1, owner);
+      await deposit.claimWithdraws([lastClaimId2], owner);
 
       // wihdraw to another address
       await lumiaTokens1.vaultShares.approve(realAssets, withdrawAmount);
-
       expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await expect(realAssets.redeem(reserveStrategy1, owner, alice, withdrawAmount))
-        .to.changeEtherBalances(
+        .to.changeTokenBalances(revenueAsset,
           [lockbox, reserveStrategy1],
-          [withdrawAmount, -withdrawAmount],
+          [-withdrawAmount, withdrawAmount],
         );
 
-      expect((await deposit.pendingWithdraw(alice, reserveStrategy1)).amount).to.equal(withdrawAmount);
-      expect((await deposit.pendingWithdraw(alice, reserveStrategy1)).unlockTime).to.equal(expectedUnlock);
+      const lastClaimId3 = await shared.getLastClaimId(deposit, reserveStrategy1, alice);
+      expect(lastClaimId3).to.equal(lastClaimId2 + 1n);
 
       await time.setNextBlockTimestamp(expectedUnlock);
-      const claimTx = deposit.connect(alice).claimWithdraw(reserveStrategy1, alice);
+      const claimTx = deposit.connect(alice).claimWithdraws([lastClaimId3], alice);
 
       await expect(claimTx)
         .to.changeEtherBalances(
-          [alice, lockbox],
+          [alice, reserveStrategy1],
           [withdrawAmount, -withdrawAmount],
         );
 
       const depositType = 1;
       await expect(claimTx)
         .to.emit(deposit, "WithdrawClaimed")
-        .withArgs(reserveStrategy1, alice, withdrawAmount, depositType);
+        .withArgs(reserveStrategy1, alice, alice, withdrawAmount, withdrawAmount, depositType);
 
       // Allocation
       const vaultInfo = await allocation.stakeInfo(reserveStrategy1);
@@ -302,10 +323,11 @@ describe("Staking", function () {
       let expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await realAssets.redeem(reserveStrategy2, owner, owner, withdrawAmount);
 
+      const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy2, owner);
       await time.setNextBlockTimestamp(expectedUnlock);
-      await expect(deposit.claimWithdraw(reserveStrategy2, owner))
+      await expect(deposit.claimWithdraws([lastClaimId], owner))
         .to.changeTokenBalances(testERC20,
-          [owner, lockbox],
+          [owner, reserveStrategy2],
           [withdrawAmount, -withdrawAmount],
         );
 
@@ -314,29 +336,34 @@ describe("Staking", function () {
       expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await realAssets.redeem(reserveStrategy2, owner, owner, withdrawAmount);
 
+      const lastClaimId2 = await shared.getLastClaimId(deposit, reserveStrategy2, owner);
       await time.setNextBlockTimestamp(expectedUnlock);
-      await expect(deposit.claimWithdraw(reserveStrategy2, owner))
+      await expect(deposit.claimWithdraws([lastClaimId2], owner))
         .to.emit(deposit, "WithdrawClaimed")
-        .withArgs(reserveStrategy2, owner, withdrawAmount, depositType);
+        .withArgs(reserveStrategy2, owner, owner, withdrawAmount, withdrawAmount, depositType);
 
       // wihdraw to another address
       await lumiaTokens2.vaultShares.approve(realAssets, withdrawAmount);
       expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
+
+      const revenueAsset = await shared.getRevenueAsset(reserveStrategy2);
       await expect(realAssets.redeem(reserveStrategy2, owner, alice, withdrawAmount))
-        .to.changeTokenBalances(testERC20,
+        .to.changeTokenBalances(revenueAsset,
           [lockbox, reserveStrategy2],
-          [withdrawAmount, -withdrawAmount],
+          [withdrawAmount / -2n, withdrawAmount / 2n],
         );
 
       // only alice should be able to claim
-      await expect(deposit.connect(bob).claimWithdraw(reserveStrategy2, alice))
-        .to.be.revertedWithCustomError(deposit, "ZeroClaim");
+      const lastClaimId3 = await shared.getLastClaimId(deposit, reserveStrategy2, alice);
+      await expect(deposit.connect(bob).claimWithdraws([lastClaimId3], alice))
+        .to.be.revertedWithCustomError(deposit, "NotEligible")
+        .withArgs(lastClaimId3, alice, bob);
 
       // but alice can claim and send to another account
       await time.setNextBlockTimestamp(expectedUnlock);
-      await expect(deposit.connect(alice).claimWithdraw(reserveStrategy2, bob))
+      await expect(deposit.connect(alice).claimWithdraws([lastClaimId3], bob))
         .to.changeTokenBalances(testERC20,
-          [bob, lockbox],
+          [bob, reserveStrategy2],
           [withdrawAmount, -withdrawAmount],
         );
 
@@ -351,6 +378,56 @@ describe("Staking", function () {
 
       const directVaultInfo = await deposit.directStakeInfo(reserveStrategy2);
       expect(directVaultInfo.totalStake).to.equal(0);
+    });
+
+    it("enforces allowedWithdrawLoss and emits WithdrawLossExceeded on excess", async () => {
+      const { hyperStaking, testERC20, reserveStrategy2, lumiaTokens2, signers } = await loadFixture(deployHyperStaking);
+      const { deposit, realAssets, defaultWithdrawDelay } = hyperStaking;
+      const { stakingManager, strategyManager, alice } = signers;
+
+      // set tiny allowed loss (e.g. 0.1%)
+      const allowed = parseEther("1") / 1000n; // 0.001 = 0.1%
+      await expect(deposit.connect(stakingManager).setAllowedWithdrawLoss(allowed)).to.not.be.reverted;
+      expect(await deposit.allowedWithdrawLoss()).to.eq(allowed);
+
+      // deposit, then queue withdraw
+      const stakeAmount = parseEther("10");
+      await testERC20.connect(alice).approve(deposit, stakeAmount);
+      await deposit.connect(alice).stakeDeposit(reserveStrategy2, alice, stakeAmount);
+
+      const withdraw = parseEther("3");
+      await lumiaTokens2.vaultShares.connect(alice).approve(realAssets, withdraw);
+      const ready = (await shared.getCurrentBlockTimestamp()) + defaultWithdrawDelay;
+      await realAssets.connect(alice).redeem(reserveStrategy2, alice, alice, withdraw);
+      const id = await shared.getLastClaimId(deposit, reserveStrategy2, alice);
+
+      // make price drop slightly so redeem < expected (force loss)
+      const p0 = await reserveStrategy2.assetPrice();
+      // choose a drop that exceeds 0.1% (e.g., -1%)
+      await reserveStrategy2.connect(strategyManager).setAssetPrice(p0 * 99n / 100n);
+
+      await time.setNextBlockTimestamp(ready);
+      await expect(deposit.connect(alice).claimWithdraws([id], alice))
+        .to.be.revertedWithCustomError(deposit, "WithdrawLossExceeded");
+
+      // now raise allowed loss above the gap (e.g., 2%), should pass
+      const twoPct = parseEther("1") * 2n / 100n;
+      await deposit.connect(stakingManager).setAllowedWithdrawLoss(twoPct);
+      await expect(deposit.connect(alice).claimWithdraws([id], alice)).to.not.be.reverted;
+    });
+
+    it("setAllowedWithdrawLoss bounds & role", async () => {
+      const { hyperStaking, signers } = await loadFixture(deployHyperStaking);
+      const { deposit } = hyperStaking;
+      const { stakingManager, alice } = signers;
+
+      await expect(deposit.connect(alice).setAllowedWithdrawLoss(parseEther("0.01"))).to.be.reverted; // role
+
+      await expect(deposit.connect(stakingManager).setAllowedWithdrawLoss(parseEther("1.000000000000000001")))
+        .to.be.revertedWithCustomError(deposit, "WithdrawLossTooHigh");
+
+      await expect(deposit.connect(stakingManager).setAllowedWithdrawLoss(parseEther("0.02"))).to.not.be.reverted;
+      expect(await deposit.allowedWithdrawLoss()).to.eq(parseEther("0.02"));
     });
 
     describe("Allocation Report", function () {
@@ -374,14 +451,17 @@ describe("Staking", function () {
         const assetPrice = await reserveStrategy2.assetPrice();
         await reserveStrategy2.connect(strategyManager).setAssetPrice(assetPrice * 2n); // double the assets
 
+        const revenueAsset = await shared.getRevenueAsset(reserveStrategy2);
+
         await lumiaTokens2.vaultShares.connect(alice).approve(realAssets, rwaBalance);
         const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
         await expect(realAssets.connect(alice).redeem(reserveStrategy2, alice, alice, rwaBalance))
-          .to.changeTokenBalances(testERC20,
-            [lockbox, reserveStrategy2], [amount, -amount]);
+          .to.changeTokenBalances(revenueAsset,
+            [lockbox, reserveStrategy2], [amount / -4n, amount / 4n]);
 
+        const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy2, alice);
         await time.setNextBlockTimestamp(expectedUnlock);
-        await deposit.connect(alice).claimWithdraw(reserveStrategy2, alice);
+        await deposit.connect(alice).claimWithdraws([lastClaimId], alice);
 
         // vault has double the assets, so the revenue is the same as the amount
         const expectedRevenue = amount;
@@ -406,7 +486,8 @@ describe("Staking", function () {
         );
 
         // balance
-        await expect(reportTx).to.changeTokenBalance(lumiaTokens2.principalToken, lumiaTokens2.vaultShares, expectedRevenue);
+        await expect(reportTx)
+          .to.changeTokenBalance(lumiaTokens2.principalToken, lumiaTokens2.vaultShares, expectedRevenue);
 
         expect(await lumiaTokens2.vaultShares.balanceOf(alice)).to.be.eq(0);
       });
@@ -429,11 +510,12 @@ describe("Staking", function () {
 
         // withdraw half of the assets
         await lumiaTokens1.vaultShares.connect(alice).approve(realAssets, stakeAmount / 2n);
-        const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
+        let expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
         await realAssets.connect(alice).redeem(reserveStrategy1, alice, alice, stakeAmount / 2n);
 
+        let lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy1, alice);
         await time.setNextBlockTimestamp(expectedUnlock);
-        await deposit.connect(alice).claimWithdraw(reserveStrategy1, alice);
+        await deposit.connect(alice).claimWithdraws([lastClaimId], alice);
 
         const newBridgeSafetyMargin = parseEther("0.05"); // 5%;
         const expectedRevenue = await allocation.checkRevenue(reserveStrategy1);
@@ -453,17 +535,28 @@ describe("Staking", function () {
         const safetyMarginAmount = (await allocation.stakeInfo(reserveStrategy1)).totalStake * newBridgeSafetyMargin / parseEther("1");
 
         expect(await allocation.checkRevenue(reserveStrategy1)).to.be.eq(expectedRevenue - safetyMarginAmount);
+
+        // redeem the rest (it should be enough revenue asset to cover it)
+        const availableShares = await lumiaTokens1.vaultShares.balanceOf(alice);
+        await lumiaTokens1.vaultShares.connect(alice).approve(realAssets, availableShares);
+        await realAssets.connect(alice).redeem(reserveStrategy1, alice, alice, availableShares);
+
+        expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
+        lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy1, alice);
+        await time.setNextBlockTimestamp(expectedUnlock);
+        await deposit.connect(alice).claimWithdraws([lastClaimId], alice);
       });
 
       it("check with non zero protocol fee rate", async function () {
         const { hyperStaking, reserveStrategy1, signers } = await loadFixture(deployHyperStaking);
-        const { deposit, allocation } = hyperStaking;
+        const { deposit, allocation, lockbox } = hyperStaking;
         const { alice, bob, vaultManager, strategyManager } = signers;
 
         const feeRecipient = bob;
         await allocation.connect(vaultManager).setFeeRecipient(reserveStrategy1, feeRecipient);
 
         const stakeAmount = parseEther("10");
+        const revenueAsset = await shared.getRevenueAsset(reserveStrategy1);
 
         await deposit.stakeDeposit(reserveStrategy1, alice, stakeAmount, { value: stakeAmount });
 
@@ -481,19 +574,19 @@ describe("Staking", function () {
 
         let expectedRevenue = await allocation.checkRevenue(reserveStrategy1);
         let expectedFeeAmount = expectedRevenue * feeRate / parseEther("1");
+
         let expectedFeeAllocation = await reserveStrategy1.previewAllocation(expectedFeeAmount);
 
-        const reportTx1 = await allocation.connect(vaultManager).report(reserveStrategy1);
+        expect(await allocation.connect(vaultManager).report(reserveStrategy1))
+          .to.emit(allocation, "StakeCompounded")
+          .withArgs(reserveStrategy1, feeRecipient, feeRate, expectedFeeAmount, expectedFeeAllocation, expectedRevenue - expectedFeeAmount);
 
-        await expect(reportTx1).to.emit(allocation, "StakeCompounded").withArgs(
-          reserveStrategy1, feeRecipient, feeRate, expectedFeeAmount, expectedFeeAllocation, expectedRevenue - expectedFeeAmount,
-        );
-
-        const precisionError = 1n; // 1 wei
-        await expect(reportTx1).to.changeEtherBalances(
-          [feeRecipient, reserveStrategy1],
-          [expectedFeeAmount - precisionError, -expectedFeeAmount + precisionError],
-        );
+        const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy1, feeRecipient);
+        await expect(deposit.connect(feeRecipient).claimWithdraws([lastClaimId], feeRecipient))
+          .to.changeEtherBalances(
+            [feeRecipient, reserveStrategy1],
+            [expectedFeeAmount, -expectedFeeAmount],
+          );
 
         // after reporting, the revenue is zero
         expect(await allocation.checkRevenue(reserveStrategy1)).to.be.eq(0);
@@ -519,14 +612,22 @@ describe("Staking", function () {
 
         const reportTx2 = await allocation.connect(vaultManager).report(reserveStrategy1);
 
-        await expect(reportTx2).to.emit(allocation, "StakeCompounded").withArgs(
-          reserveStrategy1, feeRecipient, feeRate, expectedFeeAmount, expectedFeeAllocation, expectedRevenue - (expectedFeeAmount + safetyMarginAmount),
-        );
+        await expect(reportTx2)
+          .to.emit(allocation, "StakeCompounded")
+          .withArgs(reserveStrategy1, feeRecipient, feeRate, expectedFeeAmount, expectedFeeAllocation, expectedRevenue - (expectedFeeAmount + safetyMarginAmount));
 
-        await expect(reportTx2).to.changeEtherBalances(
-          [feeRecipient, reserveStrategy1],
-          [expectedFeeAmount - precisionError, -expectedFeeAmount + precisionError],
-        );
+        await expect(reportTx2)
+          .to.changeTokenBalances(revenueAsset,
+            [lockbox, reserveStrategy1],
+            [-expectedFeeAllocation, expectedFeeAllocation],
+          );
+
+        const lastClaimId2 = await shared.getLastClaimId(deposit, reserveStrategy1, feeRecipient);
+        await expect(deposit.connect(feeRecipient).claimWithdraws([lastClaimId2], feeRecipient))
+          .to.changeEtherBalances(
+            [feeRecipient, reserveStrategy1],
+            [expectedFeeAmount, -expectedFeeAmount],
+          );
 
         // after reporting, the revenue is zero
         expect(await allocation.checkRevenue(reserveStrategy1)).to.be.eq(0);
@@ -562,8 +663,9 @@ describe("Staking", function () {
         const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
         await realAssets.redeem(reserveStrategy1, owner, owner, stakeAmount);
 
+        const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy1, owner);
         await time.setNextBlockTimestamp(expectedUnlock);
-        await expect(deposit.claimWithdraw(reserveStrategy1, revertingContract))
+        await expect(deposit.claimWithdraws([lastClaimId], revertingContract))
           .to.be.revertedWith("Transfer call failed");
       });
     });

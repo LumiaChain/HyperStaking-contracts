@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {IStrategy, Currency, SuperformStrategy} from "./SuperformStrategy.sol";
+import {IStrategy} from "../interfaces/IStrategy.sol";
+import {Currency, SuperformStrategy} from "./SuperformStrategy.sol";
 import {ICurveIntegration} from "../interfaces/ICurveIntegration.sol";
 
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -38,6 +39,7 @@ contract SwapSuperStrategy is SuperformStrategy {
 
     event CurveSwapExit(
         address indexed user,
+        address indexed receiver,
         uint256 amountIn,
         uint256 amountOut,
         uint256 slippageBps
@@ -77,11 +79,15 @@ contract SwapSuperStrategy is SuperformStrategy {
     // ========= Diamond ========= //
 
     /// @inheritdoc IStrategy
-    function allocate(
+    function requestAllocation(
+        uint256 requestId_,
         uint256 amount_,
         address user_
-    ) public payable override onlyLumiaDiamond returns (uint256 allocation) {
+    ) public payable override onlyLumiaDiamond returns (uint64 readyAt) {
         require(amount_ > 0, ZeroAmount());
+
+        // requestAllocation uses already uses Curve integration to store a claim request
+        // which later fulfills using the swapped out-amount in Superform Strategy
 
         // slippage adjusted
         uint256 expected = curveIntegration.quote(
@@ -104,19 +110,27 @@ contract SwapSuperStrategy is SuperformStrategy {
 
         emit CurveSwapAllocate(user_, amount_, amountOut, slippageBps);
 
-        // curve amountOut is used as superform amountIn
-        allocation = super.allocate(amountOut, user_);
+        // store request (for superform)
+        readyAt = 0; // claimable immediately
+        _storeAllocationRequest(
+            requestId_,
+            user_,
+            amountOut,
+            readyAt
+        );
+
+        emit AllocationRequested(requestId_, user_, amountOut, readyAt);
     }
 
-    /// @inheritdoc IStrategy
-    function exit(
-        uint256 shares_,
-        address user_
-    ) public override onlyLumiaDiamond returns (uint256 exitAmount) {
-        if (shares_ == 0) revert ZeroAmount();
+    /// NOTE: There is no need to override claimAllocation and requestExit
 
+    /// @inheritdoc IStrategy
+    function claimExit(
+        uint256[] calldata ids_,
+        address receiver_
+    ) public override onlyLumiaDiamond returns (uint256 exitAmount) {
         // redeem from Superform – tokens land in this contract
-        uint256 superformOut = super.exit(shares_, user_);
+        uint256 superformOut = super.claimExit(ids_, address(curveIntegration));
 
         // slippage-adjusted quote
         uint256 expected = curveIntegration.quote(
@@ -134,10 +148,10 @@ contract SwapSuperStrategy is SuperformStrategy {
             address(CURVE_INPUT_TOKEN),
             superformOut,
             minDx,
-            msg.sender
+            receiver_
         );
 
-        emit CurveSwapExit(user_, superformOut, exitAmount, slippageBps);
+        emit CurveSwapExit(_req[ids_[0]].user, receiver_, superformOut, exitAmount, slippageBps);
     }
 
     // ========= Admin ========= //
@@ -163,37 +177,38 @@ contract SwapSuperStrategy is SuperformStrategy {
         return super.revenueAsset();
     }
 
-    /// @inheritdoc IStrategy
+    /// @return Current slippage setting in basis points
+    function slippage() external view returns (uint256) {
+        return slippageBps;
+    }
+
+
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
     /// @dev Converts the incoming stake (CURVE_INPUT_TOKEN) amount to its Curve quote
     ///      (SUPERFORM_INPUT_TOKEN), then feeds that into the parent (Superform Strategy) preview
-    function previewAllocation(
-        uint256 stakeAmount_
-    ) public view override returns (uint256 allocation) {
+    function _previewAllocationRaw(uint256 stake_) internal view override returns (uint256 allocation) {
         uint256 superformInput = curveIntegration.quote(
             address(CURVE_INPUT_TOKEN),     // tokenIn
             CURVE_POOL,
             address(SUPERFORM_INPUT_TOKEN), // tokenOut
-            stakeAmount_
+            stake_
         );
-        allocation = super.previewAllocation(superformInput);
+        allocation = super._previewAllocationRaw(superformInput);
     }
 
-    /// @inheritdoc IStrategy
     /// @dev Works in reverse: first asks the parent (Superform Strategy) how many SUPERFORM_INPUT_TOKEN
     ///      are returned, then quotes Curve for the final exit amount
-    function previewExit(uint256 assetAllocation_) public view override returns (uint256 stakeAmount) {
-        uint256 superformOutput = super.previewExit(assetAllocation_);
+    function _previewExitRaw(uint256 allocation_) internal view override returns (uint256 stake) {
+        uint256 superformOutput = super._previewExitRaw(allocation_);
 
-        stakeAmount = curveIntegration.quote(
+        stake = curveIntegration.quote(
             address(SUPERFORM_INPUT_TOKEN), // tokenIn
             CURVE_POOL,
             address(CURVE_INPUT_TOKEN),     // tokenOut
             superformOutput
         );
-    }
-
-    /// @return Current slippage setting in basis points
-    function slippage() external view returns (uint256) {
-        return slippageBps;
     }
 }

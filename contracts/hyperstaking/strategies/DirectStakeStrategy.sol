@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {IStrategy} from "../interfaces/IStrategy.sol";
+import {StrategyRequest, StrategyKind, IStrategy} from "../interfaces/IStrategy.sol";
 import {AbstractStrategy} from "./AbstractStrategy.sol";
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
@@ -40,13 +40,44 @@ contract DirectStakeStrategy is AbstractStrategy {
     //============================================================================================//
 
     /// @inheritdoc IStrategy
-    function allocate(uint256, address) external payable returns (uint256) {
+    function requestAllocation(uint256, uint256, address) external payable returns (uint64) {
         revert DirectStakeMisused();
     }
 
     /// @inheritdoc IStrategy
-    function exit(uint256, address) external pure returns (uint256) {
+    function claimAllocation(uint256[] calldata, address) external pure returns (uint256) {
         revert DirectStakeMisused();
+    }
+
+    /// @inheritdoc IStrategy
+    function requestExit(
+        uint256 requestId_,
+        uint256 shares_,
+        address user_) external returns (uint64 readyAt) {
+        // just store request, without transfers
+
+        readyAt = 0; // claimable immediately
+        _storeExitRequest(
+            requestId_,
+            user_,
+            shares_,
+            readyAt
+        );
+
+        emit ExitRequested(requestId_, user_, shares_, readyAt);
+    }
+
+    /// @inheritdoc IStrategy
+    function claimExit(uint256[] calldata ids_, address receiver_) external returns (uint256 amount) {
+        require(ids_.length == 1, DontSupportArrays());
+        uint256 id = ids_[0];
+
+        StrategyRequest memory r = _loadClaimable(id, StrategyKind.Exit);
+
+        _markClaimed(id);
+        amount = r.amount;
+
+        emit ExitClaimed(id, receiver_, amount);
     }
 
     // ========= View ========= //
@@ -66,13 +97,17 @@ contract DirectStakeStrategy is AbstractStrategy {
         revert DirectStakeMisused();
     }
 
-    /// Price = 1:1
-    function previewAllocation(uint256) public pure returns (uint256) {
-        revert DirectStakeMisused();
+    //============================================================================================//
+    //                                     Internal Functions                                     //
+    //============================================================================================//
+
+    /// 1:1
+    function _previewAllocationRaw(uint256 stake_) internal pure override returns (uint256) {
+        return stake_;
     }
 
-    /// Price = 1:1
-    function previewExit(uint256) public pure returns (uint256) {
-        revert DirectStakeMisused();
+    /// 1:1
+    function _previewExitRaw(uint256 allocation_) internal pure override returns (uint256) {
+        return allocation_;
     }
 }

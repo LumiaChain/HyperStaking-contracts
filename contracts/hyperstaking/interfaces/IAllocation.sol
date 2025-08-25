@@ -23,7 +23,6 @@ interface IAllocation {
         address indexed strategy,
         address indexed user,
         uint256 stake, // amount requested
-        uint256 exitStake, // amount actually withdrawn; can differ by a few wei due to rounding
         uint256 allocation
     );
 
@@ -58,6 +57,8 @@ interface IAllocation {
     //                                          Errors                                            //
     //============================================================================================//
 
+    error AsyncAllocationNotSupported();
+
     error StrategyDoesNotExist(address strategy);
     error DirectStrategyNotAllowed(address strategy);
 
@@ -84,7 +85,7 @@ interface IAllocation {
      * @notice Leave for a specified strategy and asset amount
      * @param strategy The strategy from which the user is leaving
      * @param user The address of the user
-     * @param allocation The amount of asset allocation from ValutToken
+     * @param allocation The amount of asset allocation in strategy
      * @return The total withdrawal amount, including the stake, generated revenue, after fees
      */
     function leave(
