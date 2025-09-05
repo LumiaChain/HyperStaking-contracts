@@ -6,6 +6,7 @@ import "@nomicfoundation/hardhat-foundry";
 import "@typechain/hardhat";
 import "hardhat-contract-sizer";
 import "hardhat-switch-network";
+import "hardhat-ignore-warnings";
 import "solidity-docgen";
 
 import dotenv from "dotenv";
@@ -132,6 +133,13 @@ const config: HardhatUserConfig = {
     except: [
       "external",
     ],
+  },
+
+  warnings: {
+    // silence the transient storage warning from OZ
+    "**/@openzeppelin/**": { "transient-storage": "off" },
+    // silence this contract size warnings, as it is used only in tests
+    "**/SuperVaultFactory.sol": { "code-size": "off" },
   },
 
   etherscan: {
