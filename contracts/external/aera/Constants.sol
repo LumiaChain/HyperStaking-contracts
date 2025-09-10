@@ -148,3 +148,10 @@ uint256 constant MAX_DEPOSIT_REFUND_TIMEOUT = 30 days;
 
 /// @dev Whitelist flag in AddressToUintMap
 uint8 constant IS_WHITELISTED_FLAG = 1;
+
+////////////////////////////////////////////////////////////
+//                   Oracle Registry Constants            //
+////////////////////////////////////////////////////////////
+
+/// @dev Maximum update delay for oracle
+uint256 constant MAXIMUM_UPDATE_DELAY = 30 days;

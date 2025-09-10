@@ -7,7 +7,7 @@ import { Authority } from "solmate/auth/Auth.sol";
 import { IFeeCalculator } from "./interfaces/IFeeCalculator.sol";
 import { ISubmitHooks } from "./interfaces/ISubmitHooks.sol";
 import { IWhitelist } from "./interfaces/IWhitelist.sol";
-import { IOracle } from "./dependencies/IOracle.sol";
+import { IOracle } from "./interfaces/IOracle.sol";
 
 /// @notice Type of request: deposit/redeem and auto/fixed price
 /// @dev
