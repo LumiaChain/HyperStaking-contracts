@@ -21,6 +21,7 @@ module.exports = {
     "semi": ["error", "always"],
     "comma-dangle": ["error", "always-multiline"],
     "quote-props": "off",
+    "no-multi-spaces": ["error", { ignoreEOLComments: true }],
     "space-before-function-paren": [
       "error", {
         "anonymous": "always",
