@@ -11,7 +11,7 @@ import { SingleDirectSingleVaultStateReqStruct } from "../../typechain-types/con
 async function getMockedSuperform() {
   const [superManager, alice] = await ethers.getSigners();
 
-  const testUSDC = await shared.deloyTestERC20("Test USD Coin", "tUSDC", 6);
+  const testUSDC = await shared.deployTestERC20("Test USD Coin", "tUSDC", 6);
   const erc4626Vault = await shared.deloyTestERC4626Vault(testUSDC);
   await testUSDC.mint(alice.address, parseUnits("1000000", 6));
 

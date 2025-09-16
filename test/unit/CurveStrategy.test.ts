@@ -174,8 +174,8 @@ describe("CurveStrategy", function () {
 
     // -------------------- Deploy Tokens --------------------
 
-    const usdc = await shared.deloyTestERC20("Test USDC", "tUSDC", 6);
-    const usdt = await shared.deloyTestERC20("Test USDT", "tUSDT", 6);
+    const usdc = await shared.deployTestERC20("Test USDC", "tUSDC", 6);
+    const usdt = await shared.deployTestERC20("Test USDT", "tUSDT", 6);
 
     await usdc.mint(owner, stableUnits("1000000"));
     await usdt.mint(owner, stableUnits("1000000"));
@@ -371,7 +371,7 @@ describe("CurveStrategy", function () {
 
       // -------------------- setup
 
-      const badToken = await shared.deloyTestERC20("Test BAD1", "BB1", 6);
+      const badToken = await shared.deployTestERC20("Test BAD1", "BB1", 6);
 
       const { owner, alice } = signers;
       await badToken.mint(owner, stableUnits("1000000"));

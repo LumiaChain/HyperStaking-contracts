@@ -23,8 +23,8 @@ async function deployHyperStaking() {
 
   // -------------------- Deploy Tokens --------------------
 
-  const testERC20 = await shared.deloyTestERC20("Test ERC20 Token", "tERC20");
-  const testWstETH = await shared.deloyTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
+  const testERC20 = await shared.deployTestERC20("Test ERC20 Token", "tERC20");
+  const testWstETH = await shared.deployTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
 
   await testERC20.mint(signers.alice, parseEther("1000"));
   await testERC20.mint(signers.bob, parseEther("1000"));

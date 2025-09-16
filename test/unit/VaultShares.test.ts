@@ -11,7 +11,7 @@ async function deployHyperStaking() {
 
   // -------------------- Deploy Tokens --------------------
 
-  const testReserveAsset = await shared.deloyTestERC20("Test Reserve Asset", "tRaETH");
+  const testReserveAsset = await shared.deployTestERC20("Test Reserve Asset", "tRaETH");
 
   // -------------------- Hyperstaking Diamond --------------------
 
@@ -75,8 +75,8 @@ describe("VaultShares", function () {
       const { diamond, hyperFactory, hyperlaneHandler } = hyperStaking;
       const { vaultManager } = signers;
 
-      const testAsset2 = await shared.deloyTestERC20("Test Asset2", "tRaETH2");
-      const testAsset3 = await shared.deloyTestERC20("Test Asset3", "tRaETH3");
+      const testAsset2 = await shared.deployTestERC20("Test Asset2", "tRaETH2");
+      const testAsset3 = await shared.deployTestERC20("Test Asset3", "tRaETH3");
 
       const reserveStrategy2 = await shared.createReserveStrategy(
         diamond, shared.nativeTokenAddress, await testAsset2.getAddress(), parseEther("2"),

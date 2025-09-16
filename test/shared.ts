@@ -15,7 +15,7 @@ import DirectStakeStrategyModule from "../ignition/modules/DirectStakeStrategy";
 
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IHyperFactory";
 
-import { IERC20, ISuperformIntegration, Provisioner } from "../typechain-types";
+import { IERC20, ISuperformIntegration } from "../typechain-types";
 
 import { SingleDirectSingleVaultStateReqStruct } from "../typechain-types/contracts/external/superform/core/BaseRouter";
 
@@ -79,8 +79,8 @@ export async function deployTestHyperStaking(mailboxFee: bigint) {
 
   // -------------------- Deploy Tokens --------------------
 
-  const testUSDC = await deloyTestERC20("Test USDC", "tUSDC", 6);
-  const testUSDT = await deloyTestERC20("Test USDT", "tUSDT", 6);
+  const testUSDC = await deployTestERC20("Test USDC", "tUSDC", 6);
+  const testUSDT = await deployTestERC20("Test USDT", "tUSDT", 6);
 
   const stableUnits = (val: string) => parseUnits(val, 6);
   await testUSDC.mint(alice.address, stableUnits("1000000"));
@@ -181,7 +181,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint) {
   /* eslint-enable object-property-newline */
 }
 
-export async function deloyTestERC20(name: string, symbol: string, decimals: number = 18): Promise<Contract> {
+export async function deployTestERC20(name: string, symbol: string, decimals: number = 18): Promise<Contract> {
   const { testERC20 } = await ignition.deploy(TestERC20Module, {
     parameters: {
       TestERC20Module: {
@@ -315,7 +315,7 @@ export async function registerAERC20(
 export async function solveGauntletDepositRequest(
   tx: TransactionResponse,
   gauntletStrategy: Contract,
-  provisioner: Provisioner,
+  provisioner: Contract,
   token: Addressable,
   amount: bigint,
   requestId: number,
@@ -340,7 +340,7 @@ export async function solveGauntletDepositRequest(
 export async function solveGauntletRedeemRequest(
   tx: TransactionResponse,
   gauntletStrategy: Contract,
-  provisioner: Provisioner,
+  provisioner: Contract,
   token: Addressable,
   amount: bigint,
   requestId: number,

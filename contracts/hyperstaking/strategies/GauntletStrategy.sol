@@ -43,11 +43,8 @@ contract GauntletStrategy is AbstractStrategy {
     /// @notice The price calculator contract taken from aera provisioner
     IPriceAndFeeCalculator public immutable AERA_PRICE;
 
-    /// @notice The vault contract taken from aera provisioner (actial gtUSDa)
+    /// @notice The vault contract taken from aera provisioner (actual gtUSDa)
     address public immutable AERA_VAULT;
-
-    /// @dev slippage in basis points (1 bp = 0.01 %)
-    uint256 public slippageBps;
 
     /// @notice Guaranteed allocation amounts per requestId
     /// @dev Stores the minimum allocation units that will be minted when the request is claimed
@@ -338,13 +335,13 @@ contract GauntletStrategy is AbstractStrategy {
     /// @dev Returns a conservative preview of allocation units for a given stake
     function _previewAllocationRaw(uint256 amount_) internal view override returns (uint256) {
         uint256 expected = AERA_PRICE.convertTokenToUnits(AERA_VAULT, STAKE_TOKEN, amount_);
-        return (expected * (10_000 - slippageBps)) / 10_000;
+        return (expected * (10_000 - aeraConfig.slippageBps)) / 10_000;
     }
 
     /// @dev Returns a conservative preview of tokens for a given allocation
     function _previewExitRaw(uint256 allocation_) internal view override returns (uint256) {
         uint256 expected = AERA_PRICE.convertUnitsToToken(AERA_VAULT, STAKE_TOKEN, allocation_);
-        return (expected * (10_000 - slippageBps)) / 10_000;
+        return (expected * (10_000 - aeraConfig.slippageBps)) / 10_000;
     }
 
     /// @dev Returns execution deadline by adding the configured offset to the current block time

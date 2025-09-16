@@ -13,7 +13,7 @@ async function getMockedGauntlet(testUSDC?: Contract) {
 
   if (!testUSDC) {
     // deploy a test USDC
-    testUSDC = await shared.deloyTestERC20("Test USD Coin", "tUSDC", 6);
+    testUSDC = await shared.deployTestERC20("Test USD Coin", "tUSDC", 6);
     await testUSDC.mint(alice.address, parseUnits("1000000", 6));
     await testUSDC.mint(bob.address, parseUnits("1000000", 6));
   }
@@ -95,6 +95,16 @@ async function deployHyperStaking() {
     "gtUSTa vault",
     "lgtUSTa",
   );
+
+  // set 0 slippage for tests, to simplify calculations
+  const defaultConfig = await gauntletStrategy.aeraConfig();
+  await gauntletStrategy.connect(signers.strategyManager).setAeraConfig({
+    solverTip: defaultConfig.solverTip,
+    deadlineOffset: defaultConfig.deadlineOffset,
+    maxPriceAge: defaultConfig.maxPriceAge,
+    slippageBps: 0,
+    isFixedPrice: defaultConfig.isFixedPrice,
+  } as AeraConfigStruct);
 
   // -------------------- Hyperlane Handler --------------------
 

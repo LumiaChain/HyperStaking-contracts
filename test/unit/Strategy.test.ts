@@ -26,7 +26,7 @@ async function deployHyperStaking() {
 
   // -------------------- Deploy Tokens --------------------
 
-  const testWstETH = await shared.deloyTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
+  const testWstETH = await shared.deployTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
 
   // --------------------- Hyperstaking Diamond --------------------
 
