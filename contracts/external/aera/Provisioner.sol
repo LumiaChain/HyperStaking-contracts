@@ -468,6 +468,49 @@ contract Provisioner is IProvisioner, Auth2Step, ReentrancyGuardTransient {
     }
 
     ////////////////////////////////////////////////////////////
+    //                   Test-Only Functions                  //
+    ////////////////////////////////////////////////////////////
+
+    // test-only helper to settle a deposit using the hash
+    function testSolveDeposit(
+        IERC20 token,
+        address user,
+        uint256 tokens,
+        uint256 units,
+        bytes32 depositHash
+    ) external {
+        require(asyncDepositHashes[depositHash], "invalid deposit hash");
+
+        // unset hash as used
+        asyncDepositHashes[depositHash] = false;
+
+        token.forceApprove(MULTI_DEPOSITOR_VAULT, type(uint256).max);
+        IMultiDepositorVault(MULTI_DEPOSITOR_VAULT).enter(
+            address(this), token, tokens, units, user
+        );
+        token.forceApprove(MULTI_DEPOSITOR_VAULT, 0);
+    }
+
+    // test-only helper to settle a redeem using the hash
+    function testSolveRedeem(
+        IERC20 token,
+        address user,
+        uint256 tokens,
+        uint256 units,
+        bytes32 redeemHash
+    ) external {
+        require(asyncRedeemHashes[redeemHash], "invalid redeem hash");
+
+        // unset hash as used
+        asyncRedeemHashes[redeemHash] = false;
+
+        IMultiDepositorVault(MULTI_DEPOSITOR_VAULT).exit(
+            address(this), token, tokens, units, address(this)
+        );
+        token.safeTransfer(user, tokens);
+    }
+
+    ////////////////////////////////////////////////////////////
     //              Internal / Private Functions              //
     ////////////////////////////////////////////////////////////
 

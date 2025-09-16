@@ -1,5 +1,6 @@
+import { expect } from "chai";
 import { ignition, ethers, network } from "hardhat";
-import { Contract, ZeroAddress, parseEther, parseUnits, Addressable } from "ethers";
+import { Contract, ZeroAddress, ZeroBytes32, parseEther, parseUnits, Addressable, TransactionResponse, Log } from "ethers";
 import { time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 
 import HyperStakingModule from "../ignition/modules/HyperStaking";
@@ -14,7 +15,7 @@ import DirectStakeStrategyModule from "../ignition/modules/DirectStakeStrategy";
 
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IHyperFactory";
 
-import { IERC20, ISuperformIntegration } from "../typechain-types";
+import { IERC20, ISuperformIntegration, Provisioner } from "../typechain-types";
 
 import { SingleDirectSingleVaultStateReqStruct } from "../typechain-types/contracts/external/superform/core/BaseRouter";
 
@@ -73,7 +74,7 @@ export async function deploySuperformMock(erc4626Vault: Contract) {
 }
 
 export async function deployTestHyperStaking(mailboxFee: bigint) {
-  const { alice, vaultManager, lumiaFactoryManager } = await getSigners();
+  const { alice, bob, vaultManager, lumiaFactoryManager } = await getSigners();
   const testDestination = 31337; // the same for both sides of the test "oneChain" bridge
 
   // -------------------- Deploy Tokens --------------------
@@ -83,7 +84,10 @@ export async function deployTestHyperStaking(mailboxFee: bigint) {
 
   const stableUnits = (val: string) => parseUnits(val, 6);
   await testUSDC.mint(alice.address, stableUnits("1000000"));
+  await testUSDC.mint(bob.address, stableUnits("1000000"));
+
   await testUSDT.mint(alice.address, stableUnits("1000000"));
+  await testUSDT.mint(bob.address, stableUnits("1000000"));
 
   // -------------------- Hyperlane --------------------
 
@@ -306,6 +310,58 @@ export async function registerAERC20(
   ) as unknown as IERC20;
 };
 
+// -------------------- Gauntlet --------------------
+
+export async function solveGauntletDepositRequest(
+  tx: TransactionResponse,
+  gauntletStrategy: Contract,
+  provisioner: Provisioner,
+  token: Addressable,
+  amount: bigint,
+  requestId: number,
+) {
+  const depositRequestHash = await getEventArg(
+    tx,
+    "AeraAsyncDepositHash",
+    gauntletStrategy,
+  );
+  expect(depositRequestHash).to.not.equal(ZeroBytes32);
+
+  const units = await gauntletStrategy.pendingAllocation(requestId);
+  await provisioner.testSolveDeposit(
+    token,
+    await gauntletStrategy.getAddress(),
+    amount,
+    units,
+    depositRequestHash,
+  );
+}
+
+export async function solveGauntletRedeemRequest(
+  tx: TransactionResponse,
+  gauntletStrategy: Contract,
+  provisioner: Provisioner,
+  token: Addressable,
+  amount: bigint,
+  requestId: number,
+) {
+  const redeemRequestHash = await getEventArg(
+    tx,
+    "AeraAsyncRedeemHash",
+    gauntletStrategy,
+  );
+  expect(redeemRequestHash).to.not.equal(ZeroBytes32);
+
+  const units = await gauntletStrategy.pendingExit(requestId);
+  await provisioner.testSolveRedeem(
+    token,
+    await gauntletStrategy.getAddress(),
+    amount,
+    units,
+    redeemRequestHash,
+  );
+}
+
 // -------------------- Other Helpers --------------------
 
 export async function getLastClaimId(deposit: Contract, reserveStrategy1: Addressable, owner: Addressable) {
@@ -335,4 +391,22 @@ export async function getCurrentBlockTimestamp() {
   const blockNumber = await ethers.provider.getBlockNumber();
   const block = await ethers.provider.getBlock(blockNumber);
   return block!.timestamp;
+}
+
+export async function getEventArg(tx: TransactionResponse, eventName: string, contract: Contract) {
+  const receipt = await tx.wait();
+  const logs = receipt!.logs;
+  const parsedEvent = logs.map((rawLog: Log) => {
+    try {
+      return contract.interface.parseLog(rawLog);
+    } catch {
+      return null;
+    }
+  }).find((parsedLog: Log) => parsedLog !== null && parsedLog.name === eventName);
+
+  if (parsedEvent && parsedEvent.args) {
+    // NOTE: return only the first argument of the event
+    return parsedEvent.args[0];
+  }
+  return null;
 }

@@ -63,6 +63,7 @@ const GauntletMockModule = buildModule("GauntletMockModule", (m) => {
   const aeraMultiDepositorVault = m.contractAt("MultiDepositorVault", multiDepositorVaultAddress);
 
   m.call(aeraMultiDepositorVault, "acceptOwnership", [], { after: [createVault] });
+  m.call(aeraMultiDepositorVault, "setProvisioner", [aeraProvisioner], { after: [createVault] });
   m.call(aeraPriceAndFeeCalculator, "setVaultAccountant", [aeraMultiDepositorVault, owner], { after: [createVault] });
 
   return { aeraProvisioner, aeraPriceAndFeeCalculator, aeraMultiDepositorVault };
