@@ -20,7 +20,7 @@ import { IERC20, ISuperformIntegration } from "../typechain-types";
 import { SingleDirectSingleVaultStateReqStruct } from "../typechain-types/contracts/external/superform/core/BaseRouter";
 
 // full - because there are two differnet vesions of IERC20 used in the project
-const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";
+export const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";
 
 // -------------------- Accounts --------------------
 

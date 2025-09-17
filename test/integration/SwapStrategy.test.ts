@@ -4,7 +4,7 @@ import { parseUnits } from "ethers";
 import { ethers, ignition } from "hardhat";
 
 import SwapSuperStrategyModule from "../../ignition/modules/SwapSuperStrategy";
-import TestSwapIntegrationModule from "../../ignition/modules/test/TestSwapIntegration.ts";
+import TestSwapIntegrationModule from "../../ignition/modules/test/TestSwapIntegration";
 
 import { expect } from "chai";
 import * as shared from "../shared";

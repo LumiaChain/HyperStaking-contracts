@@ -83,7 +83,7 @@ contract GauntletStrategy is AbstractStrategy {
 
     constructor(
         address diamond_,
-        address stakeToken_, // (gtUSDa uses USDC as deposit, in time of writting..)
+        address stakeToken_, // (gtUSDa uses USDC as deposit, in time of writing)
         address aeraProvisioner_
     ) AbstractStrategy(diamond_) {
         // deploys new ERC20 token owned by this strategy

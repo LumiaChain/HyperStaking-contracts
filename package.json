@@ -2,7 +2,9 @@
   "name": "HyperStaking-contracts",
   "scripts": {
     "test:unit": "npx hardhat test test/unit/*",
-    "test:fork": "FORK=true npx hardhat test test/integration/*",
+    "test:integration": "npm run test:integration:ethereum && npm run test:integration:base",
+    "test:integration:ethereum": "FORK=ethereum hardhat test test/integration/eth.test.ts",
+    "test:integration:base": "FORK=base hardhat test test/integration/base.test.ts",
     "coverage": "npx hardhat coverage --testfiles test/unit --solcoverjs .solcover.ts",
     "prettier": "prettier --write --plugin=prettier-plugin-solidity 'contracts/**/*.sol'",
     "lint": "prettier --list-different --plugin=prettier-plugin-solidity 'contracts/**/*.sol' || npx eslint . --ext .js,.ts",
@@ -40,6 +42,7 @@
     "hardhat-ignore-warnings": "^0.2.12",
     "hardhat-switch-network": "^1.1.1",
     "husky": "^9.1.5",
+    "npm-run-all": "^4.1.5",
     "prettier": "^3.3.3",
     "prettier-plugin-solidity": "^1.4.1",
     "solhint": "^5.1.0",

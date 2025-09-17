@@ -15,14 +15,23 @@ dotenv.config();
 const reportGas = process.env.REPORT_GAS?.toLowerCase() === "true";
 const reportSize = process.env.REPORT_SIZE?.toLowerCase() === "true";
 
-// If FORK=true, build a forking config; otherwise undefined.
-const FORK = process.env.FORK === "true";
-const forkingConfig = FORK
-  ? {
-      url: process.env.ETHEREUM_RPC_URL,
-      blockNumber: 22_000_000,
-    }
-  : undefined;
+// Build a forking config; otherwise undefined.
+const FORK = process.env.FORK;
+
+let forkingConfig;
+if (FORK === "ethereum") {
+  forkingConfig = {
+    url: process.env.ETHEREUM_RPC_URL,
+    blockNumber: 22_000_000,
+  };
+} else if (FORK === "base") {
+  forkingConfig = {
+    url: process.env.BASE_RPC_URL,
+    blockNumber: 35_600_000,
+  };
+} else {
+  forkingConfig = undefined;
+}
 
 task("accounts", "Prints the list of accounts with balances", async (_, hre): Promise<void> => {
   const accounts = await hre.ethers.getSigners();
