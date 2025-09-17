@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers, ignition } from "hardhat";
 import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
-import { parseUnits, Log, Contract, ZeroAddress } from "ethers";
+import { parseUnits, Log, Contract, ZeroAddress, parseEther } from "ethers";
 import * as shared from "../shared";
 import { TokenDetailsStruct } from "../../typechain-types/contracts/external/aera/Provisioner";
 import { AeraConfigStruct } from "../../typechain-types/contracts/hyperstaking/strategies/GauntletStrategy";
@@ -32,10 +32,10 @@ async function getMockedGauntlet(testUSDC?: Contract) {
 
   // -------------------- config
 
-  // Register vault in the PriceAndFeeCalculator (idempotent)
+  // register vault in the PriceAndFeeCalculator (idempotent)
   await aeraPriceAndFeeCalculator.connect(owner).registerVault();
 
-  // Set thresholds and initial price so pricing is "active"
+  // set thresholds and initial price so pricing is "active"
   await aeraPriceAndFeeCalculator.connect(owner).setThresholds(
     await aeraMultiDepositorVault.getAddress(),
     0,          // minPriceToleranceBps
@@ -45,14 +45,14 @@ async function getMockedGauntlet(testUSDC?: Contract) {
     30,         // maxUpdateDelayDays (lib-dependent; keep permissive)
   );
 
-  // Set initial unit price to 1 USDC per unit
+  // set initial unit price to 1 USDC per unit
   await aeraPriceAndFeeCalculator.connect(owner).setInitialPrice(
     await aeraMultiDepositorVault.getAddress(),
     parseUnits("1", 6), // unit price in numeraire (USDC has 6 decimals)
     await shared.getCurrentBlockTimestamp(),
   );
 
-  // Enable async deposits for USDC
+  // enable async deposits for USDC
   await aeraProvisioner.connect(owner).setTokenDetails(await testUSDC.getAddress(), {
     asyncDepositEnabled: true,
     asyncRedeemEnabled: true,
@@ -293,17 +293,17 @@ describe("Aera", function () {
 
       const { diamond, testUSDC, hyperFactory, hyperlaneHandler } = hyperStaking;
 
-      // Diamond and stake token
+      // diamond and stake token
       expect(await gauntletStrategy.DIAMOND()).to.equal(diamond);
 
       const stakeCurrency = await gauntletStrategy.stakeCurrency();
       expect(stakeCurrency.token).to.equal(testUSDC);
 
-      // Revenue asset set
+      // revenue asset set
       const revenueAssetAddr = await gauntletStrategy.revenueAsset();
       expect(revenueAssetAddr).to.not.equal(ZeroAddress);
 
-      // Hyperlane route exists and vaultShares assigned
+      // hyperlane route exists and vaultShares assigned
       const [exists, ,, vAssetToken, vSharesAddr] =
         await hyperlaneHandler.getRouteInfo(gauntletStrategy);
       expect(exists).to.equal(true);
@@ -312,7 +312,7 @@ describe("Aera", function () {
       expect(vAssetToken).to.equal(principalToken.target);
       expect(vSharesAddr).to.equal(vaultShares.target);
 
-      // VaultInfo reflects strategy and stake token
+      // vaultInfo reflects strategy and stake token
       const vInfo = await hyperFactory.vaultInfo(gauntletStrategy);
       expect(vInfo.enabled).to.equal(true);
       expect(vInfo.direct).to.equal(false);
@@ -387,7 +387,7 @@ describe("Aera", function () {
       await testUSDC.connect(alice).approve(deposit, aliceStake);
       await testUSDC.connect(bob).approve(deposit, bobStake);
 
-      // Alice first
+      // alice first
       const aliceReqId = 1;
       await expect(
         deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, aliceStake),
@@ -397,7 +397,7 @@ describe("Aera", function () {
         .and.to.emit(gauntletStrategy, "AllocationClaimed")
         .withArgs(aliceReqId, lockbox.target, aliceAlloc);
 
-      // Bob next
+      // bob next
       const bobReqId = 2;
       await expect(
         deposit.connect(bob).stakeDeposit(gauntletStrategy, bob, bobStake),
@@ -422,6 +422,107 @@ describe("Aera", function () {
       // LP balances reflect staked USDC on Lumia side
       expect(await vaultShares.balanceOf(alice)).to.equal(aliceStake);
       expect(await vaultShares.balanceOf(bob)).to.equal(bobStake);
+    });
+
+    it("stake & redeem with 3% slippage", async function () {
+      const {
+        hyperStaking,
+        gauntletStrategy,
+        vaultShares,
+        signers,
+        aeraMock,
+      } = await loadFixture(deployHyperStaking);
+
+      const { deposit, allocation, realAssets, testUSDC } = hyperStaking;
+      const { alice, stakingManager, strategyManager } = signers;
+
+      // --- configure slippage back to 3% ---
+      const cfg = await gauntletStrategy.aeraConfig();
+      await gauntletStrategy.connect(strategyManager).setAeraConfig({
+        solverTip: cfg.solverTip,
+        deadlineOffset: cfg.deadlineOffset,
+        maxPriceAge: cfg.maxPriceAge,
+        slippageBps: 300,
+        isFixedPrice: cfg.isFixedPrice,
+      } as AeraConfigStruct);
+
+      // increase allowed withdraw loss to 6% (to allow for 3% in and 3% out)
+      await deposit.connect(stakingManager).setAllowedWithdrawLoss(parseEther("0.06"));
+
+      const stakeAmount = parseUnits("1000", 6);
+      await testUSDC.connect(alice).approve(deposit, stakeAmount);
+
+      // preview allocation (should include 3% slippage)
+      const expectedAlloc = await gauntletStrategy.previewAllocation(stakeAmount);
+
+      // also compute raw units via calculator to verify ~3% reduction
+      const ROUND_FLOOR = 0;
+      const rawUnits = await aeraMock.aeraPriceAndFeeCalculator.convertTokenToUnitsIfActive(
+        await aeraMock.aeraMultiDepositorVault.getAddress(),
+        await testUSDC.getAddress(),
+        stakeAmount,
+        ROUND_FLOOR,
+      );
+      // expect alloc to be strictly less than raw units (≈ -3%, allow off-by rounding)
+      const precisionError = 1n;
+      expect(expectedAlloc - precisionError).to.be.eq(rawUnits - (rawUnits * 300n) / 10_000n);
+
+      // --- Stake & settle deposit ---
+      const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+      await shared.solveGauntletDepositRequest(
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
+      );
+
+      // LP 1:1 in stake units
+      const userShares = await vaultShares.balanceOf(alice);
+      expect(userShares).to.equal(stakeAmount);
+
+      // --- 1/2 redeem ---
+      const redeemShares = userShares / 2n;
+      await vaultShares.connect(alice).approve(realAssets, redeemShares);
+
+      // amount of *shares* the strategy will need to exit (units side)
+      const redeemTx = await realAssets.connect(alice)
+        .redeem(gauntletStrategy, alice, alice, redeemShares);
+
+      const aeraConfig = await gauntletStrategy.aeraConfig();
+      const deadline = BigInt(await shared.getCurrentBlockTimestamp()) + aeraConfig.deadlineOffset;
+
+      // pendingExit is the min tokens-out (USDC), includes 3% slippage on exit
+      const requestId = 2;
+      const minTokensOut = await gauntletStrategy.pendingExit(requestId);
+      expect(minTokensOut).to.be.gt(0);
+
+      // for visibility: tokens-out should be < stakeAmount due to slippage
+      expect(minTokensOut).to.be.lt(stakeAmount);
+
+      // --- Settle redeem & claim ---
+      await shared.solveGauntletRedeemRequest(
+        redeemTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, minTokensOut, requestId,
+      );
+
+      await time.setNextBlockTimestamp(Number(deadline));
+      const lastId = await shared.getLastClaimId(deposit, gauntletStrategy, alice);
+      const claimTx = await deposit.connect(alice).claimWithdraws([lastId], alice);
+
+      // ExitClaimed with the conservative minTokensOut
+      await expect(claimTx)
+        .to.emit(gauntletStrategy, "ExitClaimed")
+        .withArgs(requestId, alice, minTokensOut);
+
+      // funds flow: strategy USDC -> alice
+      await expect(claimTx)
+        .to.changeTokenBalances(
+          testUSDC,
+          [gauntletStrategy, alice],
+          [-minTokensOut, minTokensOut],
+        );
+
+      // position fully closed (no price change, so allocation should zero out)
+      const stakeInfo = await allocation.stakeInfo(gauntletStrategy);
+      expect(stakeInfo.totalStake).to.equal(stakeAmount / 2n);
+      expect(stakeInfo.totalAllocation).to.equal(expectedAlloc / 2n - precisionError);
+      expect(await vaultShares.balanceOf(alice)).to.equal(userShares - redeemShares);
     });
 
     it("redeem after +10% price increase, claim, and balances", async function () {
@@ -581,7 +682,7 @@ describe("Aera", function () {
       const aeraConfig = await gauntletStrategy.aeraConfig();
       const deadline = BigInt(now + 60) + aeraConfig.deadlineOffset;
 
-      // Check ExitRequested event
+      // check ExitRequested event
       const expectedExitShares = await gauntletStrategy.previewAllocation(stakeAmount);
       await expect(redeemTx)
         .to.emit(gauntletStrategy, "ExitRequested")
@@ -600,7 +701,7 @@ describe("Aera", function () {
         .to.emit(gauntletStrategy, "ExitClaimed")
         .withArgs(2, alice, expectedExitAmount);
 
-      // User fully out; totalStake==0, but totalAllocation > 0 (revenue left in units)
+      // user fully out; totalStake==0, but totalAllocation > 0 (revenue left in units)
       let si = await allocation.stakeInfo(gauntletStrategy);
       expect(si.totalStake).to.eq(0);
       expect(si.totalAllocation).to.gt(0);
