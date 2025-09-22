@@ -98,10 +98,10 @@ contract GauntletStrategy is AbstractStrategy {
         // https://docs.aera.finance/integrating-with-gtusda
         aeraConfig = AeraConfig({
             solverTip: 0,
-            deadlineOffset: 3 days,
+            deadlineOffset: 2 days,
             maxPriceAge: 3600,
             isFixedPrice: false,
-            slippageBps: 300 /// 3%
+            slippageBps: 100 /// 1%
         });
 
         ( // check if area impl have async operations enabled
