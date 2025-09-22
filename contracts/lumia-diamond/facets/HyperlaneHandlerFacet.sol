@@ -214,7 +214,8 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
             strategy,
             assetToken,
             name,
-            symbol
+            symbol,
+            decimals
         )));
     }
 }

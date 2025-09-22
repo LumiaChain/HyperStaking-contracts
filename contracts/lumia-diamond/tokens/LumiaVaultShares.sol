@@ -13,6 +13,8 @@ import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step
 contract LumiaVaultShares is ERC4626, Ownable2Step {
     using SafeERC20 for IERC20;
 
+    uint8 private immutable DECIMALS;
+
     /// Lumia Strategy associated with this token
     address public immutable STRATEGY;
 
@@ -31,11 +33,13 @@ contract LumiaVaultShares is ERC4626, Ownable2Step {
         address strategy,
         IERC20 asset,
         string memory sharesName,
-        string memory sharesSymbol
+        string memory sharesSymbol,
+        uint8 customDecimals
     ) ERC4626(asset) ERC20(sharesName, sharesSymbol) Ownable(diamond) {
         require(address(asset) != address(0), ZeroAddress());
         require(address(strategy) != address(0), ZeroAddress());
 
+        DECIMALS = customDecimals;
         STRATEGY = strategy;
     }
 
@@ -102,6 +106,11 @@ contract LumiaVaultShares is ERC4626, Ownable2Step {
     /// @notice Disable renouncing ownership
     function renounceOwnership() public view override onlyOwner {
         revert RenounceOwnershipDisabled();
+    }
+
+    /// override (default 18 dec)
+    function decimals() public view override returns (uint8) {
+        return DECIMALS;
     }
 
     //============================================================================================//

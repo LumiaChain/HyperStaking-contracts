@@ -49,21 +49,20 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         // Currency struct supports both native coin and erc20 tokens
         Currency memory stakeCurrency = IStrategy(strategy).stakeCurrency();
 
-        uint8 assetDecimals;
         address revenueAsset = address(0);
+
         if(!direct) {
             // The ERC20-compliant asset associated with the strategy
             revenueAsset = IStrategy(strategy).revenueAsset();
-            assetDecimals = IERC20Metadata(revenueAsset).decimals();
-        } else {
-            // For direct strategy uses stake currency decimals
-            assetDecimals = stakeCurrency.decimals();
         }
 
         _storeVaultInfo(strategy, direct, stakeCurrency, revenueAsset);
 
+        // use stake currency decimals
+        uint8 vaultDecimals = stakeCurrency.decimals();
+
         // register new route on lumia, deploy token representing it on lumia
-        _dispatchRouteRegistry(strategy, vaultTokenName, vaultTokenSymbol, assetDecimals);
+        _dispatchRouteRegistry(strategy, vaultTokenName, vaultTokenSymbol, vaultDecimals);
 
         emit VaultCreate(
             msg.sender,
@@ -73,7 +72,7 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
             revenueAsset,
             vaultTokenName,
             vaultTokenSymbol,
-            assetDecimals
+            vaultDecimals
         );
     }
 
