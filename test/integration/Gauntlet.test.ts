@@ -60,7 +60,7 @@ describe("Test Gauntlet Strategy", function () {
     /* eslint-disable object-property-newline */
   }
 
-  it("allocation: dont revert, emits deposit hash, escrows USDC on Provisioner, updates pendingAllocation", async function () {
+  it("allocation: dont revert, emits deposit hash, escrows USDC on Provisioner, updates recordedAllocation", async function () {
     const { gauntletStrategy, usdc, signers } = await loadFixture(getAeraIntegration);
     const { owner } = signers;
 
@@ -82,11 +82,11 @@ describe("Test Gauntlet Strategy", function () {
     const provUSDCAfter = await usdc.balanceOf(AERA_PROVISIONER_ADDRESS);
     expect(provUSDCAfter).to.be.greaterThan(provUSDCBefore);
 
-    // pendingAllocation recorded (units > 0)
-    expect(await gauntletStrategy.pendingAllocation(reqId)).to.be.gt(0n);
+    // recorded allocation (units > 0)
+    expect(await gauntletStrategy.recordedAllocation(reqId)).to.be.gt(0n);
   });
 
-  it("request exit (fork): claim wrapper, transfer to strategy, emit redeem hash, set pendingExit & allowance", async function () {
+  it("request exit (fork): claim wrapper, transfer to strategy, emit redeem hash, set recordedExit & allowance", async function () {
     const { gauntletStrategy, usdc, lumiaGtUSDA, signers } = await loadFixture(getAeraIntegration);
     const { owner } = signers;
 
@@ -126,8 +126,8 @@ describe("Test Gauntlet Strategy", function () {
     expect(await lumiaGtUSDA.balanceOf(owner)).to.eq(0n);
     expect(await lumiaGtUSDA.balanceOf(await gauntletStrategy.getAddress())).to.eq(shares);
 
-    // pendingExit (USDC out) recorded
-    expect(await gauntletStrategy.pendingExit(exitReqId)).to.be.gt(0n);
+    // recordedExit (USDC out)
+    expect(await gauntletStrategy.recordedExit(exitReqId)).to.be.gt(0n);
 
     // no settlement on fork; local mock suite handles solve & claim
   });

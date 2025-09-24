@@ -46,13 +46,13 @@ contract GauntletStrategy is AbstractStrategy {
     /// @notice The vault contract taken from aera provisioner (actual gtUSDa)
     address public immutable AERA_VAULT;
 
-    /// @notice Guaranteed allocation amounts per requestId
-    /// @dev Stores the minimum allocation units that will be minted when the request is claimed
-    mapping(uint256 requestId => uint256 minUnitsOut) public pendingAllocation;
+    /// @notice Recorded allocation amounts per requestId
+    /// @dev Stores the minimum allocation units that were guaranteed when the request was created
+    mapping(uint256 requestId => uint256 minUnitsOut) public recordedAllocation;
 
-    /// @notice Guaranteed stake-out per exit request
-    /// @dev Equal to minTokensOut passed to Aera for this request
-    mapping(uint256 requestId => uint256 minStakeOut) public pendingExit;
+    /// @notice Recorded stake-out per exit request
+    /// @dev Equal to the minTokensOut passed to Aera for this request preserved as a record
+    mapping(uint256 requestId => uint256 minStakeOut) public recordedExit;
 
     //============================================================================================//
     //                                          Events                                            //
@@ -139,7 +139,7 @@ contract GauntletStrategy is AbstractStrategy {
         uint256 minUnitsOut = _previewAllocationRaw(amount_);
 
         // save minUnitsOut for later claim settlement
-        pendingAllocation[requestId_] = minUnitsOut;
+        recordedAllocation[requestId_] = minUnitsOut;
 
         // transfer stake amount to this contract and approve Aera
         STAKE_TOKEN.safeTransferFrom(msg.sender, address(this), amount_);
@@ -210,7 +210,7 @@ contract GauntletStrategy is AbstractStrategy {
         uint256 minTokensOut = _previewExitRaw(shares_);
 
         // guaranteed minimum units for this request
-        pendingExit[requestId_] = minTokensOut;
+        recordedExit[requestId_] = minTokensOut;
 
         // transfer stake amount to this contract and approve Aera
         IERC20(address(LUMIA_GTUSDA)).safeTransferFrom(msg.sender, address(this), shares_);
@@ -293,7 +293,7 @@ contract GauntletStrategy is AbstractStrategy {
         _loadClaimable(id_, StrategyKind.Allocation);
 
         // guaranteed units for this request
-        allocation = pendingAllocation[id_];
+        allocation = recordedAllocation[id_];
         require(allocation != 0, PendingAllocationMissing());
 
         // mark request as claimed
@@ -314,7 +314,7 @@ contract GauntletStrategy is AbstractStrategy {
         StrategyRequest memory r = _loadClaimable(id_, StrategyKind.Exit);
 
         // guaranteed units for this request
-        exitAmount = pendingExit[id_];
+        exitAmount = recordedExit[id_];
         require(exitAmount != 0, PendingExitMissing());
 
         // burn wrapper shares - prevent double spend

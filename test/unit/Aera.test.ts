@@ -488,9 +488,9 @@ describe("Aera", function () {
       const aeraConfig = await gauntletStrategy.aeraConfig();
       const deadline = BigInt(await shared.getCurrentBlockTimestamp()) + aeraConfig.deadlineOffset;
 
-      // pendingExit is the min tokens-out (USDC), includes 3% slippage on exit
+      // recordedExit is the min tokens-out (USDC), includes 3% slippage on exit
       const requestId = 2;
-      const minTokensOut = await gauntletStrategy.pendingExit(requestId);
+      const minTokensOut = await gauntletStrategy.recordedExit(requestId);
       expect(minTokensOut).to.be.gt(0);
 
       // for visibility: tokens-out should be < stakeAmount due to slippage
@@ -596,8 +596,8 @@ describe("Aera", function () {
         .to.emit(gauntletStrategy, "ExitRequested")
         .withArgs(2, alice, expectedExitShares, deadline);
 
-      // pendingExit must be set
-      expect(await gauntletStrategy.pendingExit(2)).to.equal(expectedExitAmount);
+      // recordedExit must be set
+      expect(await gauntletStrategy.recordedExit(2)).to.equal(expectedExitAmount);
 
       await shared.solveGauntletRedeemRequest(
         redeemTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, expectedExitAmount, 2,
@@ -689,7 +689,7 @@ describe("Aera", function () {
         .withArgs(2, alice, expectedExitShares, deadline);
 
       const expectedExitAmount = await gauntletStrategy.previewExit(expectedExitShares);
-      expect(await gauntletStrategy.pendingExit(2)).to.equal(expectedExitAmount);
+      expect(await gauntletStrategy.recordedExit(2)).to.equal(expectedExitAmount);
 
       await shared.solveGauntletRedeemRequest(
         redeemTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, expectedExitAmount, 2,
@@ -809,7 +809,7 @@ describe("Aera", function () {
         .to.emit(gauntletStrategy, "ExitRequested")
         .withArgs(2, alice, expectedExitShares, deadline);
 
-      const minTokensOut = await gauntletStrategy.pendingExit(2);
+      const minTokensOut = await gauntletStrategy.recordedExit(2);
       expect(minTokensOut).to.be.gt(0);
 
       // settle redeem and then claim

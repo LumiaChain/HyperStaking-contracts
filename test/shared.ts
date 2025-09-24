@@ -327,7 +327,7 @@ export async function solveGauntletDepositRequest(
   );
   expect(depositRequestHash).to.not.equal(ZeroBytes32);
 
-  const units = await gauntletStrategy.pendingAllocation(requestId);
+  const units = await gauntletStrategy.recordedAllocation(requestId);
   await provisioner.testSolveDeposit(
     token,
     await gauntletStrategy.getAddress(),
@@ -352,7 +352,7 @@ export async function solveGauntletRedeemRequest(
   );
   expect(redeemRequestHash).to.not.equal(ZeroBytes32);
 
-  const units = await gauntletStrategy.pendingExit(requestId);
+  const units = await gauntletStrategy.recordedExit(requestId);
   await provisioner.testSolveRedeem(
     token,
     await gauntletStrategy.getAddress(),
