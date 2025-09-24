@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers, ignition } from "hardhat";
 import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
-import { parseUnits, Log, Contract, ZeroAddress, parseEther } from "ethers";
+import { parseUnits, Log, Contract, ZeroAddress } from "ethers";
 import * as shared from "../shared";
 import { TokenDetailsStruct } from "../../typechain-types/contracts/external/aera/Provisioner";
 import { AeraConfigStruct } from "../../typechain-types/contracts/hyperstaking/strategies/GauntletStrategy";
@@ -434,7 +434,7 @@ describe("Aera", function () {
       } = await loadFixture(deployHyperStaking);
 
       const { deposit, allocation, realAssets, testUSDC } = hyperStaking;
-      const { alice, stakingManager, strategyManager } = signers;
+      const { alice, strategyManager } = signers;
 
       // --- configure slippage back to 3% ---
       const cfg = await gauntletStrategy.aeraConfig();
@@ -445,9 +445,6 @@ describe("Aera", function () {
         slippageBps: 300,
         isFixedPrice: cfg.isFixedPrice,
       } as AeraConfigStruct);
-
-      // increase allowed withdraw loss to 6% (to allow for 3% in and 3% out)
-      await deposit.connect(stakingManager).setAllowedWithdrawLoss(parseEther("0.06"));
 
       const stakeAmount = parseUnits("1000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);

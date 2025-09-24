@@ -135,13 +135,6 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             // because of possible price changes between request and claim,
             uint256 exitAmount = IStrategy(c.strategy).claimExit(ids, to);
 
-            // In case of lose, ensure protocol does not allow loss more than allowedWithdrawLoss
-            if (exitAmount < stake) {
-                uint256 loss = stake - exitAmount;
-                uint256 maxLoss = (stake * v.allowedWithdrawLoss) / LibHyperStaking.PERCENT_PRECISION;
-                require(maxLoss >= loss, WithdrawLossExceeded(stake, exitAmount));
-            }
-
             if (c.feeWithdraw) {
                 emit FeeWithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount);
                 continue; // fee withdrawal does not affect the total stake
@@ -206,18 +199,6 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         emit WithdrawDelaySet(msg.sender, previousDelay, newDelay);
     }
 
-    /// @notice Sets the allowed loss tolerance (1e18 = 100%)
-    /// @inheritdoc IDeposit
-    function setAllowedWithdrawLoss(uint256 newAllowedLoss) external onlyStakingManager {
-        require(newAllowedLoss <= 1e18, WithdrawLossTooHigh());
-
-        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        uint256 previousAllowedLoss = v.allowedWithdrawLoss;
-        v.allowedWithdrawLoss = newAllowedLoss;
-
-        emit AllowedWithdrawLossSet(msg.sender, previousAllowedLoss, newAllowedLoss);
-    }
-
     /// @inheritdoc IDeposit
     function pauseDeposit() external onlyStakingManager whenNotPaused {
         _pause();
@@ -234,11 +215,6 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     function withdrawDelay() external view returns (uint64) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         return v.defaultWithdrawDelay;
-    }
-
-    /// @inheritdoc IDeposit
-    function allowedWithdrawLoss() external view returns (uint256) {
-        return LibHyperStaking.diamondStorage().allowedWithdrawLoss;
     }
 
     /// @inheritdoc IDeposit
