@@ -86,6 +86,8 @@ contract GauntletStrategy is AbstractStrategy {
         address stakeToken_, // (gtUSDa uses USDC as deposit, in time of writing)
         address aeraProvisioner_
     ) AbstractStrategy(diamond_) {
+        require(stakeToken_ != address(0), ZeroAddress());
+
         // deploys new ERC20 token owned by this strategy
         LUMIA_GTUSDA = new LumiaGtUSDa();
 
