@@ -3,11 +3,11 @@ pragma solidity =0.8.27;
 
 import {ERC20Burnable, ERC20} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 
-/// @title LumiaGtUSDaAllocation
+/// @title LumiaGtUSDa
 /// @notice ERC20 derived token that represents a staked position,
 ///         1:1 to Gauntlet USD Alpha (gtUSDa)
 /// @dev Minted and burned only by the GauntletStrategy contract
-contract LumiaGtUSDaAllocation is ERC20Burnable {
+contract LumiaGtUSDa is ERC20Burnable {
     /// @notice Address of the GauntletStrategy authorized to mint/burn
     address public immutable GAUNTLET_STRATEGY;
 
@@ -20,7 +20,7 @@ contract LumiaGtUSDaAllocation is ERC20Burnable {
         _;
     }
 
-    constructor() ERC20("Lumia gtUSDa Allocation", "l-gtUSDa") {
+    constructor() ERC20("Lumia gtUSDa", "l-gtUSDa") {
         GAUNTLET_STRATEGY = msg.sender; // strategy deploys this token
     }
 

@@ -360,7 +360,7 @@ describe("Aera", function () {
 
       // lockbox holds revenue asset (receipt/units)
       const revenueAssetAddr = await gauntletStrategy.revenueAsset();
-      const revenueAsset = await ethers.getContractAt("LumiaGtUSDaAllocation", revenueAssetAddr);
+      const revenueAsset = await ethers.getContractAt("LumiaGtUSDa", revenueAssetAddr);
       expect(await revenueAsset.balanceOf(lockbox)).to.equal(expectedAlloc);
 
       // LP (vault shares on Lumia chain) minted to user
@@ -414,7 +414,7 @@ describe("Aera", function () {
 
       // lockbox holds combined allocation units (revenue asset)
       const revenueAsset = await ethers.getContractAt(
-        "LumiaGtUSDaAllocation",
+        "LumiaGtUSDa",
         await gauntletStrategy.revenueAsset(),
       );
       expect(await revenueAsset.balanceOf(lockbox)).to.equal(aliceAlloc + bobAlloc);

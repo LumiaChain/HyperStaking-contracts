@@ -3,7 +3,7 @@ pragma solidity =0.8.27;
 
 import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
 import {AbstractStrategy} from "./AbstractStrategy.sol";
-import {LumiaGtUSDaAllocation} from "./tokens/LumiaGtUSDaAllocation.sol";
+import {LumiaGtUSDa} from "./tokens/LumiaGtUSDa.sol";
 import {Currency} from "../libraries/CurrencyHandler.sol";
 
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -32,7 +32,7 @@ contract GauntletStrategy is AbstractStrategy {
     AeraConfig public aeraConfig;
 
     /// @notice Address of the Gauntlet derived token, used as allocation for the HyperStaking
-    LumiaGtUSDaAllocation public immutable LUMIA_GTUSDA;
+    LumiaGtUSDa public immutable LUMIA_GTUSDA;
 
     /// @notice Stake token accepted by the strategy (input currency)
     IERC20 public immutable STAKE_TOKEN;
@@ -87,7 +87,7 @@ contract GauntletStrategy is AbstractStrategy {
         address aeraProvisioner_
     ) AbstractStrategy(diamond_) {
         // deploys new ERC20 token owned by this strategy
-        LUMIA_GTUSDA = new LumiaGtUSDaAllocation();
+        LUMIA_GTUSDA = new LumiaGtUSDa();
 
         STAKE_TOKEN = IERC20(stakeToken_);
         AERA_PROVISIONER = Provisioner(aeraProvisioner_);
