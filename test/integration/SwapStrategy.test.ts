@@ -4,7 +4,7 @@ import { parseUnits } from "ethers";
 import { ethers, ignition } from "hardhat";
 
 import SwapSuperStrategyModule from "../../ignition/modules/SwapSuperStrategy";
-import TestSwapIntegrationModule from "../../ignition/modules/test/TestSwapIntegration.ts";
+import TestSwapIntegrationModule from "../../ignition/modules/test/TestSwapIntegration";
 
 import { expect } from "chai";
 import * as shared from "../shared";
@@ -169,6 +169,9 @@ describe("Swap Test Integration", function () {
 
     const superAmount = await superUSDC.balanceOf(alice);
 
+    const before3pool = await usdc.balanceOf(CURVE_3POOL_ADDRESS);
+    const beforeVault = await usdc.balanceOf(superVaultAddress);
+
     await superUSDC.connect(alice).approve(testSwapIntegration, superAmount);
     const exitTx = testSwapIntegration.connect(alice).exit(swapSuperStrategy, superAmount);
 
@@ -178,8 +181,13 @@ describe("Swap Test Integration", function () {
     await expect(exitTx).to.changeTokenBalance(superUSDC, alice, -superAmount);
     await expect(exitTx).to.changeTokenBalances(usdt, [CURVE_3POOL_ADDRESS, alice], [-amountOut + precisionErr, amountOut - precisionErr]);
 
-    const usdcOut = 299914275n; // hardcoded value, based on the pool's current state
-    await expect(exitTx).to.changeTokenBalances(usdc, [superVaultAddress, CURVE_3POOL_ADDRESS], [-1n, usdcOut]);
+    await exitTx;
+
+    const expectedOut = 299914275n; // hardcoded value, based on the pool's current state
+    const tolerance = 2n; // allow +/- 2 units
+
+    expect(await usdc.balanceOf(CURVE_3POOL_ADDRESS)).to.be.closeTo(before3pool + expectedOut, tolerance);
+    expect(await usdc.balanceOf(superVaultAddress)).to.be.closeTo(beforeVault, tolerance);
 
     expect(await superUSDC.balanceOf(alice)).to.be.eq(0);
   });

@@ -90,6 +90,7 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
 
     // ========= Diamond ========= //
 
+    /// @inheritdoc IStrategy
     function requestAllocation(
         uint256 requestId_,
         uint256 amount_,
