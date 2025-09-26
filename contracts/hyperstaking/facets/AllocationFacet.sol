@@ -192,8 +192,16 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         if (IStrategy(strategy).isDirectStakeStrategy()) {
             allocation = stake;
         } else {
+            // what we would like to exit to cover 'stake' at current price/slippage
+            uint256 need = IStrategy(strategy).previewAllocation(stake);
 
-            allocation = IStrategy(strategy).previewAllocation(stake);
+            // what we actually can exit proportionally from current holdings
+            // also prevents 1-wei ceil from exceeding (floor)
+            if (need > si.totalAllocation) {
+                allocation = si.totalAllocation;
+            } else {
+                allocation = need;
+            }
 
             // save non-direct stake information
             si.totalAllocation -= allocation;
@@ -203,7 +211,6 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
                 vault.revenueAsset.safeIncreaseAllowance(strategy, allocation);
             }
         }
-
         IDeposit(address(this)).queueWithdraw(strategy, user, stake, allocation, feeWithdraw);
 
         emit Leave(strategy, user, stake, allocation);
