@@ -1323,9 +1323,9 @@ describe("Aera", function () {
       expect(r3.minOut).to.be.lte(r3.amount);
 
       // Under fixed price/slippage, proportionality holds within a wei or two
-      // r2 is about 2× r1; r3 about 3× r1
-      expect((r2.minOut - 2n * r1.minOut) < 2n).to.equal(true);
-      expect((r3.minOut - 3n * r1.minOut) < 3n).to.equal(true);
+      // Each 1/3 redemption should yield a similar amount of tokens.
+      expect(r1.minOut).to.be.closeTo(r2.minOut, 2n);
+      expect(r3.minOut).to.be.closeTo(r2.minOut, 2n);
 
       // No last-claim penalty: the largest chunk does not get worse treatment
       const minPart = r1.minOut < r2.minOut ? r1.minOut : r2.minOut;
