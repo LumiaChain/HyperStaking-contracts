@@ -165,7 +165,7 @@ describe("Staking", function () {
       const principal = await Principal.deploy(owner, "Lumia Principal Token", "LPT", 18);
 
       const VaultShares = await ethers.getContractFactory("LumiaVaultShares");
-      const shares = await VaultShares.deploy(owner, reserveStrategy1, testERC20, "Lumia Vault Shares", "LVS");
+      const shares = await VaultShares.deploy(owner, reserveStrategy1, testERC20, "Lumia Vault Shares", "LVS", 18);
 
       await expect(principal.renounceOwnership())
         .to.be.revertedWithCustomError(principal, "RenounceOwnershipDisabled");

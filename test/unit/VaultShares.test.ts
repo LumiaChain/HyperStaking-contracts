@@ -55,19 +55,55 @@ async function deployHyperStaking() {
 describe("VaultShares", function () {
   describe("InterchainFactory", function () {
     it("vault token name, symbol and decimals", async function () {
-      const { testReserveAsset, principalToken, vaultShares, vaultSharesName, vaultSharesSymbol } = await loadFixture(deployHyperStaking);
+      const { signers, hyperStaking, testReserveAsset, reserveAssetPrice, principalToken, vaultShares, vaultSharesName, vaultSharesSymbol } = await loadFixture(deployHyperStaking);
+
+      const { diamond, hyperFactory, hyperlaneHandler } = hyperStaking;
+      const { vaultManager } = signers;
 
       expect(await principalToken.name()).to.equal(`Principal ${vaultSharesName}`);
       expect(await principalToken.symbol()).to.equal("p" + vaultSharesSymbol);
+      expect(await principalToken.decimals()).to.equal(18);
 
       expect(await vaultShares.name()).to.equal(vaultSharesName);
       expect(await vaultShares.symbol()).to.equal(vaultSharesSymbol);
+      expect(await vaultShares.decimals()).to.equal(18);
 
       const testReserveAssetDecimals = await testReserveAsset.decimals();
 
+      // 18 - native token decimals
       expect(testReserveAssetDecimals).to.equal(18);
       expect(testReserveAssetDecimals).to.equal(await principalToken.decimals());
       expect(testReserveAssetDecimals).to.equal(await vaultShares.decimals());
+
+      // create another vault shares to check different values
+
+      const strangeDecimals = 11;
+      const strangeUSDStake = await shared.deloyTestERC20("Test USD Strange Asset", "tUSSA", strangeDecimals);
+
+      const strangeStrategy = await shared.createReserveStrategy(
+        diamond, await strangeUSDStake.getAddress(), await testReserveAsset.getAddress(), reserveAssetPrice,
+      );
+
+      const vaultSharesName2 = "strange usd vault";
+      const vaultSharesSymbol2 = "vUSSA";
+      await hyperFactory.connect(vaultManager).addStrategy(
+        strangeStrategy,
+        vaultSharesName2,
+        vaultSharesSymbol2,
+      );
+
+      const strangeLumiaTokens = await shared.getDerivedTokens(
+        hyperlaneHandler,
+        await strangeStrategy.getAddress(),
+      );
+
+      expect(await strangeLumiaTokens.principalToken.name()).to.equal(`Principal ${vaultSharesName2}`);
+      expect(await strangeLumiaTokens.principalToken.symbol()).to.equal("p" + vaultSharesSymbol2);
+      expect(await strangeLumiaTokens.principalToken.decimals()).to.equal(strangeDecimals);
+
+      expect(await strangeLumiaTokens.vaultShares.name()).to.equal(vaultSharesName2);
+      expect(await strangeLumiaTokens.vaultShares.symbol()).to.equal(vaultSharesSymbol2);
+      expect(await strangeLumiaTokens.vaultShares.decimals()).to.equal(strangeDecimals);
     });
 
     it("test route and registration", async function () {

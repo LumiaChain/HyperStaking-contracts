@@ -60,13 +60,13 @@ async function deployHyperStaking() {
 describe("Lockbox", function () {
   describe("Lockbox Facet", function () {
     it("vault token properties should be correct", async function () {
-      const { hyperStaking, signers } = await loadFixture(deployHyperStaking);
+      const { hyperStaking, signers, testReserveAsset } = await loadFixture(deployHyperStaking);
       const { diamond, hyperFactory, mailbox } = hyperStaking;
       const { owner, vaultManager } = signers;
 
       const strangeToken = await shared.deployTestERC20("Test 14 dec Coin", "t14c", 14);
       const reserveStrategy2 = await shared.createReserveStrategy(
-        diamond, shared.nativeTokenAddress, await strangeToken.getAddress(), parseEther("1"),
+        diamond, await strangeToken.getAddress(), await testReserveAsset.getAddress(), parseEther("1"),
       );
 
       const vname = "strange vault";
