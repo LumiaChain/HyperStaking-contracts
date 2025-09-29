@@ -41,6 +41,7 @@ struct DirectStakeInfo {
 struct StakeInfo {
     uint256 totalStake;
     uint256 totalAllocation;
+    uint256 pendingExitStake; // stake already queued to leave, not yet claimed
 }
 
 // @param strategy That produced this claim

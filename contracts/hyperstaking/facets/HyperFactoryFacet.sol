@@ -137,7 +137,8 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
             // active staking
             v.stakeInfo[strategy] = StakeInfo({
                 totalStake: 0,
-                totalAllocation: 0
+                totalAllocation: 0,
+                pendingExitStake: 0
             });
         }
     }

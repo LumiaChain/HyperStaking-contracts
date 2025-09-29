@@ -1,13 +1,15 @@
 import { expect } from "chai";
 import fc from "fast-check";
 import { ethers, ignition } from "hardhat";
-import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
-import { parseUnits, Log, Contract, ZeroAddress } from "ethers";
+import { time, mine, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { parseUnits, Log, Contract, ZeroAddress, Signer } from "ethers";
 import * as shared from "../shared";
 import { TokenDetailsStruct } from "../../typechain-types/contracts/external/aera/Provisioner";
 import { AeraConfigStruct } from "../../typechain-types/contracts/hyperstaking/strategies/GauntletStrategy";
 import GauntletMockModule from "../../ignition/modules/test/GauntletMock";
 import GauntletStrategyModule from "../../ignition/modules/GauntletStrategy";
+import { LumiaVaultShares } from "../../typechain-types";
+import { ClaimStruct } from "../../typechain-types/contracts/hyperstaking/interfaces/IDeposit";
 
 async function getMockedGauntlet(testUSDC?: Contract) {
   const [owner, feeRecipient, alice, bob] = await ethers.getSigners();
@@ -479,6 +481,10 @@ describe("Aera", function () {
       const redeemShares = userShares;
       await vaultShares.connect(alice).approve(realAssets, redeemShares);
 
+      // move to next block to avoid "same block timestamp" for deposit and redeem
+      await time.increase(1);
+      await mine(1, { interval: 5 });
+
       // amount of *shares* the strategy will need to exit (units side)
       const redeemTx = await realAssets.connect(alice)
         .redeem(gauntletStrategy, alice, alice, redeemShares);
@@ -794,7 +800,8 @@ describe("Aera", function () {
         parseUnits("0.0001", 6), // delta tolerance
       );
 
-      let expectedExitShares = await gauntletStrategy.previewAllocation(exitAmount);
+      // because previewAllocation rounds up, we may need to correct by 1 unit
+      let expectedExitShares = await gauntletStrategy.previewAllocation(exitAmount) - 1n;
 
       // 1 off-by-one correction if necessary
       if (expectedExitShares > siAfterReport.totalAllocation) {
@@ -940,8 +947,49 @@ describe("Aera", function () {
     });
   });
 
-  describe("GauntletStrategy gain/loss fuzz", () => {
-    it("stake/redeem across slippage, price moves, and redeem ratios", async () => {
+  describe("GauntletStrategy gain/loss", () => {
+    async function redeemFraction(
+      vaultShares: LumiaVaultShares,
+      realAssets: Contract,
+      gauntletStrategy: Contract,
+      alice: Signer,
+      num: number,
+      den: number,
+      reqId: number,
+    ) {
+      const userShares = await vaultShares.balanceOf(alice);
+      const part = (userShares * BigInt(num)) / BigInt(den);
+      const amount = part > 0n ? part : 1n;
+
+      await vaultShares.connect(alice).approve(realAssets, amount);
+      const tx = await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, amount);
+
+      const minOut = await gauntletStrategy.recordedExit(reqId);
+      return { tx, amount, minOut };
+    }
+
+    async function claimAtDeadline(
+      deposit: Contract,
+      alice: Signer,
+      requestId: number,
+    ) {
+      const pendingClaim: ClaimStruct[] = await deposit.pendingWithdraws([requestId]);
+      const deadline = pendingClaim[0].unlockTime;
+
+      const now = await shared.getCurrentBlockTimestamp();
+      if (now < Number(deadline)) {
+        await time.setNextBlockTimestamp(Number(deadline));
+      }
+
+      const claimTx = await deposit.connect(alice).claimWithdraws([requestId], alice);
+      return { claimTx };
+    }
+
+    function bpsMul(amount: bigint, bps: number) {
+      return (amount * BigInt(10_000 - bps)) / 10_000n;
+    }
+
+    it("fuzz stake/redeem across slippage, price moves, and redeem ratios", async () => {
       await fc.assert(
         fc.asyncProperty(
           fc.record({
@@ -1108,6 +1156,252 @@ describe("Aera", function () {
         ),
         { numRuns: 150 }, // tune if necessary
       );
+    });
+
+    it("2×1/2 redemptions share loss fairly; totals match single-shot", async () => {
+      const {
+        hyperStaking, gauntletStrategy, vaultShares, signers, aeraMock,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit, realAssets, testUSDC } = hyperStaking;
+      const { alice, owner } = signers;
+
+      // set a moderate slippage to surface edge math
+      const cfg0 = await gauntletStrategy.aeraConfig();
+      await gauntletStrategy.connect(signers.strategyManager).setAeraConfig({
+        solverTip: cfg0.solverTip,
+        deadlineOffset: cfg0.deadlineOffset,
+        maxPriceAge: cfg0.maxPriceAge,
+        slippageBps: 300,   // 3%
+        isFixedPrice: cfg0.isFixedPrice,
+      });
+
+      // stake 10_000 USDC
+      const stakeAmount = parseUnits("10000", 6);
+      await testUSDC.connect(alice).approve(deposit, stakeAmount);
+      const stakeTx = await deposit.connect(alice).stakeDeposit(
+        gauntletStrategy,
+        alice,
+        stakeAmount,
+      );
+
+      await shared.solveGauntletDepositRequest(
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, /* requestId */ 1,
+      );
+
+      // apply price loss
+      const newPrice = parseUnits("0.75", 6); // 25% loss
+      const newTimestamp = (await shared.getCurrentBlockTimestamp()) + 60;
+      await time.setNextBlockTimestamp(newTimestamp);
+      await aeraMock.aeraPriceAndFeeCalculator.connect(owner).setUnitPrice(
+        await aeraMock.aeraMultiDepositorVault.getAddress(),
+        newPrice,
+        newTimestamp,
+      );
+
+      // Do two redeems of 1/2 each, do not claim in between, request ids start at 2
+      const r1 = await redeemFraction(vaultShares, realAssets, gauntletStrategy, alice, 1, 2, 2);
+      const r2 = await redeemFraction(vaultShares, realAssets, gauntletStrategy, alice, 1, 1, 3);
+
+      // settle both with their recorded mins, then claim both at deadline
+      await shared.solveGauntletRedeemRequest(
+        r1.tx,
+        gauntletStrategy,
+        aeraMock.aeraProvisioner,
+        testUSDC,
+        r1.minOut,
+        /* requestId */ 2,
+      );
+
+      await shared.solveGauntletRedeemRequest(
+        r2.tx,
+        gauntletStrategy,
+        aeraMock.aeraProvisioner,
+        testUSDC,
+        r2.minOut,
+        /* requestId */ 3,
+      );
+
+      // claim second first, then first (order should not change totals)
+      const { claimTx: claim2 } = await claimAtDeadline(deposit, alice, 3);
+      await expect(claim2)
+        .to.emit(gauntletStrategy, "ExitClaimed")
+        .withArgs(3, alice, r2.minOut);
+
+      const { claimTx: claim1 } = await claimAtDeadline(deposit, alice, 2);
+      await expect(claim1)
+        .to.emit(gauntletStrategy, "ExitClaimed")
+        .withArgs(2, alice, r1.minOut);
+
+      // Each part can never exceed redeemed shares baseline
+      expect(r1.minOut).to.be.lte(r1.amount);
+      expect(r2.minOut).to.be.lte(r2.amount);
+
+      // Proportionality under fixed price/slippage: halves should be near-equal
+      const diff = r1.minOut > r2.minOut ? r1.minOut - r2.minOut : r2.minOut - r1.minOut;
+      expect(diff).to.be.lte(1n); // within 1 wei
+
+      // Compare against a hypothetical single-shot redeem min
+      const fullRedeemMin = bpsMul(
+        (stakeAmount * newPrice) / parseUnits("1", 6), // price loss
+        300,                              // slippage once for redeem
+      );
+
+      // We did two redeems, each had slippage. That makes the sum a tiny bit lower
+      const sumMin = r1.minOut + r2.minOut;
+      const twoPathLowerBound = bpsMul(fullRedeemMin, 300); // rough lower bound
+      expect(sumMin + 1n).to.be.gte(twoPathLowerBound);
+      expect(sumMin).to.be.lte(fullRedeemMin); // never better than single-shot
+    });
+
+    it("3×1/3 redemptions share loss; sum never < one-lump lower bound", async () => {
+      const {
+        hyperStaking, gauntletStrategy, vaultShares, signers, aeraMock,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit, allocation, realAssets, testUSDC } = hyperStaking;
+      const { alice, owner } = signers;
+
+      const cfg0 = await gauntletStrategy.aeraConfig();
+      await gauntletStrategy.connect(signers.strategyManager).setAeraConfig({
+        solverTip: cfg0.solverTip,
+        deadlineOffset: cfg0.deadlineOffset,
+        maxPriceAge: cfg0.maxPriceAge,
+        slippageBps: 300,
+        isFixedPrice: cfg0.isFixedPrice,
+      });
+
+      const stakeAmount = parseUnits("9000", 6);
+      await testUSDC.connect(alice).approve(deposit, stakeAmount);
+      const stakeTx = await deposit.connect(alice).stakeDeposit(
+        gauntletStrategy,
+        alice,
+        stakeAmount,
+      );
+
+      await shared.solveGauntletDepositRequest(
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, /* requestId */ 1,
+      );
+
+      const newPrice = parseUnits("0.50", 6); // 50% loss
+      const newTimestamp = (await shared.getCurrentBlockTimestamp()) + 60;
+      await time.setNextBlockTimestamp(newTimestamp);
+      await aeraMock.aeraPriceAndFeeCalculator.connect(owner).setUnitPrice(
+        await aeraMock.aeraMultiDepositorVault.getAddress(),
+        newPrice,
+        newTimestamp,
+      );
+
+      const beforeSI = await allocation.stakeInfo(gauntletStrategy);
+
+      const r1 = await redeemFraction(vaultShares, realAssets, gauntletStrategy, alice, 1, 3, 2);
+      const r2 = await redeemFraction(vaultShares, realAssets, gauntletStrategy, alice, 1, 2, 3);
+      const r3 = await redeemFraction(vaultShares, realAssets, gauntletStrategy, alice, 1, 1, 4);
+
+      await shared.solveGauntletRedeemRequest(
+        r1.tx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, r1.minOut, 2,
+      );
+      await shared.solveGauntletRedeemRequest(
+        r2.tx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, r2.minOut, 3,
+      );
+      await shared.solveGauntletRedeemRequest(
+        r3.tx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, r3.minOut, 4,
+      );
+
+      const midSI = await allocation.stakeInfo(gauntletStrategy);
+      expect(midSI.pendingExitStake - beforeSI.pendingExitStake).to.equal(stakeAmount);
+      expect(midSI.pendingExitStake).to.be.lte(midSI.totalStake);
+
+      await claimAtDeadline(deposit, alice, 2);
+      await claimAtDeadline(deposit, alice, 3);
+      await claimAtDeadline(deposit, alice, 4);
+
+      const afterSI = await allocation.stakeInfo(gauntletStrategy);
+      expect(afterSI.pendingExitStake).to.equal(0);
+
+      // All parts bounded by their share amounts
+      expect(r1.minOut).to.be.lte(r1.amount);
+      expect(r2.minOut).to.be.lte(r2.amount);
+      expect(r3.minOut).to.be.lte(r3.amount);
+
+      // Under fixed price/slippage, proportionality holds within a wei or two
+      // r2 is about 2× r1; r3 about 3× r1
+      expect((r2.minOut - 2n * r1.minOut) < 2n).to.equal(true);
+      expect((r3.minOut - 3n * r1.minOut) < 3n).to.equal(true);
+
+      // No last-claim penalty: the largest chunk does not get worse treatment
+      const minPart = r1.minOut < r2.minOut ? r1.minOut : r2.minOut;
+      expect(r3.minOut + 1n).to.be.gte(minPart);
+
+      // Sum never exceeds single-shot and not catastrophically less
+      const fullRedeemMin = bpsMul((stakeAmount * newPrice) / parseUnits("1", 6), 300);
+      const sumMin = r1.minOut + r2.minOut + r3.minOut;
+      expect(sumMin).to.be.lte(fullRedeemMin);
+      // rough lower guard: applying slippage multiple times hurts, but not absurdly
+      const multiPathLower = bpsMul(bpsMul(fullRedeemMin, 300), 300);
+      expect(sumMin + 1n).to.be.gte(multiPathLower);
+    });
+
+    it("2×1/2, price up: each part <= shares; sum <= single-shot", async () => {
+      const {
+        hyperStaking, gauntletStrategy, vaultShares, signers, aeraMock,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit, realAssets, testUSDC } = hyperStaking;
+      const { alice, owner } = signers;
+
+      const cfg0 = await gauntletStrategy.aeraConfig();
+      await gauntletStrategy.connect(signers.strategyManager).setAeraConfig({
+        solverTip: cfg0.solverTip,
+        deadlineOffset: cfg0.deadlineOffset,
+        maxPriceAge: cfg0.maxPriceAge,
+        slippageBps: 300,
+        isFixedPrice: cfg0.isFixedPrice,
+      });
+
+      const stakeAmount = parseUnits("5000", 6);
+      await testUSDC.connect(alice).approve(deposit, stakeAmount);
+      const stakeTx = await deposit.connect(alice).stakeDeposit(
+        gauntletStrategy,
+        alice,
+        stakeAmount,
+      );
+
+      await shared.solveGauntletDepositRequest(
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, /* requestId */ 1,
+      );
+
+      // push price up + mint gains into aera vault so accounting is consistent
+      const newPrice = parseUnits("2.00", 6); // 100% gain
+      const newTimestamp = (await shared.getCurrentBlockTimestamp()) + 60;
+      await time.setNextBlockTimestamp(newTimestamp);
+      await aeraMock.aeraPriceAndFeeCalculator.connect(owner).setUnitPrice(
+        await aeraMock.aeraMultiDepositorVault.getAddress(),
+        newPrice,
+        newTimestamp,
+      );
+
+      const gain = ((newPrice - parseUnits("1", 6)) * stakeAmount) / parseUnits("1", 6);
+      await testUSDC.mint(aeraMock.aeraMultiDepositorVault, gain);
+
+      const r1 = await redeemFraction(vaultShares, realAssets, gauntletStrategy, alice, 1, 2, 2);
+      const r2 = await redeemFraction(vaultShares, realAssets, gauntletStrategy, alice, 1, 1, 3);
+
+      await shared.solveGauntletRedeemRequest(
+        r1.tx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, r1.minOut, 2,
+      );
+      await shared.solveGauntletRedeemRequest(
+        r2.tx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, r2.minOut, 3,
+      );
+
+      await claimAtDeadline(deposit, alice, 2);
+      await claimAtDeadline(deposit, alice, 3);
+
+      // Upper bound: never more tokens than redeemed shares
+      expect(r1.minOut).to.be.lte(r1.amount);
+      expect(r2.minOut).to.be.lte(r2.amount);
+
+      // Sum should be <= single-shot due to repeated slippage application
+      const singleShot = bpsMul((stakeAmount * newPrice) / parseUnits("1", 6), 300);
+      const sumMin = r1.minOut + r2.minOut;
+      expect(sumMin).to.be.lte(singleShot);
     });
   });
 });

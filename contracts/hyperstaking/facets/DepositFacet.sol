@@ -147,6 +147,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             } else {
                 depositType = DepositType.Active;
                 v.stakeInfo[c.strategy].totalStake -= stake;
+                v.stakeInfo[c.strategy].pendingExitStake -= stake;
             }
 
             emit WithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount, depositType);

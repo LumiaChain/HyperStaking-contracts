@@ -195,16 +195,21 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
             // what we would like to exit to cover 'stake' at current price/slippage
             uint256 need = IStrategy(strategy).previewAllocation(stake);
 
-            // what we actually can exit proportionally from current holdings
-            // also prevents 1-wei ceil from exceeding (floor)
-            if (need > si.totalAllocation) {
-                allocation = si.totalAllocation;
-            } else {
-                allocation = need;
+            // stake still available to queue (excludes already-queued exits)
+            uint256 availableStake = si.totalStake - si.pendingExitStake;
+
+            uint256 capUnits;
+            // guard, div by zero, if everything is already queued
+            if (availableStake > 0) {
+                capUnits = si.totalAllocation * stake / availableStake;
             }
+
+            // min(need, capUnits) fix +1 ceil and enforces proportional exits under loss
+            allocation = need <= capUnits ? need : capUnits;
 
             // save non-direct stake information
             si.totalAllocation -= allocation;
+            si.pendingExitStake += stake;
 
             // integrated strategy does not require allowance
             if (!IStrategy(strategy).isIntegratedStakeStrategy()) {
