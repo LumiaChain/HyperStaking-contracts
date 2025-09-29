@@ -54,7 +54,7 @@ contract GauntletStrategy is AbstractStrategy {
     /// @dev Equal to the minTokensOut passed to Aera for this request preserved as a record
     mapping(uint256 requestId => uint256 minStakeOut) public recordedExit;
 
-    // @notice Keeps the last used deadline for Aera requests
+    /// @notice Keeps the last used deadline for Aera requests
     uint256 private _lastAeraDeadline;
 
     //============================================================================================//

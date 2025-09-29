@@ -801,12 +801,7 @@ describe("Aera", function () {
       );
 
       // because previewAllocation rounds up, we may need to correct by 1 unit
-      let expectedExitShares = await gauntletStrategy.previewAllocation(exitAmount) - 1n;
-
-      // 1 off-by-one correction if necessary
-      if (expectedExitShares > siAfterReport.totalAllocation) {
-        expectedExitShares -= 1n;
-      }
+      const expectedExitShares = await gauntletStrategy.previewAllocation(exitAmount) - 1n;
 
       const cfg = await gauntletStrategy.aeraConfig();
       const deadline = BigInt(now + 60) + cfg.deadlineOffset;

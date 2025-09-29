@@ -193,6 +193,8 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
             allocation = stake;
         } else {
             // what we would like to exit to cover 'stake' at current price/slippage
+            // previewAllocation rounds up to the nearest whole share, which can result in an allocation
+            // that is one unit higher than the actual available shares. To ensure the requested exit stake
             uint256 need = IStrategy(strategy).previewAllocation(stake);
 
             // stake still available to queue (excludes already-queued exits)
@@ -204,7 +206,8 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
                 capUnits = si.totalAllocation * stake / availableStake;
             }
 
-            // min(need, capUnits) fix +1 ceil and enforces proportional exits under loss
+            // enforces proportional exits under loss
+            // min(need, capUnits) also fix +1 ceil from previewAllocation
             allocation = need <= capUnits ? need : capUnits;
 
             // save non-direct stake information
