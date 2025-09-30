@@ -1,21 +1,31 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
+// solhint-disable var-name-mixedcase
+// solhint-disable func-name-mixedcase
+// solhint-disable no-empty-blocks
+
 import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {IHyperStakingRoles} from "../interfaces/IHyperStakingRoles.sol";
 
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
 /**
  * @title AbstractStrategy
  */
-abstract contract AbstractStrategy is IStrategy {
+abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable {
     using CurrencyHandler for Currency;
 
     /// Diamond deployment address
-    address public immutable DIAMOND;
+    address public DIAMOND;
 
     /// Stores all requests both allocations and exits
     mapping(uint256 id => StrategyRequest) internal _req;
+
+    /// Storage gap for upgradeability. Must remain the last state variable
+    uint256[50] private __gap;
 
     //============================================================================================//
     //                                          Events                                            //
@@ -40,6 +50,7 @@ abstract contract AbstractStrategy is IStrategy {
 
     error NotLumiaDiamond();
     error NotStrategyManager();
+    error NotStrategyUpgrader();
     error DontSupportArrays();
 
     error AlreadyClaimed();
@@ -63,21 +74,43 @@ abstract contract AbstractStrategy is IStrategy {
         _;
     }
 
+    modifier onlyStrategyUpgrader() {
+        require(
+            IHyperStakingRoles(DIAMOND).hasStrategyUpgraderRole(msg.sender),
+            NotStrategyUpgrader()
+        );
+        _;
+    }
+
     //============================================================================================//
-    //                                        Constructor                                         //
+    //                                    Initialize / Proxy                                      //
     //============================================================================================//
 
-    constructor(
-        address diamond_
-    ) {
+    /// Lock the implementation
+    constructor() {
+        _disableInitializers();
+    }
+
+    /// Internal init
+    function __AbstractStrategy_init(address diamond_) internal onlyInitializing {
+        __UUPSUpgradeable_init();
+
         require(diamond_ != address(0), ZeroAddress());
 
         DIAMOND = diamond_;
     }
 
+    /// @dev Authorize upgrades for UUPS pattern
+    function _authorizeUpgrade(address newImplementation) internal override onlyStrategyUpgrader {}
+
     //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
+
+    /// @notice Semantic version of this implementation
+    function implementationVersion() external pure returns (string memory) {
+        return "IStrategy 1.0.0";
+    }
 
     // ========= Previews ========= //
 

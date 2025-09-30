@@ -29,7 +29,9 @@ export async function getSigners() {
     owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, bob, alice,
   ] = await ethers.getSigners();
 
-  return { owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, bob, alice };
+  const strategyUpgrader = owner;
+
+  return { owner, stakingManager, vaultManager, strategyManager, strategyUpgrader, lumiaFactoryManager, bob, alice };
 }
 
 // -------------------- Currency --------------------

@@ -5,11 +5,21 @@ const GauntletStrategyModule = buildModule("GauntletStrategyModule", (m) => {
   const stakeToken = m.getParameter("stakeToken");
   const aeraProvisioner = m.getParameter("aeraProvisioner");
 
-  const gauntletStrategy = m.contract("GauntletStrategy", [
+  // deploy implementation
+  const impl = m.contract("GauntletStrategy", [], { id: "impl" });
+
+  // encode initializer calldata
+  const initCalldata = m.encodeFunctionCall(impl, "initialize", [
     diamond, stakeToken, aeraProvisioner,
   ]);
 
-  return { gauntletStrategy };
+  // deploy ERC1967Proxy with init data
+  const proxy = m.contract("ERC1967Proxy", [impl, initCalldata]);
+
+  // treat the proxy as GauntletStrategy
+  const gauntletStrategy = m.contractAt("GauntletStrategy", proxy);
+
+  return { proxy, gauntletStrategy };
 });
 
 export default GauntletStrategyModule;

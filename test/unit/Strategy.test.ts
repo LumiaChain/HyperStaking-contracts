@@ -86,6 +86,42 @@ async function deployHyperStaking() {
 }
 
 describe("Strategy", function () {
+  describe("UUPS Strategy upgrade", () => {
+    it("blocks non-upgrader, allows authorized upgrader", async () => {
+      const { reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+      const { strategyUpgrader, alice } = signers;
+
+      // check versioning
+      expect(await reserveStrategy.implementationVersion()).to.equal("IStrategy 1.0.0");
+
+      const IMPL_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
+      const proxyContract = await ethers.getContractAt("UUPSUpgradeable", reserveStrategy);
+
+      // impl V2
+      const implFactory = await ethers.getContractFactory("DirectStakeStrategy");
+      const implV2 = await implFactory.deploy();
+      await implV2.waitForDeployment();
+
+      // non-upgrader cannot upgrade
+      await expect(
+        reserveStrategy.connect(alice).upgradeToAndCall(implV2.target, "0x"),
+      ).to.be.revertedWithCustomError(reserveStrategy, "NotStrategyUpgrader");
+
+      // Authorized upgrade; assert event from the proxy
+      await expect(proxyContract.connect(strategyUpgrader).upgradeToAndCall(implV2.target, "0x"))
+        .to.emit(proxyContract, "Upgraded")
+        .withArgs(await implV2.getAddress());
+
+      // verify the EIP-1967 implementation slot changed
+      const implSlot = await ethers.provider.getStorage(proxyContract, IMPL_SLOT);
+      expect(ethers.getAddress("0x" + implSlot.slice(26))) // last 20 bytes
+        .to.equal(await implV2.getAddress());
+
+      // check versioning again (check if new implementation is working)
+      expect(await reserveStrategy.implementationVersion()).to.equal("IStrategy 1.0.0");
+    });
+  });
+
   describe("ReserveStrategy", function () {
     it("check state after allocation", async function () {
       const { hyperStaking, testWstETH, reserveStrategy, reserveAssetPrice, signers } = await loadFixture(deployHyperStaking);

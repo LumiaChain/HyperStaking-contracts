@@ -1,25 +1,31 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+// solhint-disable var-name-mixedcase
+// solhint-disable func-name-mixedcase
+
+import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import {PirexEth} from "../../../external/pirex/PirexEth.sol";
 import {AutoPxEth} from "../../../external/pirex/AutoPxEth.sol";
 
 import {DataTypes} from "../../../external/pirex/libraries/DataTypes.sol";
 
-contract PirexIntegration {
+contract PirexIntegration is Initializable {
     using SafeERC20 for IERC20;
 
     /// PxEth (ERC20) contract address
-    address public immutable PX_ETH;
+    address public PX_ETH;
 
     /// PirexEth contract address
-    address public immutable PIREX_ETH;
+    address public PIREX_ETH;
 
     /// AutoPxEth (ERC4626) contract address
-    address public immutable AUTO_PX_ETH;
+    address public AUTO_PX_ETH;
+
+    /// Storage gap for upgradeability. Must remain the last state variable
+    uint256[50] private __gap;
 
     //============================================================================================//
     //                                          Events                                            //
@@ -49,14 +55,14 @@ contract PirexIntegration {
     error ZeroAddressPx();
 
     //============================================================================================//
-    //                                        Constructor                                         //
+    //                                        Initialize                                          //
     //============================================================================================//
 
-    constructor(
+    function __PirexIntegration_init(
         address pxEth_,
         address pirexEth_,
         address autoPxEth_
-    ) {
+    ) public onlyInitializing {
         require(pxEth_ != address(0), ZeroAddressPx());
         require(pirexEth_ != address(0), ZeroAddressPx());
         require(autoPxEth_ != address(0), ZeroAddressPx());
