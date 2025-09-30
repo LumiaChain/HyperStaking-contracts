@@ -62,7 +62,7 @@ contract PirexIntegration is Initializable {
         address pxEth_,
         address pirexEth_,
         address autoPxEth_
-    ) public onlyInitializing {
+    ) internal onlyInitializing {
         require(pxEth_ != address(0), ZeroAddressPx());
         require(pirexEth_ != address(0), ZeroAddressPx());
         require(autoPxEth_ != address(0), ZeroAddressPx());

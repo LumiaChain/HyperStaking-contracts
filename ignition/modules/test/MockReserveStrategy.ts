@@ -8,17 +8,18 @@ const ReserveStrategyModule = buildModule("ReserveStrategyModule", (m) => {
   const assetPrice = m.getParameter("assetPrice", parseEther("1"));
 
   const impl = m.contract("MockReserveStrategy", [], { id: "impl" });
-  const proxy = m.contract("ERC1967Proxy", [impl, "0x"]);
 
-  const reserveStrategy = m.contractAt("MockReserveStrategy", proxy);
-
-  // Initialize via the proxy
-  m.call(reserveStrategy, "initialize", [
+  // encode initializer calldata
+  const initCalldata = m.encodeFunctionCall(impl, "initialize", [
     diamond,
     { token: stake },
     asset,
     assetPrice,
   ]);
+
+  // deploy ERC1967Proxy with init data
+  const proxy = m.contract("ERC1967Proxy", [impl, initCalldata]);
+  const reserveStrategy = m.contractAt("MockReserveStrategy", proxy);
 
   return { proxy, reserveStrategy };
 });

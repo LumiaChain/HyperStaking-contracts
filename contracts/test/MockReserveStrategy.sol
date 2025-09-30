@@ -35,6 +35,9 @@ contract MockReserveStrategy is AbstractStrategy {
     /// Price of the asset
     uint256 public assetReserve;
 
+    /// Storage gap for upgradeability. Must remain the last state variable
+    uint256[50] private __gap;
+
     //============================================================================================//
     //                                          Errors                                            //
     //============================================================================================//

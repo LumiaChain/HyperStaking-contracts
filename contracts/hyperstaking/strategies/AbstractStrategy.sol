@@ -101,7 +101,9 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
     }
 
     /// @dev Authorize upgrades for UUPS pattern
-    function _authorizeUpgrade(address newImplementation) internal override onlyStrategyUpgrader {}
+    function _authorizeUpgrade(address newImplementation) internal view override onlyStrategyUpgrader {
+        require(newImplementation != address(0), ZeroAddress());
+    }
 
     //============================================================================================//
     //                                      Public Functions                                      //
