@@ -12,6 +12,7 @@ import {
 } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
@@ -27,6 +28,7 @@ import {
 contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20Metadata;
     using CurrencyHandler for Currency;
+    using Math for uint256;
 
     //============================================================================================//
     //                                      Public Functions                                      //
@@ -203,7 +205,7 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
             uint256 capUnits;
             // guard, div by zero, if everything is already queued
             if (availableStake > 0) {
-                capUnits = si.totalAllocation * stake / availableStake;
+                capUnits = si.totalAllocation.mulDiv(stake, availableStake);
             }
 
             // enforces proportional exits under loss
