@@ -12,7 +12,7 @@ async function getMockedSuperform() {
   const [superManager, alice] = await ethers.getSigners();
 
   const testUSDC = await shared.deployTestERC20("Test USD Coin", "tUSDC", 6);
-  const erc4626Vault = await shared.deloyTestERC4626Vault(testUSDC);
+  const erc4626Vault = await shared.deployTestERC4626Vault(testUSDC);
   await testUSDC.mint(alice.address, parseUnits("1000000", 6));
 
   // --------------------
