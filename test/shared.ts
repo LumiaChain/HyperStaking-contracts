@@ -29,7 +29,9 @@ export async function getSigners() {
     owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, bob, alice,
   ] = await ethers.getSigners();
 
-  return { owner, stakingManager, vaultManager, strategyManager, lumiaFactoryManager, bob, alice };
+  const strategyUpgrader = owner;
+
+  return { owner, stakingManager, vaultManager, strategyManager, strategyUpgrader, lumiaFactoryManager, bob, alice };
 }
 
 // -------------------- Currency --------------------
@@ -103,7 +105,7 @@ export async function deployTestHyperStaking(mailboxFee: bigint) {
 
   // -------------------- Superform --------------------
 
-  const erc4626Vault = await deloyTestERC4626Vault(testUSDC);
+  const erc4626Vault = await deployTestERC4626Vault(testUSDC);
   const {
     superformFactory, superformRouter, superVault, superPositions,
   } = await deploySuperformMock(erc4626Vault);
@@ -194,7 +196,7 @@ export async function deployTestERC20(name: string, symbol: string, decimals: nu
   return testERC20;
 }
 
-export async function deloyTestERC4626Vault(asset: Contract): Promise<Contract> {
+export async function deployTestERC4626Vault(asset: Contract): Promise<Contract> {
   return ethers.deployContract("TestERC4626", [await asset.getAddress()]) as unknown as Promise<Contract>;
 }
 

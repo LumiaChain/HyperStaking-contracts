@@ -15,16 +15,19 @@ contract SwapSuperStrategy is SuperformStrategy {
     using SafeERC20 for IERC20;
 
     /// The actual token address used in allocation, must be swaped before it can be used with superform
-    IERC20 public immutable CURVE_INPUT_TOKEN;
+    IERC20 public CURVE_INPUT_TOKEN;
 
     /// 3Pool, etc.
-    address public immutable CURVE_POOL;
+    address public CURVE_POOL;
 
     /// Curve integration - (diamond facet)
     ICurveIntegration public curveIntegration;
 
      /// @dev Maximum slippage in basis points (1 bp = 0.01 %)
     uint256 private slippageBps;
+
+    /// Storage gap for upgradeability. Must remain the last state variable
+    uint256[50] private __gap;
 
     //============================================================================================//
     //                                          Events                                            //
@@ -52,16 +55,19 @@ contract SwapSuperStrategy is SuperformStrategy {
     error SlippageTooHigh();
 
     //============================================================================================//
-    //                                        Constructor                                         //
+    //                                        Initialize                                          //
     //============================================================================================//
 
-    constructor(
+    function initialize (
         address diamond_,
         address curveInputToken_,
         address curvePool_,
         address superVault_,
         address superformInputToken_ // This contract takes different stake/deposit token than superform
-    ) SuperformStrategy(diamond_, superVault_, superformInputToken_) {
+    ) public initializer {
+        __AbstractStrategy_init(diamond_);
+        __SuperformStrategy_init(diamond_, superVault_, superformInputToken_);
+
         require(curveInputToken_ != address(0), ZeroAddress());
         require(curvePool_ != address(0), ZeroAddress());
 

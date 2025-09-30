@@ -78,7 +78,7 @@ describe("VaultShares", function () {
       // create another vault shares to check different values
 
       const strangeDecimals = 11;
-      const strangeUSDStake = await shared.deloyTestERC20("Test USD Strange Asset", "tUSSA", strangeDecimals);
+      const strangeUSDStake = await shared.deployTestERC20("Test USD Strange Asset", "tUSSA", strangeDecimals);
 
       const strangeStrategy = await shared.createReserveStrategy(
         diamond, await strangeUSDStake.getAddress(), await testReserveAsset.getAddress(), reserveAssetPrice,

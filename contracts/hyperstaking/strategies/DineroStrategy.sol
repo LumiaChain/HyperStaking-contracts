@@ -17,6 +17,9 @@ import {PirexIntegration} from "./integrations/PirexIntegration.sol";
 contract DineroStrategy is AbstractStrategy, PirexIntegration {
     using SafeERC20 for IERC20;
 
+    /// Storage gap for upgradeability. Must remain the last state variable
+    uint256[50] private __gap;
+
     //============================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
@@ -24,15 +27,18 @@ contract DineroStrategy is AbstractStrategy, PirexIntegration {
     error BadAllocationValue();
 
     //============================================================================================//
-    //                                        Constructor                                         //
+    //                                        Initialize                                          //
     //============================================================================================//
 
-    constructor(
+    function initialize (
         address diamond_,
         address pxEth_,
         address pirexEth_,
         address autoPxEth_
-    ) AbstractStrategy(diamond_) PirexIntegration(pxEth_, pirexEth_, autoPxEth_) { }
+    ) public initializer {
+        __AbstractStrategy_init(diamond_);
+        __PirexIntegration_init(pxEth_, pirexEth_, autoPxEth_);
+    }
 
     //============================================================================================//
     //                                      Public Functions                                      //

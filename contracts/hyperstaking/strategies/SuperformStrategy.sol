@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
+// solhint-disable var-name-mixedcase
+// solhint-disable func-name-mixedcase
+
 import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
 import {AbstractStrategy} from "./AbstractStrategy.sol";
 
@@ -22,19 +25,22 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     using SafeERC20 for IERC20;
 
     /// Address of the designated SuperVault
-    address public immutable SUPER_VAULT;
+    address public SUPER_VAULT;
 
     /// Specific superform used by this strategy
-    uint256 public immutable SUPERFORM_ID;
+    uint256 public SUPERFORM_ID;
 
     /// Token address used in allocation
-    IERC20 public immutable SUPERFORM_INPUT_TOKEN;
+    IERC20 public SUPERFORM_INPUT_TOKEN;
 
     /// Superform integration - (diamond facet)
     ISuperformIntegration public superformIntegration;
 
     /// SuperPositions contract address
     ISuperPositions public superPositions;
+
+    /// Storage gap for upgradeability. Must remain the last state variable
+    uint256[50] private __gap;
 
     //============================================================================================//
     //                                          Errors                                            //
@@ -45,14 +51,24 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     error InvalidStakeToken(address expected, address provided);
 
     //============================================================================================//
-    //                                        Constructor                                         //
+    //                                        Initialize                                          //
     //============================================================================================//
 
-    constructor(
+    // Used when strategy is the final strategy
+    function initialize (
         address diamond_,
         address superVault_,
         address stakeToken_ // SuperUSDC supports USDC as deposit, asset is checked
-    ) AbstractStrategy(diamond_) {
+    ) public virtual initializer {
+        __AbstractStrategy_init(diamond_);
+        __SuperformStrategy_init(diamond_, superVault_, stakeToken_);
+    }
+
+    function __SuperformStrategy_init(
+        address diamond_,
+        address superVault_,
+        address stakeToken_
+    ) internal onlyInitializing {
         require(superVault_ != address(0), ZeroAddress());
         require(stakeToken_ != address(0), ZeroAddress());
 

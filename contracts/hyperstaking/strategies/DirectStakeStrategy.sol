@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
-import {StrategyRequest, StrategyKind, IStrategy} from "../interfaces/IStrategy.sol";
+import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
 import {AbstractStrategy} from "./AbstractStrategy.sol";
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
@@ -18,6 +18,9 @@ contract DirectStakeStrategy is AbstractStrategy {
     /// Main currency used for staking
     Currency private currency;
 
+    /// Storage gap for upgradeability. Must remain the last state variable
+    uint256[50] private __gap;
+
     //============================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
@@ -25,13 +28,14 @@ contract DirectStakeStrategy is AbstractStrategy {
     error DirectStakeMisused();
 
     //============================================================================================//
-    //                                        Constructor                                         //
+    //                                        Initialize                                          //
     //============================================================================================//
 
-    constructor(
+    function initialize (
         address diamond_,
         Currency memory currency_
-    ) AbstractStrategy(diamond_) {
+    ) public initializer {
+        __AbstractStrategy_init(diamond_);
         currency = currency_;
     }
 

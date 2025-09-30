@@ -35,6 +35,13 @@ contract MockReserveStrategy is AbstractStrategy {
     /// Price of the asset
     uint256 public assetReserve;
 
+    /// Storage gap for upgradeability. Must remain the last state variable
+    uint256[50] private __gap;
+
+    //============================================================================================//
+    //                                          Errors                                            //
+    //============================================================================================//
+
     error MissingCollateral();
 
     //============================================================================================//
@@ -71,16 +78,18 @@ contract MockReserveStrategy is AbstractStrategy {
     );
 
     //============================================================================================//
-    //                                        Constructor                                         //
+    //                                        Initialize                                          //
     //============================================================================================//
 
     // @param assetPrice_ should be provided with 18 decimal precision
-    constructor(
+    function initialize (
         address diamond_,
         Currency memory stake_,
         IERC20Metadata revenueAsset_,
         uint256 assetPrice_
-    ) AbstractStrategy(diamond_) {
+    ) public initializer {
+        __AbstractStrategy_init(diamond_);
+
         stake = stake_;
         revenueAsset = address(revenueAsset_);
         assetPrice = assetPrice_;

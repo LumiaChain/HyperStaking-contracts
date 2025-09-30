@@ -294,7 +294,7 @@ describe("CurveStrategy", function () {
       await usdc.mint(signers.alice.address, parseUnits("10000", 6));
       await usdt.mint(signers.alice.address, parseUnits("10000", 6));
 
-      const erc4626Vault = await shared.deloyTestERC4626Vault(usdc);
+      const erc4626Vault = await shared.deployTestERC4626Vault(usdc);
 
       const {
         superformFactory, superformRouter, superVault, superPositions,

@@ -56,6 +56,7 @@ contract HyperStakingInit is AccessControlEnumerableUpgradeable, ReentrancyGuard
         _grantRole(LibAcl.STAKING_MANAGER_ROLE, initStakingManager);
         _grantRole(LibAcl.VAULT_MANAGER_ROLE, initVaultManager);
         _grantRole(LibAcl.STRATEGY_MANAGER_ROLE, initStrategyManager);
+        _grantRole(LibAcl.STRATEGY_UPGRADER_ROLE, msg.sender);
 
         // adding IAccessControlEnumerable to supportedInterfaces
         LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();

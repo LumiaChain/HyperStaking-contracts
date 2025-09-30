@@ -19,6 +19,7 @@ import {LibAcl} from "./libraries/LibAcl.sol";
  *      - `Staking Manager`: Oversees staking operations
  *      - `Vault Manager`: Handles vaults
  *      - `Strategy Manager`: Handles external strategies
+ *      - `Strategy Upgrader`: Handle upgrades for external strategies
  *
  *      Utilizes OpenZeppelin's AccessControlEnumerableUpgradeable, which now supports
  *      EIP-7201 namespace storage, making it compatible with Diamond Proxy architecture
@@ -62,6 +63,14 @@ contract HyperStakingAcl is AccessControlEnumerableUpgradeable, IHyperStakingRol
         _;
     }
 
+    /// @dev Only allows access for the `Strategy Upgrader` role
+    modifier onlyStrategyUpgrader() {
+        if (!hasRole(STRATEGY_UPGRADER_ROLE(), msg.sender)) {
+            revert OnlyStrategyUpgrader();
+        }
+        _;
+    }
+
     //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
@@ -71,6 +80,11 @@ contract HyperStakingAcl is AccessControlEnumerableUpgradeable, IHyperStakingRol
     /// @inheritdoc IHyperStakingRoles
     function hasStrategyManagerRole(address account) external view returns (bool) {
         return hasRole(STRATEGY_MANAGER_ROLE(), account);
+    }
+
+    /// @inheritdoc IHyperStakingRoles
+    function hasStrategyUpgraderRole(address account) external view returns (bool) {
+        return hasRole(STRATEGY_UPGRADER_ROLE(), account);
     }
 
     // ---
@@ -85,5 +99,9 @@ contract HyperStakingAcl is AccessControlEnumerableUpgradeable, IHyperStakingRol
 
     function STRATEGY_MANAGER_ROLE() public pure returns (bytes32) {
         return LibAcl.STRATEGY_MANAGER_ROLE;
+    }
+
+    function STRATEGY_UPGRADER_ROLE() public pure returns (bytes32) {
+        return LibAcl.STRATEGY_UPGRADER_ROLE;
     }
 }

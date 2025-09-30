@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
+// solhint-disable var-name-mixedcase
+
 import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
 import {AbstractStrategy} from "./AbstractStrategy.sol";
 import {LumiaGtUSDa} from "./tokens/LumiaGtUSDa.sol";
@@ -32,19 +34,19 @@ contract GauntletStrategy is AbstractStrategy {
     AeraConfig public aeraConfig;
 
     /// @notice Address of the Gauntlet derived token, used as allocation for the HyperStaking
-    LumiaGtUSDa public immutable LUMIA_GTUSDA;
+    LumiaGtUSDa public LUMIA_GTUSDA;
 
     /// @notice Stake token accepted by the strategy (input currency)
-    IERC20 public immutable STAKE_TOKEN;
+    IERC20 public STAKE_TOKEN;
 
     /// @notice Aera Provisioner used to submit deposit and redeem requests
-    Provisioner public immutable AERA_PROVISIONER;
+    Provisioner public AERA_PROVISIONER;
 
     /// @notice The price calculator contract taken from aera provisioner
-    IPriceAndFeeCalculator public immutable AERA_PRICE;
+    IPriceAndFeeCalculator public AERA_PRICE;
 
     /// @notice The vault contract taken from aera provisioner (actual gtUSDa)
-    address public immutable AERA_VAULT;
+    address public AERA_VAULT;
 
     /// @notice Recorded allocation amounts per requestId
     /// @dev Stores the minimum allocation units that were guaranteed when the request was created
@@ -56,6 +58,9 @@ contract GauntletStrategy is AbstractStrategy {
 
     /// @notice Keeps the last used deadline for Aera requests
     uint256 private _lastAeraDeadline;
+
+    /// Storage gap for upgradeability. Must remain the last state variable
+    uint256[50] private __gap;
 
     //============================================================================================//
     //                                          Events                                            //
@@ -81,14 +86,16 @@ contract GauntletStrategy is AbstractStrategy {
     error InvalidConfig();
 
     //============================================================================================//
-    //                                        Constructor                                         //
+    //                                        Initialize                                          //
     //============================================================================================//
 
-    constructor(
+    function initialize (
         address diamond_,
         address stakeToken_, // (gtUSDa uses USDC as deposit, in time of writing)
         address aeraProvisioner_
-    ) AbstractStrategy(diamond_) {
+    ) public initializer {
+        __AbstractStrategy_init(diamond_);
+
         require(stakeToken_ != address(0), ZeroAddress());
 
         // deploys new ERC20 token owned by this strategy

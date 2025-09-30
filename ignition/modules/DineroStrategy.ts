@@ -12,9 +12,21 @@ const DineroStrategyModule = buildModule("DineroStrategyModule", (m) => {
   const pirexEth = m.getParameter("pirexEth", PIREX_ETH_ADDRESS);
   const autoPxEth = m.getParameter("autoPxEth", AUTO_PX_ETH_ADDRESS);
 
-  const dineroStrategy = m.contract("DineroStrategy", [diamond, pxEth, pirexEth, autoPxEth]);
+  // deploy implementation
+  const impl = m.contract("DineroStrategy", [], { id: "impl" });
 
-  return { dineroStrategy };
+  // encode initializer calldata
+  const initCalldata = m.encodeFunctionCall(impl, "initialize", [
+    diamond, pxEth, pirexEth, autoPxEth,
+  ]);
+
+  // deploy ERC1967Proxy with init data
+  const proxy = m.contract("ERC1967Proxy", [impl, initCalldata]);
+
+  // treat the proxy as DineroStrategy
+  const dineroStrategy = m.contractAt("DineroStrategy", proxy);
+
+  return { proxy, dineroStrategy };
 });
 
 export default DineroStrategyModule;
