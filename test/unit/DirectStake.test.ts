@@ -109,13 +109,19 @@ describe("Direct Stake", function () {
 
   it("lumia rwa shares could be redeemend back to origin chain in the same 1:1 ratio", async function () {
     const { hyperStaking, directStakeStrategy, vaultShares, signers } = await loadFixture(deployHyperStaking);
-    const { testUSDC, deposit, defaultWithdrawDelay, realAssets } = hyperStaking;
+    const { testUSDC, deposit, allocation, defaultWithdrawDelay, realAssets } = hyperStaking;
     const { alice, bob } = signers;
 
     const stakeAmount = parseEther("500");
 
     await testUSDC.approve(deposit, stakeAmount);
     await deposit.directStakeDeposit(directStakeStrategy, alice, stakeAmount);
+
+    expect((await deposit.directStakeInfo(directStakeStrategy)).totalStake).to.equal(stakeAmount);
+
+    let stakeInfo = await allocation.stakeInfo(directStakeStrategy);
+    expect(stakeInfo.totalStake).to.equal(0);
+    expect(stakeInfo.totalAllocation).to.equal(0);
 
     await vaultShares.connect(alice).approve(realAssets, stakeAmount);
     const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
@@ -130,6 +136,11 @@ describe("Direct Stake", function () {
     expect((await deposit.directStakeInfo(directStakeStrategy)).totalStake).to.equal(0);
 
     expect(await vaultShares.balanceOf(alice)).to.equal(0);
+
+    expect((await deposit.directStakeInfo(directStakeStrategy)).totalStake).to.equal(0);
+    stakeInfo = await allocation.stakeInfo(directStakeStrategy);
+    expect(stakeInfo.totalStake).to.equal(0);
+    expect(stakeInfo.totalAllocation).to.equal(0);
   });
 
   it("rwa shares should behave like ERC-20s and be redeemable by other users", async function () {

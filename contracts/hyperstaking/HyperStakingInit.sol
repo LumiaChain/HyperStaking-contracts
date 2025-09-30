@@ -67,9 +67,6 @@ contract HyperStakingInit is AccessControlEnumerableUpgradeable, ReentrancyGuard
         // withdraw delay, by default 3 days - 259200 seconds
         v.defaultWithdrawDelay = 259200;
 
-        // default withdraw claim tolerance
-        v.allowedWithdrawLoss = 2e16; // 2% with 1e18 precision
-
         // initialize Lockbox
         require(lockboxMailbox != address(0), ZeroAddress());
         LockboxData storage box = v.lockboxData;

@@ -54,6 +54,9 @@ contract GauntletStrategy is AbstractStrategy {
     /// @dev Equal to the minTokensOut passed to Aera for this request preserved as a record
     mapping(uint256 requestId => uint256 minStakeOut) public recordedExit;
 
+    /// @notice Keeps the last used deadline for Aera requests
+    uint256 private _lastAeraDeadline;
+
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
@@ -347,8 +350,16 @@ contract GauntletStrategy is AbstractStrategy {
     }
 
     /// @dev Returns execution deadline by adding the configured offset to the current block time
-    function _aeraDeadline() internal view returns (uint256) {
-        return block.timestamp + aeraConfig.deadlineOffset;
+    ///      If multiple requests are made in the same block, bumps by +1 to keep uniqueness
+    function _aeraDeadline() internal returns (uint256 deadline) {
+        deadline = block.timestamp + aeraConfig.deadlineOffset;
+
+        // ensure strict monotonic increase to avoid hash collisions
+        if (deadline <= _lastAeraDeadline) {
+            deadline = _lastAeraDeadline + 1;
+        }
+
+        _lastAeraDeadline = deadline;
     }
 
     /// @notice Calculate the request hash in the same way as in the Area Provisioner contract

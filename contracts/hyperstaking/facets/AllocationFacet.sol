@@ -12,6 +12,7 @@ import {
 } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
@@ -27,6 +28,7 @@ import {
 contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20Metadata;
     using CurrencyHandler for Currency;
+    using Math for uint256;
 
     //============================================================================================//
     //                                      Public Functions                                      //
@@ -192,18 +194,33 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         if (IStrategy(strategy).isDirectStakeStrategy()) {
             allocation = stake;
         } else {
+            // what we would like to exit to cover 'stake' at current price/slippage
+            // previewAllocation rounds up to the nearest whole share, which can result in an allocation
+            // that is one unit higher than the actual available shares. To ensure the requested exit stake
+            uint256 need = IStrategy(strategy).previewAllocation(stake);
 
-            allocation = IStrategy(strategy).previewAllocation(stake);
+            // stake still available to queue (excludes already-queued exits)
+            uint256 availableStake = si.totalStake - si.pendingExitStake;
+
+            uint256 capUnits;
+            // guard, div by zero, if everything is already queued
+            if (availableStake > 0) {
+                capUnits = si.totalAllocation.mulDiv(stake, availableStake);
+            }
+
+            // enforces proportional exits under loss
+            // min(need, capUnits) also fix +1 ceil from previewAllocation
+            allocation = need <= capUnits ? need : capUnits;
 
             // save non-direct stake information
             si.totalAllocation -= allocation;
+            si.pendingExitStake += stake;
 
             // integrated strategy does not require allowance
             if (!IStrategy(strategy).isIntegratedStakeStrategy()) {
                 vault.revenueAsset.safeIncreaseAllowance(strategy, allocation);
             }
         }
-
         IDeposit(address(this)).queueWithdraw(strategy, user, stake, allocation, feeWithdraw);
 
         emit Leave(strategy, user, stake, allocation);

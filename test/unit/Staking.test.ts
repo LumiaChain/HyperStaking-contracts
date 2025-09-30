@@ -380,56 +380,6 @@ describe("Staking", function () {
       expect(directVaultInfo.totalStake).to.equal(0);
     });
 
-    it("enforces allowedWithdrawLoss and emits WithdrawLossExceeded on excess", async () => {
-      const { hyperStaking, testERC20, reserveStrategy2, lumiaTokens2, signers } = await loadFixture(deployHyperStaking);
-      const { deposit, realAssets, defaultWithdrawDelay } = hyperStaking;
-      const { stakingManager, strategyManager, alice } = signers;
-
-      // set tiny allowed loss (e.g. 0.1%)
-      const allowed = parseEther("1") / 1000n; // 0.001 = 0.1%
-      await expect(deposit.connect(stakingManager).setAllowedWithdrawLoss(allowed)).to.not.be.reverted;
-      expect(await deposit.allowedWithdrawLoss()).to.eq(allowed);
-
-      // deposit, then queue withdraw
-      const stakeAmount = parseEther("10");
-      await testERC20.connect(alice).approve(deposit, stakeAmount);
-      await deposit.connect(alice).stakeDeposit(reserveStrategy2, alice, stakeAmount);
-
-      const withdraw = parseEther("3");
-      await lumiaTokens2.vaultShares.connect(alice).approve(realAssets, withdraw);
-      const ready = (await shared.getCurrentBlockTimestamp()) + defaultWithdrawDelay;
-      await realAssets.connect(alice).redeem(reserveStrategy2, alice, alice, withdraw);
-      const id = await shared.getLastClaimId(deposit, reserveStrategy2, alice);
-
-      // make price drop slightly so redeem < expected (force loss)
-      const p0 = await reserveStrategy2.assetPrice();
-      // choose a drop that exceeds 0.1% (e.g., -1%)
-      await reserveStrategy2.connect(strategyManager).setAssetPrice(p0 * 99n / 100n);
-
-      await time.setNextBlockTimestamp(ready);
-      await expect(deposit.connect(alice).claimWithdraws([id], alice))
-        .to.be.revertedWithCustomError(deposit, "WithdrawLossExceeded");
-
-      // now raise allowed loss above the gap (e.g., 2%), should pass
-      const twoPct = parseEther("1") * 2n / 100n;
-      await deposit.connect(stakingManager).setAllowedWithdrawLoss(twoPct);
-      await expect(deposit.connect(alice).claimWithdraws([id], alice)).to.not.be.reverted;
-    });
-
-    it("setAllowedWithdrawLoss bounds & role", async () => {
-      const { hyperStaking, signers } = await loadFixture(deployHyperStaking);
-      const { deposit } = hyperStaking;
-      const { stakingManager, alice } = signers;
-
-      await expect(deposit.connect(alice).setAllowedWithdrawLoss(parseEther("0.01"))).to.be.reverted; // role
-
-      await expect(deposit.connect(stakingManager).setAllowedWithdrawLoss(parseEther("1.000000000000000001")))
-        .to.be.revertedWithCustomError(deposit, "WithdrawLossTooHigh");
-
-      await expect(deposit.connect(stakingManager).setAllowedWithdrawLoss(parseEther("0.02"))).to.not.be.reverted;
-      expect(await deposit.allowedWithdrawLoss()).to.eq(parseEther("0.02"));
-    });
-
     describe("Allocation Report", function () {
       it("report in case of zero feeRate", async function () {
         const {

@@ -41,6 +41,7 @@ struct DirectStakeInfo {
 struct StakeInfo {
     uint256 totalStake;
     uint256 totalAllocation;
+    uint256 pendingExitStake; // stake already queued to leave, not yet claimed
 }
 
 // @param strategy That produced this claim
@@ -106,9 +107,6 @@ struct HyperStakingStorage {
 
     /// @notice Global delay, in seconds, that must elapse after a claim is queued
     uint64 defaultWithdrawDelay;
-
-    /// @notice Allowed loss tolerance for exit claims
-    uint256 allowedWithdrawLoss;
 
     /// @notice Next request ID for strategy operations
     uint256 nextRequestId;

@@ -7,7 +7,7 @@ import HyperStakingModule from "../ignition/modules/HyperStaking";
 import LumiaDiamondModule from "../ignition/modules/LumiaDiamond";
 import OneChainMailboxModule from "../ignition/modules/test/OneChainMailbox";
 import SuperformMockModule from "../ignition/modules/test/SuperformMock";
-import CurveMockModule from "../ignition/modules/test/CurveMock.ts";
+import CurveMockModule from "../ignition/modules/test/CurveMock";
 
 import TestERC20Module from "../ignition/modules/test/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/test/MockReserveStrategy";
