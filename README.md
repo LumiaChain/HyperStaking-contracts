@@ -1,6 +1,6 @@
 # HyperStaking Contracts
 
-This repository contains the HyperStaking contracts, built using Hardhat for testing, deployment, and development. The contracts utilize the Diamond Proxy architecture (ERC-2535).
+This repository contains the HyperStaking contracts, built using Hardhat and TypeScript for testing, deployment, and development. The contracts utilize the Diamond Proxy architecture (ERC-2535).
 
 ## Project Overview
 
@@ -41,8 +41,8 @@ Run the following to test contracts and check coverage:
 # Run unit tests
 npm run test:unit
 
-# Run integration tests against a forked network
-npm run test:fork
+# Run integration tests against forked networks
+npm run test:integration
 
 # Run tests with a gas report
 REPORT_GAS=true npx hardhat test
@@ -71,7 +71,7 @@ npm run docgen            # Generates contract documentation
 
 ### Deployment
 
-The project is set up to deploy contracts using Hardhat Ignition. You can deploy the HyperStaking module by running e.g.:
+The project is set up to deploy contracts using Hardhat Ignition. You can deploy the HyperStaking module by running, for example:
 
 ```bash
 npx hardhat ignition deploy ignition/modules/HyperStaking.ts --network holesky
