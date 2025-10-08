@@ -52,7 +52,7 @@ All stake and withdrawal operations pass through the **Lockbox Facet**, where al
 
 #### Handling Multiple Deposit Currencies
 
-The HyperStaking protocol supports staking with a variety of asset types, including both native tokenc (e.g., **ETH**) and ERC20 tokens.
+The HyperStaking protocol supports staking with a variety of asset types, including both native tokens (e.g., **ETH**) and ERC20 tokens.
 Some strategies, such as **Superform**, can even handle wrapped representations of other assets, including NFTs, enabling a broad range of staking options under a single framework.
 
 Asset types are standardized through the `Currency` struct, which distinguishes native coins from ERC20 tokens:
@@ -329,7 +329,7 @@ On exit:
 1. The strategy calculates the redeemable USDC amount from SuperUSDC using the latest rate.
 2. Calls the `SuperformIntegrationFacet` to transmute ERC20 SuperUSDC back into its ERC1155 NFT representation.
 3. Invokes the `SuperformIntegrationFacet` to burn the ERC1155 SuperUSDC and credit the corresponding USDC back to the user.
-3. All transfers remain within the diamond, leveraging its internal asset registry and permissioning.
+4. All transfers remain within the diamond, leveraging its internal asset registry and permissioning.
 
 This approach ensures:
 
