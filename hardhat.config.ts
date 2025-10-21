@@ -49,7 +49,7 @@ const config: HardhatUserConfig = {
       {
         version: "0.8.27",
         settings: {
-          evmVersion: "cancun",
+          evmVersion: "paris",
           optimizer: {
             enabled: true,
             runs: 200,
@@ -108,9 +108,13 @@ const config: HardhatUserConfig = {
     // },
     lumia_testnet: {
       url: process.env.LUMIA_TESTNET_RPC_URL,
-      chainId: 1952959480,
+      chainId: 2030232745,
       accounts: {
         mnemonic: process.env.WALLET_MNEMONIC,
+      },
+      ignition: {
+        gasPrice: parseUnits("5", "gwei"),
+        disableFeeBumping: true,
       },
     },
     bsc_testnet: {

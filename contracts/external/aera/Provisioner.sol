@@ -3,7 +3,7 @@ pragma solidity =0.8.27;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { BitMaps } from "@openzeppelin/contracts/utils/structs/BitMaps.sol";
@@ -32,7 +32,7 @@ import { IProvisioner } from "./interfaces/IProvisioner.sol";
 /// this contract to enter or exit the vault. Sync deposits are processed instantly, but stay refundable for a period of
 /// time. Async requests can either be solved by authorized solvers, going through the vault, or directly by anyone
 /// willing to pay units (for deposits) or tokens (for redeems), pocketing the solver tip, always paid in tokens
-contract Provisioner is IProvisioner, Auth2Step, ReentrancyGuardTransient {
+contract Provisioner is IProvisioner, Auth2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using BitMaps for BitMaps.BitMap;
 
