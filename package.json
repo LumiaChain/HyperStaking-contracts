@@ -12,9 +12,9 @@
     "prepare": "husky",
     "docgen": "npx hardhat docgen",
     "deploy-hyperstaking-holesky": "npx hardhat ignition deploy ignition/modules/HyperStaking.ts --network holesky",
-    "deploy-lumia-diamond-holesky": "npx hardhat ignition deploy ignition/modules/LumiaDiamond.ts --parameters ignition/parameters.holesky.json --network holesky",
     "deploy-dinero-strategy-holesky": "npx hardhat ignition deploy ignition/modules/DineroStrategy.ts --parameters ignition/parameters.holesky.json --network holesky",
-    "deploy-superform-strategy-holesky": "npx hardhat ignition deploy ignition/modules/SuperformStrategy.ts --parameters ignition/parameters.holesky.json --network holesky"
+    "deploy-superform-strategy-holesky": "npx hardhat ignition deploy ignition/modules/SuperformStrategy.ts --parameters ignition/parameters.holesky.json --network holesky",
+    "deploy-lumia-testnet": "npx hardhat ignition deploy ignition/modules/LumiaDiamond.ts --parameters ignition/parameters.lumia_testnet.json --network lumia_testnet"
   },
   "repository": {
     "type": "git",
