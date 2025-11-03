@@ -318,7 +318,6 @@ describe("Aera", function () {
       // vaultInfo reflects strategy and stake token
       const vInfo = await hyperFactory.vaultInfo(gauntletStrategy);
       expect(vInfo.enabled).to.equal(true);
-      expect(vInfo.direct).to.equal(false);
       expect(vInfo.stakeCurrency).to.deep.equal([await testUSDC.getAddress()]);
       expect(vInfo.strategy).to.equal(await gauntletStrategy.getAddress());
       expect(vInfo.revenueAsset).to.equal(revenueAssetAddr);

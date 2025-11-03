@@ -108,18 +108,6 @@ interface IStrategy {
     //============================================================================================//
 
     /**
-     * @notice Indicates whether the strategy is a DirectStakeStrategy
-     * @dev  Direct stake strategies bypass all yield‐generating logic and
-     *       exist solely to allow 1:1 deposits into the vault without a
-     *       separate strategy usage. They:
-     *         - Store currency info to remain compatible with the vault
-     *         - Always revert on `allocate(...)`, `exit(...)`, and any
-     *           preview functions
-     * @return Always returns `true` for direct stake strategies, `false` otherwise
-     */
-    function isDirectStakeStrategy() external view returns (bool);
-
-    /**
      * @notice Returns true if this stake strategy is an integrated strategy
      * @dev An integrated strategy delegates all asset movements (ERC-20 tokens or native currency)
      *      to the IntegrationFacet within the same diamond. As a result:

@@ -190,17 +190,16 @@ describe("Staking", function () {
         );
 
       // event
-      const depositType = 1;
       await expect(deposit.stakeDeposit(reserveStrategy1, owner, stakeAmount, { value: stakeAmount }))
         .to.emit(deposit, "StakeDeposit")
-        .withArgs(owner, owner, reserveStrategy1, stakeAmount, depositType);
+        .withArgs(owner, owner, reserveStrategy1, stakeAmount);
 
       const stakeAmountForAlice = parseEther("11");
       await expect(deposit.connect(alice).stakeDeposit(
         reserveStrategy1, alice, stakeAmountForAlice, { value: stakeAmountForAlice }),
       )
         .to.emit(deposit, "StakeDeposit")
-        .withArgs(alice, alice, reserveStrategy1, stakeAmountForAlice, depositType);
+        .withArgs(alice, alice, reserveStrategy1, stakeAmountForAlice);
 
       // Allocation
       const vaultInfo = await allocation.stakeInfo(reserveStrategy1);
@@ -294,18 +293,14 @@ describe("Staking", function () {
           [withdrawAmount, -withdrawAmount],
         );
 
-      const depositType = 1;
       await expect(claimTx)
         .to.emit(deposit, "WithdrawClaimed")
-        .withArgs(reserveStrategy1, alice, alice, withdrawAmount, withdrawAmount, depositType);
+        .withArgs(reserveStrategy1, alice, alice, withdrawAmount, withdrawAmount);
 
       // Allocation
       const vaultInfo = await allocation.stakeInfo(reserveStrategy1);
       expect(vaultInfo.totalStake).to.equal(stakeAmount - 3n * withdrawAmount);
       expect(vaultInfo.totalAllocation).to.equal(stakeAmount - 3n * withdrawAmount);
-
-      const directVaultInfo = await deposit.directStakeInfo(reserveStrategy1);
-      expect(directVaultInfo.totalStake).to.equal(0);
     });
 
     it("it should be possible to stake and withdraw with erc20", async function () {
@@ -331,7 +326,6 @@ describe("Staking", function () {
           [withdrawAmount, -withdrawAmount],
         );
 
-      const depositType = 1;
       await lumiaTokens2.vaultShares.approve(realAssets, withdrawAmount);
       expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await realAssets.redeem(reserveStrategy2, owner, owner, withdrawAmount);
@@ -340,7 +334,7 @@ describe("Staking", function () {
       await time.setNextBlockTimestamp(expectedUnlock);
       await expect(deposit.claimWithdraws([lastClaimId2], owner))
         .to.emit(deposit, "WithdrawClaimed")
-        .withArgs(reserveStrategy2, owner, owner, withdrawAmount, withdrawAmount, depositType);
+        .withArgs(reserveStrategy2, owner, owner, withdrawAmount, withdrawAmount);
 
       // wihdraw to another address
       await lumiaTokens2.vaultShares.approve(realAssets, withdrawAmount);
@@ -375,9 +369,6 @@ describe("Staking", function () {
       // UserInfo
       expect(await lumiaTokens2.vaultShares.balanceOf(owner)).to.equal(stakeAmount - 3n * withdrawAmount);
       expect(await lumiaTokens2.vaultShares.balanceOf(alice)).to.equal(0);
-
-      const directVaultInfo = await deposit.directStakeInfo(reserveStrategy2);
-      expect(directVaultInfo.totalStake).to.equal(0);
     });
 
     describe("Allocation Report", function () {

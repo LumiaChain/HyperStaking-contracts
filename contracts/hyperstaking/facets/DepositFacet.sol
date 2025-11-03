@@ -16,7 +16,7 @@ import {
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
-    HyperStakingStorage, LibHyperStaking, VaultInfo, DirectStakeInfo, Claim
+    HyperStakingStorage, LibHyperStaking, VaultInfo, Claim
 } from "../libraries/LibHyperStaking.sol";
 
 /**
@@ -31,49 +31,10 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     uint64 public constant MAX_WITHDRAW_DELAY = 30 days;
 
     //============================================================================================//
-    //                                         Modifiers                                          //
-    //============================================================================================//
-
-    modifier onlyDirect(address strategy) {
-        require(IStrategy(strategy).isDirectStakeStrategy(), NotDirectDeposit(strategy));
-        _;
-    }
-
-    //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
 
-    /* ========== Direct Staking ========== */
-
-    /// @notice Direct stake deposit
-    /// @inheritdoc IDeposit
-    function directStakeDeposit(address strategy, address to, uint256 stake)
-        external
-        payable
-        nonReentrant
-        whenNotPaused
-        onlyDirect(strategy)
-    {
-        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        VaultInfo storage vault = v.vaultInfo[strategy];
-
-        _checkDeposit(vault, strategy, stake);
-
-        v.directStakeInfo[strategy].totalStake += stake;
-
-        vault.stakeCurrency.transferFrom(
-            msg.sender,
-            address(this),
-            stake
-        );
-
-        // direct forwarding a StakeInfo message across chains
-        ILockbox(address(this)).bridgeStakeInfo(strategy, to, stake);
-
-        emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Direct);
-    }
-
-    /* ========== Active Staking ========== */
+    /* ========== Deposit ========== */
 
     /// @notice Stake deposit function
     /// @inheritdoc IDeposit
@@ -99,7 +60,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         // true - bridge info to Lumia chain to mint coresponding rwa asset
         IAllocation(address(this)).join(strategy, to, stake);
 
-        emit StakeDeposit(msg.sender, to, strategy, stake, DepositType.Active);
+        emit StakeDeposit(msg.sender, to, strategy, stake);
     }
 
     /* ========== Stake Withdraw ========== */
@@ -140,17 +101,10 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
                 continue; // fee withdrawal does not affect the total stake
             }
 
-            DepositType depositType;
-            if (IStrategy(c.strategy).isDirectStakeStrategy()) {
-                depositType = DepositType.Direct;
-                v.directStakeInfo[c.strategy].totalStake -= stake;
-            } else {
-                depositType = DepositType.Active;
-                v.stakeInfo[c.strategy].totalStake -= stake;
-                v.stakeInfo[c.strategy].pendingExitStake -= stake;
-            }
+            v.stakeInfo[c.strategy].pendingExitStake -= stake;
+            v.stakeInfo[c.strategy].totalStake -= stake;
 
-            emit WithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount, depositType);
+            emit WithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount);
         }
     }
 
@@ -251,12 +205,6 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         for (uint256 i; i < limit; ++i) {
             ids[i] = arr[len - 1 - i];
         }
-    }
-
-    /// @inheritdoc IDeposit
-    function directStakeInfo(address strategy) external view returns (DirectStakeInfo memory) {
-        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        return v.directStakeInfo[strategy];
     }
 
     //============================================================================================//

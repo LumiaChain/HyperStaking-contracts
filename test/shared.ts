@@ -11,7 +11,6 @@ import CurveMockModule from "../ignition/modules/test/CurveMock";
 
 import TestERC20Module from "../ignition/modules/test/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/test/MockReserveStrategy";
-import DirectStakeStrategyModule from "../ignition/modules/DirectStakeStrategy";
 
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IHyperFactory";
 
@@ -237,22 +236,6 @@ export async function createReserveStrategy(
   });
 
   return reserveStrategy;
-}
-
-export async function createDirectStakeStrategy(
-  diamond: Contract,
-  currencyToken: string,
-) {
-  const { directStakeStrategy } = await ignition.deploy(DirectStakeStrategyModule, {
-    parameters: {
-      DirectStakeStrategyModule: {
-        diamond: await diamond.getAddress(),
-        currencyToken,
-      },
-    },
-  });
-
-  return directStakeStrategy;
 }
 
 // -------------------- Superform AERC20 --------------------

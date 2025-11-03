@@ -170,12 +170,11 @@ describe("Lockbox", function () {
 
       const stakeAmount = parseEther("2");
 
-      const depositType = 1;
       await expect(deposit.stakeDeposit(
         reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
       ))
         .to.emit(deposit, "StakeDeposit")
-        .withArgs(owner, alice, reserveStrategy, stakeAmount, depositType);
+        .withArgs(owner, alice, reserveStrategy, stakeAmount);
 
       const sharesAfter = await vaultShares.balanceOf(alice);
       expect(sharesAfter).to.be.gt(sharesBefore);

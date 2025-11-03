@@ -68,7 +68,6 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
         StakeInfo storage si = v.stakeInfo[strategy];
-        _checkActiveStrategy(vault, strategy); // strategy validation
 
         address feeRecipient = vault.feeRecipient;
         require(feeRecipient != address(0), FeeRecipientUnset());
@@ -106,7 +105,6 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         require(newMargin < LibHyperStaking.PERCENT_PRECISION, SafetyMarginTooHigh());
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
-        _checkActiveStrategy(vault, strategy); // validation
 
         uint256 oldMargin = vault.bridgeSafetyMargin;
         vault.bridgeSafetyMargin = newMargin;
@@ -120,7 +118,6 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
-        _checkActiveStrategy(vault, strategy); // strategy validation
 
         address oldRecipient = vault.feeRecipient;
         vault.feeRecipient = newRecipient;
@@ -134,7 +131,6 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
-        _checkActiveStrategy(vault, strategy); // strategy validation
 
         uint256 oldRate = vault.feeRate;
         vault.feeRate = newRate;
@@ -191,36 +187,33 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         VaultInfo storage vault = v.vaultInfo[strategy];
         StakeInfo storage si = v.stakeInfo[strategy];
 
-        if (IStrategy(strategy).isDirectStakeStrategy()) {
-            allocation = stake;
-        } else {
-            // what we would like to exit to cover 'stake' at current price/slippage
-            // previewAllocation rounds up to the nearest whole share, which can result in an allocation
-            // that is one unit higher than the actual available shares. To ensure the requested exit stake
-            uint256 need = IStrategy(strategy).previewAllocation(stake);
+        // what we would like to exit to cover 'stake' at current price/slippage
+        // previewAllocation rounds up to the nearest whole share, which can result in an allocation
+        // that is one unit higher than the actual available shares. To ensure the requested exit stake
+        uint256 need = IStrategy(strategy).previewAllocation(stake);
 
-            // stake still available to queue (excludes already-queued exits)
-            uint256 availableStake = si.totalStake - si.pendingExitStake;
+        // stake still available to queue (excludes already-queued exits)
+        uint256 availableStake = si.totalStake - si.pendingExitStake;
 
-            uint256 capUnits;
-            // guard, div by zero, if everything is already queued
-            if (availableStake > 0) {
-                capUnits = si.totalAllocation.mulDiv(stake, availableStake);
-            }
-
-            // enforces proportional exits under loss
-            // min(need, capUnits) also fix +1 ceil from previewAllocation
-            allocation = need <= capUnits ? need : capUnits;
-
-            // save non-direct stake information
-            si.totalAllocation -= allocation;
-            si.pendingExitStake += stake;
-
-            // integrated strategy does not require allowance
-            if (!IStrategy(strategy).isIntegratedStakeStrategy()) {
-                vault.revenueAsset.safeIncreaseAllowance(strategy, allocation);
-            }
+        uint256 capUnits;
+        // guard, div by zero, if everything is already queued
+        if (availableStake > 0) {
+            capUnits = si.totalAllocation.mulDiv(stake, availableStake);
         }
+
+        // enforces proportional exits under loss
+        // min(need, capUnits) also fix +1 ceil from previewAllocation
+        allocation = need <= capUnits ? need : capUnits;
+
+        // save stake information
+        si.totalAllocation -= allocation;
+        si.pendingExitStake += stake;
+
+        // integrated strategy does not require allowance
+        if (!IStrategy(strategy).isIntegratedStakeStrategy()) {
+            vault.revenueAsset.safeIncreaseAllowance(strategy, allocation);
+        }
+
         IDeposit(address(this)).queueWithdraw(strategy, user, stake, allocation, feeWithdraw);
 
         emit Leave(strategy, user, stake, allocation);
@@ -255,15 +248,5 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
 
         // save information
         si.totalAllocation += allocation;
-    }
-
-    /// @notice helper check function, strategy validation
-    /// @dev unlike deposits, not enabled strategies are still available to the VaultManager operations
-    function _checkActiveStrategy(
-        VaultInfo storage vault,
-        address strategy
-    ) internal view {
-        require(vault.strategy != address(0), StrategyDoesNotExist(strategy));
-        require(!vault.direct, DirectStrategyNotAllowed(strategy));
     }
 }

@@ -547,7 +547,6 @@ describe("CurveStrategy", function () {
 
       // VaultInfo
       expect((await hyperFactory.vaultInfo(swapSuperStrategy)).enabled).to.deep.equal(true);
-      expect((await hyperFactory.vaultInfo(swapSuperStrategy)).direct).to.deep.equal(false);
       expect((await hyperFactory.vaultInfo(swapSuperStrategy)).stakeCurrency).to.deep.equal([testUSDT.target]); // USDT and not USDC
       expect((await hyperFactory.vaultInfo(swapSuperStrategy)).strategy).to.equal(swapSuperStrategy);
       expect((await hyperFactory.vaultInfo(swapSuperStrategy)).revenueAsset).to.equal(revenueAsset);

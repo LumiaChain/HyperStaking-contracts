@@ -14,7 +14,6 @@ interface IHyperFactory {
     event VaultCreate(
         address indexed from,
         address strategy,
-        bool direct,
         address indexed stakeCurrency,
         address indexed revenueAsset,
         string vaultTokenName,

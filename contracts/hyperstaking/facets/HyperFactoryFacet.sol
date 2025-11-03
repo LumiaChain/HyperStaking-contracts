@@ -16,7 +16,7 @@ import {RouteRegistryData} from "../libraries/HyperlaneMailboxMessages.sol";
 
 import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
-    LibHyperStaking, HyperStakingStorage, VaultInfo, DirectStakeInfo, StakeInfo
+    LibHyperStaking, HyperStakingStorage, VaultInfo, StakeInfo
 } from "../libraries/LibHyperStaking.sol";
 
 /**
@@ -43,20 +43,16 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         string memory vaultTokenName,
         string memory vaultTokenSymbol
     ) external payable onlyVaultManager nonReentrant {
-        bool direct = IStrategy(strategy).isDirectStakeStrategy();
-
         // The currency used for staking in this vault is taken from the strategy
         // Currency struct supports both native coin and erc20 tokens
         Currency memory stakeCurrency = IStrategy(strategy).stakeCurrency();
 
         address revenueAsset = address(0);
 
-        if(!direct) {
-            // The ERC20-compliant asset associated with the strategy
-            revenueAsset = IStrategy(strategy).revenueAsset();
-        }
+        // The ERC20-compliant asset associated with the strategy
+        revenueAsset = IStrategy(strategy).revenueAsset();
 
-        _storeVaultInfo(strategy, direct, stakeCurrency, revenueAsset);
+        _storeVaultInfo(strategy, stakeCurrency, revenueAsset);
 
         // use stake currency decimals
         uint8 vaultDecimals = stakeCurrency.decimals();
@@ -67,7 +63,6 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         emit VaultCreate(
             msg.sender,
             strategy,
-            direct,
             stakeCurrency.token,
             revenueAsset,
             vaultTokenName,
@@ -103,11 +98,9 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
 
     /**
      * @notice Initializes the vault and stake info for a given strategy
-     * @dev for direct: revenueAsset == address(0) should be used
      */
     function _storeVaultInfo(
         address strategy,
-        bool direct,
         Currency memory stakeCurrency,
         address revenueAsset
     ) internal {
@@ -117,7 +110,6 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         // save VaultInfo in storage
         v.vaultInfo[strategy] = VaultInfo({
             enabled: true,
-            direct: direct,
             strategy: strategy,
             stakeCurrency: stakeCurrency,
             revenueAsset: IERC20Metadata(revenueAsset),
@@ -127,19 +119,11 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         });
 
         // init stakeInfo
-        if (direct) {
-            // direct staking
-            v.directStakeInfo[strategy] = DirectStakeInfo({
-                totalStake: 0
-            });
-        } else {
-            // active staking
-            v.stakeInfo[strategy] = StakeInfo({
-                totalStake: 0,
-                totalAllocation: 0,
-                pendingExitStake: 0
-            });
-        }
+        v.stakeInfo[strategy] = StakeInfo({
+            totalStake: 0,
+            totalAllocation: 0,
+            pendingExitStake: 0
+        });
     }
 
     /**
@@ -168,4 +152,3 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         IRouteRegistry(address(this)).routeRegistryDispatch{value: fee}(data);
     }
 }
-

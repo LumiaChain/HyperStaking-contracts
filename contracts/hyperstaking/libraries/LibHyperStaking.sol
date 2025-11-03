@@ -13,7 +13,6 @@ import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet
 
 /// General Vault details
 /// @param enabled Determines whether deposits to the strategy are enabled or disabled
-/// @param direct True if the strategy is direct; false if it is active
 /// @param strategy Address of the strategy contract
 /// @param stakeCurrency Currency used for staking
 /// @param revenueAsset ERC-20 yield token used in the vault
@@ -22,7 +21,6 @@ import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet
 /// @param bridgeSafetyMargin Safety buffer, scaled by 1e18, applied during revenue harvesting
 struct VaultInfo {
     bool enabled;
-    bool direct;
     address strategy;
     Currency stakeCurrency;
     IERC20Metadata revenueAsset;
@@ -31,13 +29,8 @@ struct VaultInfo {
     uint256 bridgeSafetyMargin;
 }
 
-/// DirectStake specific info
-struct DirectStakeInfo {
-    uint256 totalStake;
-}
-
-/// Users' stakes are not held directly in the pool;
-/// instead, they are represented by liquid ERC4626 vault shares bridged to the other chain
+/// Tracks aggregate staking and allocation state on the origin chain
+/// defining the asset side of the ERC4626 vault on the Lumia chain
 struct StakeInfo {
     uint256 totalStake;
     uint256 totalAllocation;
@@ -101,9 +94,6 @@ struct HyperStakingStorage {
 
     /// @notice Info about staking into the vaults
     mapping (address strategy => StakeInfo) stakeInfo;
-
-    /// @notice Info of directStake
-    mapping (address strategy => DirectStakeInfo) directStakeInfo;
 
     /// @notice Global delay, in seconds, that must elapse after a claim is queued
     uint64 defaultWithdrawDelay;

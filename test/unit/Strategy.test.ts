@@ -98,7 +98,7 @@ describe("Strategy", function () {
       const proxyContract = await ethers.getContractAt("UUPSUpgradeable", reserveStrategy);
 
       // impl V2
-      const implFactory = await ethers.getContractFactory("DirectStakeStrategy");
+      const implFactory = await ethers.getContractFactory("DineroStrategy");
       const implV2 = await implFactory.deploy();
       await implV2.waitForDeployment();
 
@@ -168,7 +168,6 @@ describe("Strategy", function () {
 
       // VaultInfo
       expect((await hyperFactory.vaultInfo(reserveStrategy)).enabled).to.deep.equal(true);
-      expect((await hyperFactory.vaultInfo(reserveStrategy)).direct).to.deep.equal(false);
       expect((await hyperFactory.vaultInfo(reserveStrategy)).stakeCurrency).to.deep.equal([shared.nativeTokenAddress]);
       expect((await hyperFactory.vaultInfo(reserveStrategy)).strategy).to.equal(reserveStrategy);
       expect((await hyperFactory.vaultInfo(reserveStrategy)).revenueAsset).to.equal(testWstETH);

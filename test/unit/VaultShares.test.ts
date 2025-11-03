@@ -170,12 +170,11 @@ describe("VaultShares", function () {
 
       const stakeAmount = parseEther("6");
 
-      const depositType = 1;
       await expect(deposit.stakeDeposit(
         reserveStrategy, alice, stakeAmount, { value: stakeAmount },
       ))
         .to.emit(deposit, "StakeDeposit")
-        .withArgs(owner, alice, reserveStrategy, stakeAmount, depositType);
+        .withArgs(owner, alice, reserveStrategy, stakeAmount);
 
       // both principalToken and shares should be minted in ration 1:1 to the stake at start
       expect(await vaultShares.totalSupply()).to.be.eq(stakeAmount);

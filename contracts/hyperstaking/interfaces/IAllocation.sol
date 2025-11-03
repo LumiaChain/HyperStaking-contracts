@@ -60,7 +60,6 @@ interface IAllocation {
     error AsyncAllocationNotSupported();
 
     error StrategyDoesNotExist(address strategy);
-    error DirectStrategyNotAllowed(address strategy);
 
     error FeeRecipientUnset();
     error ZeroFeeRecipient();
@@ -107,14 +106,14 @@ interface IAllocation {
     function setBridgeSafetyMargin(address strategy, uint256 newMargin) external;
 
     /**
-     * @notice Updates the fee recipient for a given active strategy
+     * @notice Updates the fee recipient for a given strategy
      * @param strategy The strategy whose fee recipient is being set
      * @param newRecipient The new recipient address
      */
     function setFeeRecipient(address strategy, address newRecipient) external;
 
     /**
-     * @notice Updates the fee rate for a given active strategy
+     * @notice Updates the fee rate for a given strategy
      * @dev The new rate must be `<= 1e18` (i.e. 100%).
      * @param strategy The vault/strategy whose rate is being set.
      * @param newRate The new fee rate (1e18 == 100%).
@@ -128,7 +127,7 @@ interface IAllocation {
     /**
      * @notice Retrieves information for a specified strategy
      * @param strategy The address of the strategy
-     * @return The StakeInfo struct containing information about this specific active strategy
+     * @return The StakeInfo struct containing information about this specific strategy
      */
     function stakeInfo(address strategy) external view returns (StakeInfo memory);
 

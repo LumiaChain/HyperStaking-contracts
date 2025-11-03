@@ -3,7 +3,6 @@ pragma solidity =0.8.27;
 
 // solhint-disable func-name-mixedcase
 
-import {DirectStakeInfo} from "../libraries/LibHyperStaking.sol";
 import {Claim} from "../libraries/LibHyperStaking.sol";
 
 /**
@@ -11,11 +10,6 @@ import {Claim} from "../libraries/LibHyperStaking.sol";
  * @dev Interface for DepositFacet
  */
 interface IDeposit {
-    enum DepositType {
-        Direct,
-        Active
-    }
-
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
@@ -24,9 +18,7 @@ interface IDeposit {
         address from,
         address indexed to,
         address indexed strategy,
-        uint256 stake,
-        DepositType indexed depositType     // 0 - Direct
-                                            // 1 - Active
+        uint256 stake
     );
 
     event WithdrawClaimed(
@@ -34,8 +26,7 @@ interface IDeposit {
         address indexed from,
         address to,
         uint256 stake,
-        uint256 exitAmount,
-        DepositType indexed depositType
+        uint256 exitAmount
     );
 
     event FeeWithdrawClaimed(
@@ -74,9 +65,6 @@ interface IDeposit {
     /// @notice Thrown when attempting to deposit to a non-existent vault
     error VaultDoesNotExist(address strategy);
 
-    /// @notice Thrown when depositing to a not direct deposit vault
-    error NotDirectDeposit(address strategy);
-
     /// @notice Thrown when trying to claim still locked stake
     error ClaimTooEarly(uint64 time, uint64 unlockTime);
 
@@ -99,22 +87,7 @@ interface IDeposit {
     //                                          Mutable                                           //
     //============================================================================================//
 
-    /* ========== Direct Deposit ========== */
-
-    /**
-     * @notice Deposits a specified stake amount directly into the lockbox and bridges it to Lumia
-     *         Uses a designated Strategy contract, which does not perform any yield strategy generation
-     * @param strategy The address of the strategy associated with the vault
-     * @param to The address receiving the staked token allocation (typically the user's address)
-     * @param stake The amount of the token to stake
-     */
-    function directStakeDeposit(
-        address strategy,
-        address to,
-        uint256 stake
-    ) external payable;
-
-    /* ========== Active Deposit  ========== */
+    /* ========== Deposit  ========== */
 
     /**
      * @notice Deposits a specified stake amount into chosen strategy
@@ -194,7 +167,4 @@ interface IDeposit {
         external
         view
         returns (uint256[] memory ids);
-
-    /// @notice Retrieves information about all direct stakes for a specified strategy
-    function directStakeInfo(address strategy) external view returns (DirectStakeInfo memory);
 }
