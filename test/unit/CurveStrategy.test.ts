@@ -3,34 +3,31 @@ import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-help
 import { ethers, ignition } from "hardhat";
 import { parseEther, parseUnits, Contract, ZeroAddress } from "ethers";
 import SwapSuperStrategyModule from "../../ignition/modules/SwapSuperStrategy";
-import TestSwapIntegrationModule from "../../ignition/modules/test/TestSwapIntegration.ts";
-
-import { ISuperformIntegration } from "../../typechain-types";
+import TestSwapIntegrationModule from "../../ignition/modules/test/TestSwapIntegration";
 
 import { expect } from "chai";
 import * as shared from "../shared";
+import { deployHyperStakingBase } from "../setup";
 
 const stableUnits = (val: string) => parseUnits(val, 6);
 
 async function deployHyperStaking() {
-  const signers = await shared.getSigners();
-
-  // -------------------- Hyperstaking Diamond --------------------
-
-  const hyperStaking = await shared.deployTestHyperStaking(0n);
+  const {
+    signers, hyperStaking, lumiaDiamond, testUSDC, testUSDT, erc4626Vault, curvePool, superVault, superformFactory, invariantChecker, defaultWithdrawDelay,
+  } = await deployHyperStakingBase();
 
   // -------------------- Apply Strategies --------------------
 
-  const testUSDCAddr = await hyperStaking.testUSDC.getAddress();
-  const testUSDTAddr = await hyperStaking.testUSDT.getAddress();
+  const testUSDCAddr = await testUSDC.getAddress();
+  const testUSDTAddr = await testUSDT.getAddress();
 
   const { swapSuperStrategy } = await ignition.deploy(SwapSuperStrategyModule, {
     parameters: {
       SwapSuperStrategyModule: {
         diamond: await hyperStaking.diamond.getAddress(),
         curveInputToken: testUSDTAddr,
-        curvePool: await hyperStaking.curvePool.getAddress(),
-        superVault: await hyperStaking.superVault.getAddress(),
+        curvePool: await curvePool.getAddress(),
+        superVault: await superVault.getAddress(),
         superformInputToken: testUSDCAddr,
       },
     },
@@ -39,7 +36,7 @@ async function deployHyperStaking() {
   // ------------------ SuperUSDC ------------------
 
   const superUSDC = await shared.registerAERC20( // transmuted ERC20 version
-    hyperStaking.superformIntegration, hyperStaking.superVault, hyperStaking.testUSDC,
+    hyperStaking.superformIntegration, superVault, testUSDC,
   );
 
   // ------------------ CurveIntegration ------------------
@@ -49,7 +46,7 @@ async function deployHyperStaking() {
   const registerTokens = [testDAIAddr, testUSDCAddr, testUSDTAddr];
   const indexes = [0n, 1n, 2n];
   await hyperStaking.curveIntegration.connect(signers.strategyManager).registerPool(
-    hyperStaking.curvePool,
+    curvePool,
     nCoins,
     registerTokens,
     indexes,
@@ -76,10 +73,15 @@ async function deployHyperStaking() {
     true,
   );
 
+  // -------------------- Setup Checker --------------------
+
+  await invariantChecker.addStrategy(await swapSuperStrategy.getAddress());
+  setInvChecker(invariantChecker);
+
   // -------------------- Hyperlane Handler --------------------
 
   const { principalToken, vaultShares } = await shared.getDerivedTokens(
-    hyperStaking.hyperlaneHandler,
+    lumiaDiamond.hyperlaneHandler,
     await swapSuperStrategy.getAddress(),
   );
 
@@ -87,10 +89,12 @@ async function deployHyperStaking() {
 
   /* eslint-disable object-property-newline */
   return {
-    hyperStaking, // HyperStaking deployment
-    swapSuperStrategy, superUSDC, principalToken, vaultShares, // test contracts
-    vaultTokenName, vaultTokenSymbol, // values
     signers, // signers
+    hyperStaking, lumiaDiamond, // diamonds deployment
+    defaultWithdrawDelay, // deposit parameter
+    swapSuperStrategy, superVault, superformFactory, superUSDC, curvePool, // strategy and related
+    testUSDC, testUSDT, erc4626Vault, principalToken, vaultShares, // test contracts
+    vaultTokenName, vaultTokenSymbol, // values
   };
   /* eslint-enable object-property-newline */
 }
@@ -339,7 +343,7 @@ describe("CurveStrategy", function () {
       // ------------------ SuperUSDC ------------------
 
       const superUSDC = await shared.registerAERC20( // transmuted ERC20 version
-        testSwapIntegration as unknown as ISuperformIntegration, superVault, usdc,
+        testSwapIntegration as unknown as Contract, superVault, usdc,
       );
 
       // ------------------ CurveIntegration ------------------
@@ -532,11 +536,19 @@ describe("CurveStrategy", function () {
   });
 
   describe("Curve - Swap Strategy", function () {
-    it("swap strategy is also a superform strategy", async function () {
-      const { hyperStaking, swapSuperStrategy } = await loadFixture(deployHyperStaking);
-      const { testUSDC, testUSDT, diamond, hyperFactory, hyperlaneHandler } = hyperStaking;
+    afterEach(async () => {
+      const c = globalThis.$invChecker;
+      if (c) await c.check();
+    });
 
-      const superformId = await hyperStaking.superformFactory.vaultToSuperforms(hyperStaking.superVault, 0);
+    it("swap strategy is also a superform strategy", async function () {
+      const {
+        hyperStaking, lumiaDiamond, swapSuperStrategy, testUSDC, testUSDT, superVault, superformFactory,
+      } = await loadFixture(deployHyperStaking);
+      const { diamond, hyperFactory } = hyperStaking;
+      const { hyperlaneHandler } = lumiaDiamond;
+
+      const superformId = await superformFactory.vaultToSuperforms(superVault, 0);
 
       expect(await swapSuperStrategy.DIAMOND()).to.equal(diamond);
       expect(await swapSuperStrategy.SUPERFORM_ID()).to.equal(superformId);
@@ -557,8 +569,11 @@ describe("CurveStrategy", function () {
     });
 
     it("staking using swap strategy", async function () {
-      const { hyperStaking, swapSuperStrategy, vaultShares, superUSDC, signers } = await loadFixture(deployHyperStaking);
-      const { testUSDC, testUSDT, erc4626Vault, curvePool, deposit, defaultWithdrawDelay, allocation, hyperFactory, lockbox, hyperlaneHandler, realAssets } = hyperStaking;
+      const {
+        signers, hyperStaking, lumiaDiamond, swapSuperStrategy, vaultShares, superUSDC, testUSDC, testUSDT, erc4626Vault, curvePool, defaultWithdrawDelay,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit, allocation, hyperFactory, lockbox } = hyperStaking;
+      const { hyperlaneHandler, realAssets } = lumiaDiamond;
       const { alice } = signers;
 
       const amount = parseUnits("2000", 6);
@@ -620,8 +635,11 @@ describe("CurveStrategy", function () {
     });
 
     it("check on redeem vulnerability", async function () {
-      const { hyperStaking, swapSuperStrategy, vaultShares, superUSDC, signers } = await loadFixture(deployHyperStaking);
-      const { testUSDC, testUSDT, erc4626Vault, curvePool, deposit, defaultWithdrawDelay, allocation, hyperFactory, hyperlaneHandler, realAssets } = hyperStaking;
+      const {
+        signers, hyperStaking, lumiaDiamond, testUSDC, testUSDT, erc4626Vault, swapSuperStrategy, curvePool, vaultShares, superUSDC, defaultWithdrawDelay,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit, allocation, hyperFactory } = hyperStaking;
+      const { hyperlaneHandler, realAssets } = lumiaDiamond;
       const { alice, bob } = signers;
 
       const amount = parseUnits("2000", 6);

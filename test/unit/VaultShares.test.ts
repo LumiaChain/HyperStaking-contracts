@@ -5,17 +5,12 @@ import { parseEther, ZeroAddress } from "ethers";
 import * as shared from "../shared";
 
 import { StakeRedeemDataStruct } from "../../typechain-types/contracts/lumia-diamond/interfaces/IStakeRedeemRoute";
+import { deployHyperStakingBase } from "../setup";
 
 async function deployHyperStaking() {
-  const signers = await shared.getSigners();
-
-  // -------------------- Deploy Tokens --------------------
-
-  const testReserveAsset = await shared.deployTestERC20("Test Reserve Asset", "tRaETH");
-
-  // -------------------- Hyperstaking Diamond --------------------
-
-  const hyperStaking = await shared.deployTestHyperStaking(0n);
+  const {
+    signers, hyperStaking, lumiaDiamond, testERC20, invariantChecker, defaultWithdrawDelay,
+  } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Apply Strategies --------------------
 
@@ -23,7 +18,7 @@ async function deployHyperStaking() {
   const reserveAssetPrice = parseEther("2");
 
   const reserveStrategy = await shared.createReserveStrategy(
-    hyperStaking.diamond, shared.nativeTokenAddress, await testReserveAsset.getAddress(), reserveAssetPrice,
+    hyperStaking.diamond, shared.nativeTokenAddress, await testERC20.getAddress(), reserveAssetPrice,
   );
 
   const vaultSharesName = "eth vault1";
@@ -35,29 +30,43 @@ async function deployHyperStaking() {
     vaultSharesSymbol,
   );
 
+  // -------------------- Setup Checker --------------------
+
+  await invariantChecker.addStrategy(await reserveStrategy.getAddress());
+  setInvChecker(invariantChecker);
+
   // -------------------- Hyperlane Handler --------------------
 
   const { principalToken, vaultShares } = await shared.getDerivedTokens(
-    hyperStaking.hyperlaneHandler,
+    lumiaDiamond.hyperlaneHandler,
     await reserveStrategy.getAddress(),
   );
 
   /* eslint-disable object-property-newline */
   return {
-    hyperStaking, // HyperStaking deployment
-    testReserveAsset, reserveStrategy, principalToken, vaultShares, // test contracts
-    reserveAssetPrice, vaultSharesName, vaultSharesSymbol, // values
     signers, // signers
+    hyperStaking, lumiaDiamond, // HyperStaking deployment
+    defaultWithdrawDelay,
+    testERC20, reserveStrategy, principalToken, vaultShares, // test contracts
+    reserveAssetPrice, vaultSharesName, vaultSharesSymbol, // values
   };
   /* eslint-enable object-property-newline */
 }
 
 describe("VaultShares", function () {
+  afterEach(async () => {
+    const c = globalThis.$invChecker;
+    if (c) await c.check();
+  });
+
   describe("InterchainFactory", function () {
     it("vault token name, symbol and decimals", async function () {
-      const { signers, hyperStaking, testReserveAsset, reserveAssetPrice, principalToken, vaultShares, vaultSharesName, vaultSharesSymbol } = await loadFixture(deployHyperStaking);
+      const {
+        signers, hyperStaking, lumiaDiamond, testERC20, reserveAssetPrice, principalToken, vaultShares, vaultSharesName, vaultSharesSymbol,
+      } = await loadFixture(deployHyperStaking);
 
-      const { diamond, hyperFactory, hyperlaneHandler } = hyperStaking;
+      const { diamond, hyperFactory } = hyperStaking;
+      const { hyperlaneHandler } = lumiaDiamond;
       const { vaultManager } = signers;
 
       expect(await principalToken.name()).to.equal(`Principal ${vaultSharesName}`);
@@ -68,7 +77,7 @@ describe("VaultShares", function () {
       expect(await vaultShares.symbol()).to.equal(vaultSharesSymbol);
       expect(await vaultShares.decimals()).to.equal(18);
 
-      const testReserveAssetDecimals = await testReserveAsset.decimals();
+      const testReserveAssetDecimals = await testERC20.decimals();
 
       // 18 - native token decimals
       expect(testReserveAssetDecimals).to.equal(18);
@@ -81,7 +90,7 @@ describe("VaultShares", function () {
       const strangeUSDStake = await shared.deployTestERC20("Test USD Strange Asset", "tUSSA", strangeDecimals);
 
       const strangeStrategy = await shared.createReserveStrategy(
-        diamond, await strangeUSDStake.getAddress(), await testReserveAsset.getAddress(), reserveAssetPrice,
+        diamond, await strangeUSDStake.getAddress(), await testERC20.getAddress(), reserveAssetPrice,
       );
 
       const vaultSharesName2 = "strange usd vault";
@@ -107,8 +116,11 @@ describe("VaultShares", function () {
     });
 
     it("test route and registration", async function () {
-      const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
-      const { diamond, hyperFactory, hyperlaneHandler } = hyperStaking;
+      const {
+        signers, hyperStaking, lumiaDiamond, reserveStrategy,
+      } = await loadFixture(deployHyperStaking);
+      const { diamond, hyperFactory } = hyperStaking;
+      const { hyperlaneHandler } = lumiaDiamond;
       const { vaultManager } = signers;
 
       const testAsset2 = await shared.deployTestERC20("Test Asset2", "tRaETH2");
@@ -164,7 +176,9 @@ describe("VaultShares", function () {
     });
 
     it("stake deposit should generate vault shares", async function () {
-      const { hyperStaking, reserveStrategy, principalToken, vaultShares, signers } = await loadFixture(deployHyperStaking);
+      const {
+        hyperStaking, reserveStrategy, principalToken, vaultShares, signers,
+      } = await loadFixture(deployHyperStaking);
       const { deposit, allocation } = hyperStaking;
       const { owner, vaultManager, strategyManager, alice } = signers;
 
@@ -198,7 +212,9 @@ describe("VaultShares", function () {
     });
 
     it("shares should be minted equally regardless of the deposit order", async function () {
-      const { hyperStaking, reserveStrategy, vaultShares, signers } = await loadFixture(deployHyperStaking);
+      const {
+        signers, hyperStaking, reserveStrategy, vaultShares,
+      } = await loadFixture(deployHyperStaking);
       const { deposit } = hyperStaking;
       const { owner, alice, bob } = signers;
 
@@ -224,13 +240,11 @@ describe("VaultShares", function () {
 
     it("it should be possible to redeem and withdraw stake", async function () {
       const {
-        hyperStaking, testReserveAsset, reserveStrategy, reserveAssetPrice, principalToken, vaultShares, signers,
+        signers, hyperStaking, lumiaDiamond, testERC20, reserveStrategy, reserveAssetPrice, principalToken, vaultShares, defaultWithdrawDelay,
       } = await loadFixture(deployHyperStaking);
-      const { deposit, defaultWithdrawDelay, lockbox, realAssets, stakeRedeemRoute } = hyperStaking;
-      const {
-        alice,
-        bob,
-      } = signers;
+      const { deposit, lockbox } = hyperStaking;
+      const { realAssets, stakeRedeemRoute } = lumiaDiamond;
+      const { alice, bob } = signers;
 
       expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
 
@@ -244,7 +258,7 @@ describe("VaultShares", function () {
 
       // check allocation
       const expectedAllocation = stakeAmount * parseEther("1") / reserveAssetPrice;
-      expect(await testReserveAsset.balanceOf(lockbox)).to.be.eq(expectedAllocation);
+      expect(await testERC20.balanceOf(lockbox)).to.be.eq(expectedAllocation);
 
       // redeem should be possible only through realAssets facet - lumia proxy
       await expect(vaultShares.connect(alice).redeem(stakeAmount, alice, alice))
@@ -272,7 +286,7 @@ describe("VaultShares", function () {
       // back to zero
       expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
       expect(await principalToken.balanceOf(vaultShares)).to.be.eq(0);
-      expect(await testReserveAsset.balanceOf(lockbox)).to.be.eq(0);
+      expect(await testERC20.balanceOf(lockbox)).to.be.eq(0);
 
       // -- scenario with approval redeem
       await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
@@ -283,7 +297,7 @@ describe("VaultShares", function () {
 
       await expect(realAssets.connect(alice).redeem(
         reserveStrategy, alice, bob, stakeAmount, { value: dispatchFee },
-      )).to.changeTokenBalances(testReserveAsset,
+      )).to.changeTokenBalances(testERC20,
         [lockbox, reserveStrategy],
         [-expectedAllocation, expectedAllocation],
       );
@@ -297,7 +311,7 @@ describe("VaultShares", function () {
       await expect(deposit.connect(bob).claimWithdraws([lastClaimId], bob))
         .to.changeEtherBalance(bob, stakeAmount);
 
-      expect(await testReserveAsset.balanceOf(lockbox)).to.be.eq(0);
+      expect(await testERC20.balanceOf(lockbox)).to.be.eq(0);
     });
   });
 });

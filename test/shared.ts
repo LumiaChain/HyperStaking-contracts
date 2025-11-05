@@ -1,20 +1,14 @@
 import { expect } from "chai";
 import { ignition, ethers, network } from "hardhat";
 import { Contract, ZeroAddress, ZeroBytes32, parseEther, parseUnits, Addressable, TransactionResponse, Log } from "ethers";
-import { time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
-
-import HyperStakingModule from "../ignition/modules/HyperStaking";
-import LumiaDiamondModule from "../ignition/modules/LumiaDiamond";
-import OneChainMailboxModule from "../ignition/modules/test/OneChainMailbox";
 import SuperformMockModule from "../ignition/modules/test/SuperformMock";
-import CurveMockModule from "../ignition/modules/test/CurveMock";
 
 import TestERC20Module from "../ignition/modules/test/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/test/MockReserveStrategy";
 
 import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IHyperFactory";
 
-import { IERC20, ISuperformIntegration } from "../typechain-types";
+import { IERC20 } from "../typechain-types";
 
 import { SingleDirectSingleVaultStateReqStruct } from "../typechain-types/contracts/external/superform/core/BaseRouter";
 
@@ -74,113 +68,7 @@ export async function deploySuperformMock(erc4626Vault: Contract) {
   });
 }
 
-export async function deployTestHyperStaking(mailboxFee: bigint) {
-  const { alice, bob, vaultManager, lumiaFactoryManager } = await getSigners();
-  const testDestination = 31337; // the same for both sides of the test "oneChain" bridge
-
-  // -------------------- Deploy Tokens --------------------
-
-  const testUSDC = await deployTestERC20("Test USDC", "tUSDC", 6);
-  const testUSDT = await deployTestERC20("Test USDT", "tUSDT", 6);
-
-  const stableUnits = (val: string) => parseUnits(val, 6);
-  await testUSDC.mint(alice.address, stableUnits("1000000"));
-  await testUSDC.mint(bob.address, stableUnits("1000000"));
-
-  await testUSDT.mint(alice.address, stableUnits("1000000"));
-  await testUSDT.mint(bob.address, stableUnits("1000000"));
-
-  // -------------------- Hyperlane --------------------
-
-  const { mailbox } = await ignition.deploy(OneChainMailboxModule, {
-    parameters: {
-      OneChainMailboxModule: {
-        fee: mailboxFee,
-        localDomain: testDestination,
-      },
-    },
-  });
-  const mailboxAddress = await mailbox.getAddress();
-
-  // -------------------- Superform --------------------
-
-  const erc4626Vault = await deployTestERC4626Vault(testUSDC);
-  const {
-    superformFactory, superformRouter, superVault, superPositions,
-  } = await deploySuperformMock(erc4626Vault);
-
-  // -------------------- Curve --------------------
-
-  const { curvePool, curveRouter } = await ignition.deploy(CurveMockModule, {
-    parameters: {
-      CurveMockModule: {
-        usdcAddress: await testUSDC.getAddress(),
-        usdtAddress: await testUSDT.getAddress(),
-      },
-    },
-  });
-
-  // fill the pool with some USDC and USDT
-  await testUSDC.transfer(await curvePool.getAddress(), stableUnits("500000"));
-  await testUSDT.transfer(await curvePool.getAddress(), stableUnits("500000"));
-
-  // -------------------- HyperStaking --------------------
-
-  const { diamond, deposit, hyperFactory, allocation, lockbox, routeRegistry, stakeInfoRoute, superformIntegration, curveIntegration } = await ignition.deploy(HyperStakingModule, {
-    parameters: {
-      HyperStakingModule: {
-        lockboxMailbox: mailboxAddress,
-        lockboxDestination: testDestination,
-        superformFactory: await superformFactory.getAddress(),
-        superformRouter: await superformRouter.getAddress(),
-        superPositions: await superPositions.getAddress(),
-        curveRouter: await curveRouter.getAddress(),
-      },
-    },
-  });
-
-  const defaultWithdrawDelay = 3 * 24 * 60 * 60; // 3 days
-
-  // -------------------- Lumia Diamond --------------------
-
-  const { lumiaDiamond, hyperlaneHandler, realAssets, stakeRedeemRoute } = await ignition.deploy(LumiaDiamondModule, {
-    parameters: {
-      LumiaDiamondModule: {
-        lumiaMailbox: mailboxAddress,
-      },
-    },
-  });
-
-  // -------------------- Other/Configuration --------------------
-
-  // finish setup for hyperstaking
-  await lockbox.connect(vaultManager).proposeLumiaFactory(hyperlaneHandler);
-  await time.setNextBlockTimestamp(await getCurrentBlockTimestamp() + 3600 * 24); // 1 day later
-  await lockbox.connect(vaultManager).applyLumiaFactory();
-
-  // finish setup for lumia diamond
-  const authorized = true;
-  await hyperlaneHandler.connect(lumiaFactoryManager).updateAuthorizedOrigin(
-    lockbox,
-    authorized,
-    testDestination,
-  );
-
-  /* eslint-disable object-property-newline */
-  return {
-    diamond,
-    deposit, hyperFactory, allocation, lockbox, // hyperstaking facets
-    defaultWithdrawDelay, // deposit parameter
-    routeRegistry, stakeInfoRoute, // hyperstaking route facets
-    superformIntegration, curveIntegration, // hyperstaking integration facets
-    lumiaDiamond, hyperlaneHandler, realAssets, stakeRedeemRoute, // lumia diamond facets
-    superVault, superformFactory, // superform mock
-    curvePool, curveRouter, // curve mock
-    testUSDC, testUSDT, erc4626Vault, // test tokens
-    mailbox, // hyperlane test mailbox
-  };
-  /* eslint-enable object-property-newline */
-}
+// -------------------- Tokens --------------------
 
 export async function deployTestERC20(name: string, symbol: string, decimals: number = 18): Promise<Contract> {
   const { testERC20 } = await ignition.deploy(TestERC20Module, {
@@ -241,7 +129,7 @@ export async function createReserveStrategy(
 // -------------------- Superform AERC20 --------------------
 
 export async function registerAERC20(
-  superformIntegration: ISuperformIntegration,
+  superformIntegration: Contract,
   superVault: Contract,
   testUSDC: Contract,
 ): Promise<IERC20> {

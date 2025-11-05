@@ -10,6 +10,7 @@ import * as shared from "../shared";
 // import TxCostTracker from "../txCostTracker";
 import { PirexEth } from "../../typechain-types";
 import { CurrencyStruct } from "../../typechain-types/contracts/hyperstaking/facets/HyperFactoryFacet";
+import { deployHyperStakingBase } from "../setup";
 
 async function getMockedPirex() {
   const [, , rewardRecipient] = await ethers.getSigners();
@@ -22,15 +23,9 @@ async function getMockedPirex() {
 }
 
 async function deployHyperStaking() {
-  const signers = await shared.getSigners();
-
-  // -------------------- Deploy Tokens --------------------
-
-  const testWstETH = await shared.deployTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
-
-  // --------------------- Hyperstaking Diamond --------------------
-
-  const hyperStaking = await shared.deployTestHyperStaking(0n);
+  const {
+    signers, testWstETH, hyperStaking, lumiaDiamond, invariantChecker, defaultWithdrawDelay,
+  } = await deployHyperStakingBase();
 
   // -------------------- Apply Strategies --------------------
 
@@ -65,10 +60,15 @@ async function deployHyperStaking() {
     "dETH2",
   );
 
+  // -------------------- Setup Checker --------------------
+
+  await invariantChecker.addStrategy(await dineroStrategy.getAddress());
+  setInvChecker(invariantChecker);
+
   // -------------------- Hyperlane Handler --------------------
 
   const { principalToken, vaultShares } = await shared.getDerivedTokens(
-    hyperStaking.hyperlaneHandler,
+    lumiaDiamond.hyperlaneHandler,
     await dineroStrategy.getAddress(),
   );
 
@@ -76,11 +76,12 @@ async function deployHyperStaking() {
 
   /* eslint-disable object-property-newline */
   return {
-    hyperStaking, // HyperStaking deployment
+    signers, // signers
+    defaultWithdrawDelay,
+    hyperStaking, lumiaDiamond, // diamonds deployment
     pxEth, upxEth, pirexEth, autoPxEth, // pirex mock
     testWstETH, reserveStrategy, dineroStrategy, principalToken, vaultShares, // test contracts
     reserveAssetPrice, // values
-    signers, // signers
   };
   /* eslint-enable object-property-newline */
 }
@@ -123,6 +124,11 @@ describe("Strategy", function () {
   });
 
   describe("ReserveStrategy", function () {
+    afterEach(async () => {
+      const c = globalThis.$invChecker;
+      if (c) await c.check();
+    });
+
     it("check state after allocation", async function () {
       const { hyperStaking, testWstETH, reserveStrategy, reserveAssetPrice, signers } = await loadFixture(deployHyperStaking);
       const { deposit, hyperFactory, allocation, lockbox } = hyperStaking;
@@ -180,8 +186,11 @@ describe("Strategy", function () {
     });
 
     it("requestInfo & requestInfoBatch reflect queued withdraws", async function () {
-      const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
-      const { deposit, hyperlaneHandler, realAssets } = hyperStaking;
+      const {
+        signers, hyperStaking, lumiaDiamond, reserveStrategy,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit } = hyperStaking;
+      const { hyperlaneHandler, realAssets } = lumiaDiamond;
       const { alice } = signers;
 
       const stakeAmount = parseEther("5");
@@ -301,7 +310,7 @@ describe("Strategy", function () {
       });
 
       it("VaultDoesNotExist", async function () {
-        const { hyperStaking, signers } = await loadFixture(deployHyperStaking);
+        const { signers, hyperStaking } = await loadFixture(deployHyperStaking);
         const { deposit } = hyperStaking;
         const { owner } = signers;
 
@@ -313,7 +322,7 @@ describe("Strategy", function () {
       });
 
       it("VaultAlreadyExist", async function () {
-        const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+        const { signers, hyperStaking, reserveStrategy } = await loadFixture(deployHyperStaking);
         const { hyperFactory } = hyperStaking;
         const { vaultManager } = signers;
 
@@ -326,7 +335,7 @@ describe("Strategy", function () {
       });
 
       it("Vault external functions not be accessible outside deposit", async function () {
-        const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+        const { signers, hyperStaking, reserveStrategy } = await loadFixture(deployHyperStaking);
         const { allocation } = hyperStaking;
         const { alice } = signers;
 
@@ -340,8 +349,13 @@ describe("Strategy", function () {
   });
 
   describe("Dinero Strategy", function () {
+    afterEach(async () => {
+      const c = globalThis.$invChecker;
+      if (c) await c.check();
+    });
+
     it("staking deposit to dinero strategy should aquire apxEth", async function () {
-      const { hyperStaking, autoPxEth, dineroStrategy, signers } = await loadFixture(deployHyperStaking);
+      const { signers, hyperStaking, autoPxEth, dineroStrategy } = await loadFixture(deployHyperStaking);
       const { deposit, hyperFactory, lockbox, allocation } = hyperStaking;
       const { owner } = signers;
 
@@ -384,8 +398,11 @@ describe("Strategy", function () {
     });
 
     it("unstaking from to dinero strategy should exchange apxEth back to eth", async function () {
-      const { hyperStaking, autoPxEth, vaultShares, dineroStrategy, signers } = await loadFixture(deployHyperStaking);
-      const { deposit, defaultWithdrawDelay, hyperFactory, lockbox, realAssets, allocation } = hyperStaking;
+      const {
+        signers, hyperStaking, lumiaDiamond, autoPxEth, vaultShares, dineroStrategy, defaultWithdrawDelay,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit, hyperFactory, lockbox, allocation } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
       const { owner } = signers;
 
       const blockTime = await shared.getCurrentBlockTimestamp();
@@ -428,45 +445,45 @@ describe("Strategy", function () {
 
       expect(await autoPxEth.balanceOf(lockbox)).to.equal(0);
     });
+  });
 
-    describe("Pirex Mock", function () {
-      it("it should be possible to deposit ETH and get pxETH", async function () {
-        const [owner] = await ethers.getSigners();
-        const { pxEth, pirexEth } = await loadFixture(getMockedPirex);
+  describe("Pirex Mock", function () {
+    it("it should be possible to deposit ETH and get pxETH", async function () {
+      const [owner] = await ethers.getSigners();
+      const { pxEth, pirexEth } = await loadFixture(getMockedPirex);
 
-        await pirexEth.deposit(owner, false, { value: parseEther("1") });
+      await pirexEth.deposit(owner, false, { value: parseEther("1") });
 
-        expect(await pxEth.balanceOf(owner)).to.be.greaterThan(0);
-      });
+      expect(await pxEth.balanceOf(owner)).to.be.greaterThan(0);
+    });
 
-      it("it should be possible to deposit ETH and auto-compund it with apxEth", async function () {
-        const [owner] = await ethers.getSigners();
-        const { pxEth, pirexEth, autoPxEth } = await loadFixture(getMockedPirex);
+    it("it should be possible to deposit ETH and auto-compund it with apxEth", async function () {
+      const [owner] = await ethers.getSigners();
+      const { pxEth, pirexEth, autoPxEth } = await loadFixture(getMockedPirex);
 
-        await pirexEth.deposit(owner, true, { value: parseEther("5") });
+      await pirexEth.deposit(owner, true, { value: parseEther("5") });
 
-        expect(await pxEth.balanceOf(owner)).to.equal(0);
-        expect(await autoPxEth.balanceOf(owner)).to.be.greaterThan(0);
-      });
+      expect(await pxEth.balanceOf(owner)).to.equal(0);
+      expect(await autoPxEth.balanceOf(owner)).to.be.greaterThan(0);
+    });
 
-      it("it should be possible to instant Redeem apxEth back to ETH", async function () {
-        const [owner, alice] = await ethers.getSigners();
-        const { pxEth, pirexEth, autoPxEth } = await loadFixture(getMockedPirex);
+    it("it should be possible to instant Redeem apxEth back to ETH", async function () {
+      const [owner, alice] = await ethers.getSigners();
+      const { pxEth, pirexEth, autoPxEth } = await loadFixture(getMockedPirex);
 
-        const initialDeposit = parseEther("1");
-        await pirexEth.deposit(owner, true, { value: initialDeposit });
+      const initialDeposit = parseEther("1");
+      await pirexEth.deposit(owner, true, { value: initialDeposit });
 
-        const totalAssets = await autoPxEth.totalAssets();
-        await autoPxEth.withdraw(totalAssets / 2n, owner, owner);
+      const totalAssets = await autoPxEth.totalAssets();
+      await autoPxEth.withdraw(totalAssets / 2n, owner, owner);
 
-        await expect(pirexEth.instantRedeemWithPxEth(initialDeposit / 2n, alice))
-          .to.changeEtherBalances(
-            [pirexEth, alice],
-            [-initialDeposit / 2n, initialDeposit / 2n],
-          );
+      await expect(pirexEth.instantRedeemWithPxEth(initialDeposit / 2n, alice))
+        .to.changeEtherBalances(
+          [pirexEth, alice],
+          [-initialDeposit / 2n, initialDeposit / 2n],
+        );
 
-        expect(await pxEth.balanceOf(owner)).to.equal(0);
-      });
+      expect(await pxEth.balanceOf(owner)).to.equal(0);
     });
   });
 });

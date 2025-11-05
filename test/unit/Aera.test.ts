@@ -10,6 +10,7 @@ import GauntletMockModule from "../../ignition/modules/test/GauntletMock";
 import GauntletStrategyModule from "../../ignition/modules/GauntletStrategy";
 import { LumiaVaultShares } from "../../typechain-types";
 import { ClaimStruct } from "../../typechain-types/contracts/hyperstaking/interfaces/IDeposit";
+import { deployHyperStakingBase } from "../setup";
 
 async function getMockedGauntlet(testUSDC?: Contract) {
   const [owner, feeRecipient, alice, bob] = await ethers.getSigners();
@@ -70,15 +71,13 @@ async function getMockedGauntlet(testUSDC?: Contract) {
 }
 
 async function deployHyperStaking() {
-  const signers = await shared.getSigners();
-
-  // --------------------- Hyperstaking Diamond --------------------
-
-  const hyperStaking = await shared.deployTestHyperStaking(0n);
+  const {
+    signers, hyperStaking, lumiaDiamond, testUSDC, invariantChecker,
+  } = await deployHyperStakingBase();
 
   // --------------------- Aera Mock --------------------
 
-  const getMockedGauntletWithUSDC = () => getMockedGauntlet(hyperStaking.testUSDC);
+  const getMockedGauntletWithUSDC = () => getMockedGauntlet(testUSDC);
   const aeraMock = await loadFixture(getMockedGauntletWithUSDC);
 
   // -------------------- Apply Strategy --------------------
@@ -87,7 +86,7 @@ async function deployHyperStaking() {
     parameters: {
       GauntletStrategyModule: {
         diamond: await hyperStaking.diamond.getAddress(),
-        stakeToken: await hyperStaking.testUSDC.getAddress(),
+        stakeToken: await testUSDC.getAddress(),
         aeraProvisioner: await aeraMock.aeraProvisioner.getAddress(),
       },
     },
@@ -109,10 +108,15 @@ async function deployHyperStaking() {
     isFixedPrice: defaultConfig.isFixedPrice,
   } as AeraConfigStruct);
 
+  // -------------------- Setup Checker --------------------
+
+  await invariantChecker.addStrategy(await gauntletStrategy.getAddress());
+  setInvChecker(invariantChecker);
+
   // -------------------- Hyperlane Handler --------------------
 
   const { principalToken, vaultShares } = await shared.getDerivedTokens(
-    hyperStaking.hyperlaneHandler,
+    lumiaDiamond.hyperlaneHandler,
     await gauntletStrategy.getAddress(),
   );
 
@@ -120,9 +124,10 @@ async function deployHyperStaking() {
 
   /* eslint-disable object-property-newline */
   return {
-    hyperStaking, aeraMock, gauntletStrategy, // contracts
-    principalToken, vaultShares, // test contracts
     signers, // signers
+    hyperStaking, lumiaDiamond, // diamonds deployment
+    testUSDC, aeraMock, gauntletStrategy, // contracts
+    principalToken, vaultShares, // test contracts
   };
   /* eslint-enable object-property-newline */
 }
@@ -289,12 +294,18 @@ describe("Aera", function () {
   });
 
   describe("Gauntlet Strategy", function () {
+    afterEach(async () => {
+      const c = globalThis.$invChecker;
+      if (c) await c.check();
+    });
+
     it("wires Diamond, stake token, revenue asset, route, and VaultInfo", async function () {
       const {
-        hyperStaking, gauntletStrategy, principalToken, vaultShares,
+        hyperStaking, lumiaDiamond, gauntletStrategy, principalToken, vaultShares, testUSDC,
       } = await loadFixture(deployHyperStaking);
 
-      const { diamond, testUSDC, hyperFactory, hyperlaneHandler } = hyperStaking;
+      const { diamond, hyperFactory } = hyperStaking;
+      const { hyperlaneHandler } = lumiaDiamond;
 
       // diamond and stake token
       expect(await gauntletStrategy.DIAMOND()).to.equal(diamond);
@@ -325,13 +336,10 @@ describe("Aera", function () {
 
     it("stake: single user, events, stakeInfo, lockbox & LP balances", async function () {
       const {
-        hyperStaking,
-        gauntletStrategy,
-        vaultShares,
-        signers,
+        signers, hyperStaking, gauntletStrategy, vaultShares, testUSDC,
       } = await loadFixture(deployHyperStaking);
 
-      const { deposit, allocation, lockbox, testUSDC } = hyperStaking;
+      const { deposit, allocation, lockbox } = hyperStaking;
       const { alice } = signers;
 
       const stakeAmount = parseUnits("1000", 6);
@@ -371,13 +379,10 @@ describe("Aera", function () {
 
     it("stake: two users, interleaved; sums, LP balances correct", async function () {
       const {
-        hyperStaking,
-        gauntletStrategy,
-        vaultShares,
-        signers,
+        hyperStaking, gauntletStrategy, vaultShares, signers, testUSDC,
       } = await loadFixture(deployHyperStaking);
 
-      const { deposit, allocation, lockbox, testUSDC } = hyperStaking;
+      const { deposit, allocation, lockbox } = hyperStaking;
       const { alice, bob } = signers;
 
       const aliceStake = parseUnits("1200", 6);
@@ -428,14 +433,11 @@ describe("Aera", function () {
 
     it("stake & redeem with 3% slippage", async function () {
       const {
-        hyperStaking,
-        gauntletStrategy,
-        vaultShares,
-        signers,
-        aeraMock,
+        signers, hyperStaking, lumiaDiamond, testUSDC, gauntletStrategy, vaultShares, aeraMock,
       } = await loadFixture(deployHyperStaking);
 
-      const { deposit, allocation, realAssets, testUSDC } = hyperStaking;
+      const { deposit, allocation } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
       const { alice, strategyManager } = signers;
 
       // --- configure slippage back to 3% ---
@@ -530,20 +532,11 @@ describe("Aera", function () {
 
     it("redeem after +10% price increase, claim, and balances", async function () {
       const {
-        hyperStaking,
-        gauntletStrategy,
-        vaultShares,
-        signers,
-        aeraMock,
+        signers, hyperStaking, lumiaDiamond, testUSDC, gauntletStrategy, vaultShares, aeraMock,
       } = await loadFixture(deployHyperStaking);
 
-      const {
-        deposit,
-        allocation,
-        realAssets,
-        lockbox,
-        testUSDC,
-      } = hyperStaking;
+      const { deposit, allocation, lockbox } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
       const { alice, owner } = signers;
 
       // ---------- Stake ----------
@@ -635,17 +628,11 @@ describe("Aera", function () {
 
     it("requires feeRecipient; then compounds revenue with feeRate=0", async function () {
       const {
-        hyperStaking,
-        gauntletStrategy,
-        principalToken,
-        vaultShares,
-        signers,
-        aeraMock,
+        signers, hyperStaking, lumiaDiamond, testUSDC, gauntletStrategy, principalToken, vaultShares, aeraMock,
       } = await loadFixture(deployHyperStaking);
 
-      const {
-        deposit, allocation, realAssets, testUSDC, hyperFactory,
-      } = hyperStaking;
+      const { deposit, allocation, hyperFactory } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
       const { alice, owner, vaultManager, bob } = signers;
 
       // ---------- Stake ----------
@@ -736,14 +723,11 @@ describe("Aera", function () {
 
     it("compounds before user redeem, user claims more tokens than initial stake", async function () {
       const {
-        hyperStaking,
-        gauntletStrategy,
-        vaultShares,
-        signers,
-        aeraMock,
+        signers, hyperStaking, lumiaDiamond, gauntletStrategy, vaultShares, aeraMock, testUSDC,
       } = await loadFixture(deployHyperStaking);
 
-      const { deposit, allocation, realAssets, testUSDC, hyperFactory } = hyperStaking;
+      const { deposit, allocation, hyperFactory } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
       const { alice, owner, vaultManager, bob } = signers;
 
       // --- Stake & settle deposit ---
@@ -841,9 +825,7 @@ describe("Aera", function () {
 
     it("errors: guards and config validation", async function () {
       const {
-        hyperStaking,
-        gauntletStrategy,
-        signers,
+        signers, hyperStaking, gauntletStrategy,
       } = await loadFixture(deployHyperStaking);
 
       const { owner, alice, strategyManager } = signers;
@@ -942,6 +924,11 @@ describe("Aera", function () {
   });
 
   describe("GauntletStrategy gain/loss", () => {
+    afterEach(async () => {
+      const c = globalThis.$invChecker;
+      if (c) await c.check();
+    });
+
     async function redeemFraction(
       vaultShares: LumiaVaultShares,
       realAssets: Contract,
@@ -999,10 +986,11 @@ describe("Aera", function () {
           }).filter(r => r.redeemNum <= r.redeemDen),
           async ({ usdc, slipBps, redeemNum, redeemDen, priceDeltaBps }) => {
             const {
-              hyperStaking, gauntletStrategy, vaultShares, signers, aeraMock,
+              signers, hyperStaking, lumiaDiamond, gauntletStrategy, vaultShares, aeraMock, testUSDC,
             } = await loadFixture(deployHyperStaking);
 
-            const { deposit, allocation, realAssets, testUSDC } = hyperStaking;
+            const { deposit, allocation } = hyperStaking;
+            const { realAssets } = lumiaDiamond;
             const { alice, strategyManager, owner } = signers;
 
             const aliceBalanceBefore = await testUSDC.balanceOf(alice);
@@ -1154,9 +1142,10 @@ describe("Aera", function () {
 
     it("2×1/2 redemptions share loss fairly; totals match single-shot", async () => {
       const {
-        hyperStaking, gauntletStrategy, vaultShares, signers, aeraMock,
+        signers, hyperStaking, lumiaDiamond, testUSDC, gauntletStrategy, vaultShares, aeraMock,
       } = await loadFixture(deployHyperStaking);
-      const { deposit, realAssets, testUSDC } = hyperStaking;
+      const { deposit } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
       const { alice, owner } = signers;
 
       // set a moderate slippage to surface edge math
@@ -1249,9 +1238,10 @@ describe("Aera", function () {
 
     it("3×1/3 redemptions share loss; sum never < one-lump lower bound", async () => {
       const {
-        hyperStaking, gauntletStrategy, vaultShares, signers, aeraMock,
+        signers, hyperStaking, lumiaDiamond, testUSDC, gauntletStrategy, vaultShares, aeraMock,
       } = await loadFixture(deployHyperStaking);
-      const { deposit, allocation, realAssets, testUSDC } = hyperStaking;
+      const { deposit, allocation } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
       const { alice, owner } = signers;
 
       const cfg0 = await gauntletStrategy.aeraConfig();
@@ -1336,9 +1326,10 @@ describe("Aera", function () {
 
     it("2×1/2, price up: each part <= shares; sum <= single-shot", async () => {
       const {
-        hyperStaking, gauntletStrategy, vaultShares, signers, aeraMock,
+        signers, hyperStaking, lumiaDiamond, gauntletStrategy, testUSDC, vaultShares, aeraMock,
       } = await loadFixture(deployHyperStaking);
-      const { deposit, realAssets, testUSDC } = hyperStaking;
+      const { deposit } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
       const { alice, owner } = signers;
 
       const cfg0 = await gauntletStrategy.aeraConfig();

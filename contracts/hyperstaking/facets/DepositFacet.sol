@@ -4,7 +4,6 @@ pragma solidity =0.8.27;
 import {IDeposit} from "../interfaces/IDeposit.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 import {IAllocation} from "../interfaces/IAllocation.sol";
-import {ILockbox} from "../interfaces/ILockbox.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {
@@ -96,12 +95,14 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             // because of possible price changes between request and claim,
             uint256 exitAmount = IStrategy(c.strategy).claimExit(ids, to);
 
+            v.stakeInfo[c.strategy].pendingExitStake -= stake;
+
             if (c.feeWithdraw) {
                 emit FeeWithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount);
-                continue; // fee withdrawal does not affect the total stake
+                continue;
             }
 
-            v.stakeInfo[c.strategy].pendingExitStake -= stake;
+            // totalStake is not incremented by feeAmount
             v.stakeInfo[c.strategy].totalStake -= stake;
 
             emit WithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount);
