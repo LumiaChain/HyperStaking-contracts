@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.27;
 
+// solhint-disable var-name-mixedcase
+
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -43,6 +45,7 @@ struct InterchainFactoryStorage {
 
     /// @notice Temporary data about last msg
     LastMessage lastMessage;
+    uint256[8] __gap_lastMessage;
 
     /// @notice Set of authorized Lockboxes (located on their respective origin chains)
     EnumerableSet.AddressSet authorizedOrigins;
