@@ -456,7 +456,7 @@ describe("Lockbox", function () {
       expect(failed[0].user).to.eq(ZeroAddress);
     });
 
-    it.only("edge-case: redeem 1 wei after 10x gain: allocation rounds to 0", async function () {
+    it("edge-case: redeem 1 wei after 10x gain: allocation rounds to 0", async function () {
       const {
         signers,
         hyperStaking,

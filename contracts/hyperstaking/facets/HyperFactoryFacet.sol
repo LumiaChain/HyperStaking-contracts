@@ -19,6 +19,8 @@ import {
     LibHyperStaking, HyperStakingStorage, VaultInfo, StakeInfo
 } from "../libraries/LibHyperStaking.sol";
 
+import {ZeroAddress} from "../../shared/Errors.sol";
+
 /**
  * @title HyperFactoryFacet
  * @notice Facet responsible for initiating HyperStaking strategies on the origin chain, and initiates
@@ -43,6 +45,8 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         string memory vaultTokenName,
         string memory vaultTokenSymbol
     ) external payable onlyVaultManager nonReentrant {
+        require(strategy != address(0), ZeroAddress());
+
         // The currency used for staking in this vault is taken from the strategy
         // Currency struct supports both native coin and erc20 tokens
         Currency memory stakeCurrency = IStrategy(strategy).stakeCurrency();
