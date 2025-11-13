@@ -10,4 +10,7 @@ error NotAuthorized(address);
 error ZeroAddress();
 error ZeroAmount();
 
+error ZeroStakeExit();
+error ZeroAllocationExit();
+
 error UpdateFailed();

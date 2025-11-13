@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ignition, ethers, network } from "hardhat";
-import { Contract, ZeroAddress, ZeroBytes32, parseEther, parseUnits, Addressable, TransactionResponse, Log } from "ethers";
+import { Contract, Interface, ZeroAddress, ZeroBytes32, parseEther, parseUnits, Addressable, TransactionResponse, Log } from "ethers";
 import SuperformMockModule from "../ignition/modules/test/SuperformMock";
 
 import TestERC20Module from "../ignition/modules/test/TestERC20";
@@ -236,6 +236,15 @@ export async function solveGauntletRedeemRequest(
 }
 
 // -------------------- Other Helpers --------------------
+
+// shared custom errors declared in a standalone Solidity file (no contract or library)
+const errorsIface = new Interface([
+  "error ZeroAmount()",
+  "error ZeroAddress()",
+  "error ZeroStakeExit()",
+  "error ZeroAllocationExit()",
+]);
+export const errors = { interface: errorsIface };
 
 export async function getLastClaimId(deposit: Contract, reserveStrategy1: Addressable, owner: Addressable) {
   const lastClaims = await deposit.lastClaims(reserveStrategy1, owner, 1);

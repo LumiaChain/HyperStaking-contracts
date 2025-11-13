@@ -4,7 +4,7 @@ pragma solidity =0.8.27;
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {ICurveRouterMinimal} from "../strategies/integrations/curve/interfaces/ICurveRouterMinimal.sol";
 
-import { ZeroAddress } from "../Errors.sol";
+import { ZeroAddress } from "../../shared/Errors.sol";
 
 //================================================================================================//
 //                                            Types                                               //

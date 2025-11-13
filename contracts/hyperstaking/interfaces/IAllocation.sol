@@ -68,6 +68,10 @@ interface IAllocation {
     error InsufficientRevenue();
     error SafetyMarginTooHigh();
 
+    error ZeroStakeExit();
+    error ZeroAllocationExit();
+
+
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//

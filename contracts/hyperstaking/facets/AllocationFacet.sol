@@ -18,6 +18,7 @@ import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
     LibHyperStaking, HyperStakingStorage, VaultInfo, StakeInfo
 } from "../libraries/LibHyperStaking.sol";
+import {ZeroStakeExit, ZeroAllocationExit} from "../../shared/Errors.sol";
 
 /**
  * @title AllocationFacet
@@ -202,8 +203,16 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         }
 
         // enforces proportional exits under loss
-        // min(need, capUnits) also fix +1 ceil from previewAllocation
-        allocation = need <= capUnits ? need : capUnits;
+        allocation = need;
+        if (need > capUnits) {
+            // edge-case: check ZeroStakeExit
+            require(IStrategy(strategy).previewExit(allocation) > 0, ZeroStakeExit());
+            // min(need, capUnits) also fix +1 ceil from previewAllocation
+            allocation = capUnits;
+        }
+
+        // edge-case: prevent zero shares exit
+        require(allocation > 0, ZeroAllocationExit());
 
         // save stake information
         si.totalAllocation -= allocation;

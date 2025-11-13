@@ -438,7 +438,7 @@ describe("Lockbox", function () {
         value: reserveStrategySupply,
       });
 
-      const reexecuteTx = lockbox.connect(alice).reexecuteStakeRedeem(id);
+      const reexecuteTx = lockbox.connect(alice).reexecuteFailedRedeem(id);
 
       await expect(reexecuteTx)
         .to.emit(lockbox, "StakeRedeemReexecuted")
@@ -454,6 +454,49 @@ describe("Lockbox", function () {
       // should no longer be retrievable
       const failed = await lockbox.getFailedRedeems([id]);
       expect(failed[0].user).to.eq(ZeroAddress);
+    });
+
+    it.only("edge-case: redeem 1 wei after 10x gain: allocation rounds to 0", async function () {
+      const {
+        signers,
+        hyperStaking,
+        lumiaDiamond,
+        reserveStrategy,
+        vaultShares,
+        mailbox,
+        reserveAssetPrice,
+      } = await loadFixture(deployHyperStaking);
+
+      const { deposit, lockbox } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
+      const { alice, owner, strategyManager } = signers;
+
+      await mailbox.connect(owner).setFee(0n);
+
+      // --- stake so Alice has shares ---
+      const stakeAmount = parseEther("10");
+      await deposit.connect(alice).stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
+
+      const userShares = await vaultShares.balanceOf(alice);
+      expect(userShares).to.eq(stakeAmount);
+
+      // --- pump price on the strategy ---
+      await reserveStrategy.connect(strategyManager).setAssetPrice(reserveAssetPrice * 10n); // 10x gain
+
+      // for a 1-wei share, capUnits should floor to 0
+      const tinyShares = 1n;
+
+      // redeeming this tiny amount should revert because allocation exit is zero
+      await vaultShares.connect(alice).approve(realAssets, tinyShares);
+      await realAssets.connect(alice).redeem(reserveStrategy, alice, alice, tinyShares);
+
+      const failedRedeem = await lockbox.getUserFailedRedeemIds(alice);
+      expect(failedRedeem.length).to.eq(1);
+
+      // re-execute should revert (cannot fulfill zero-amount exit)
+      await expect(
+        lockbox.connect(alice).reexecuteFailedRedeem(failedRedeem[0]),
+      ).to.be.revertedWithCustomError(shared.errors, "ZeroAllocationExit");
     });
   });
 

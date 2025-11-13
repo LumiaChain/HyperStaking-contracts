@@ -19,7 +19,7 @@ import {
 } from "../../../external/superform/core/types/DataTypes.sol";
 import {DataLib} from "../../../external/superform/core/libraries/DataLib.sol";
 
-import * as Errors from "../../Errors.sol";
+import * as Errors from "../../../shared/Errors.sol";
 
 /**
  * @title SuperformIntegration

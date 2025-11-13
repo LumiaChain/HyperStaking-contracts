@@ -14,7 +14,7 @@ import {
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
-import {NotAuthorized} from "../Errors.sol";
+import {NotAuthorized} from "../../shared/Errors.sol";
 
 import {
     LibHyperStaking, LockboxData, FailedRedeem, FailedRedeemData, PendingMailbox, PendingLumiaFactory
@@ -118,7 +118,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     /* ========== Reexecute ========== */
 
     /// @inheritdoc ILockbox
-    function reexecuteStakeRedeem(uint256 id) external {
+    function reexecuteFailedRedeem(uint256 id) external {
         FailedRedeemData storage failedRedeems = LibHyperStaking.diamondStorage().failedRedeems;
         FailedRedeem memory fr = failedRedeems.failedRedeems[id];
 

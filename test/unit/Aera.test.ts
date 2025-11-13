@@ -1639,5 +1639,65 @@ describe("Aera", function () {
       const siAfterUserExit = await allocation.stakeInfo(gauntletStrategy);
       expect(siAfterUserExit.pendingExitStake).to.eq(0);
     });
+
+    it("edge-case: redeem 1 wei after total loss", async function () {
+      const {
+        signers, hyperStaking, lumiaDiamond, gauntletStrategy, vaultShares, aeraMock, testUSDC,
+      } = await loadFixture(deployHyperStaking);
+
+      const { deposit, lockbox } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
+      const { alice, owner, strategyManager } = signers;
+
+      // set some slippage to make tiny exits even more likely to round to zero
+      const cfg0 = await gauntletStrategy.aeraConfig();
+      await gauntletStrategy.connect(strategyManager).setAeraConfig({
+        solverTip: cfg0.solverTip,
+        deadlineOffset: cfg0.deadlineOffset,
+        maxPriceAge: cfg0.maxPriceAge,
+        slippageBps: 3000, // 30%
+        isFixedPrice: cfg0.isFixedPrice,
+      });
+
+      // --- stake & settle ---
+      const stakeAmount = parseUnits("1000", 6);
+      await testUSDC.connect(alice).approve(deposit, stakeAmount);
+      const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+      await shared.solveGauntletDepositRequest(
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
+      );
+
+      // sanity: user has shares
+      const userShares = await vaultShares.balanceOf(alice);
+      expect(userShares).to.eq(stakeAmount);
+
+      // --- crash price to ~zero (minimum non-zero unit = 1 with 6 decimals) ---
+      const ts = (await shared.getCurrentBlockTimestamp()) + 60;
+      await time.setNextBlockTimestamp(ts);
+      await aeraMock.aeraPriceAndFeeCalculator.connect(owner).setUnitPrice(
+        await aeraMock.aeraMultiDepositorVault.getAddress(),
+        1n, // 1e-6 USDC per unit => ~ -99.9999%
+        ts,
+      );
+
+      // preview tells us exit will round to zero for a 1-wei share
+      const oneWeiShare = 1n;
+      const expectedOut = await gauntletStrategy.previewExit(
+        await gauntletStrategy.previewAllocation(oneWeiShare),
+      );
+      expect(expectedOut).to.eq(0n);
+
+      // redeem 1 wei -> should fail
+      await vaultShares.connect(alice).approve(realAssets, oneWeiShare);
+      await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, oneWeiShare);
+
+      const failedRedeem = await lockbox.getUserFailedRedeemIds(alice);
+      expect(failedRedeem.length).to.eq(1);
+
+      // re-execute should revert (cannot fulfill zero-amount exit)
+      await expect(
+        lockbox.connect(alice).reexecuteFailedRedeem(failedRedeem[0]),
+      ).to.be.revertedWithCustomError(shared.errors, "ZeroStakeExit");
+    });
   });
 });
