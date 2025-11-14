@@ -7,7 +7,6 @@ import { time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import HyperStakingModule from "../ignition/modules/HyperStaking";
 import LumiaDiamondModule from "../ignition/modules/LumiaDiamond";
 import OneChainMailboxModule from "../ignition/modules/test/OneChainMailbox";
-import CurveMockModule from "../ignition/modules/test/CurveMock";
 import InvariantCheckerModule from "../ignition/modules/test/InvariantChecker";
 
 declare global {
@@ -86,27 +85,6 @@ export async function deployHyperStakingBase() {
   });
   const mailboxAddress = await mailbox.getAddress();
 
-  // -------------------- Superform --------------------
-
-  const {
-    superformFactory, superformRouter, superVault, superPositions,
-  } = await shared.deploySuperformMock(erc4626Vault);
-
-  // -------------------- Curve --------------------
-
-  const { curvePool, curveRouter } = await ignition.deploy(CurveMockModule, {
-    parameters: {
-      CurveMockModule: {
-        usdcAddress: await testUSDC.getAddress(),
-        usdtAddress: await testUSDT.getAddress(),
-      },
-    },
-  });
-
-  // fill the pool with some USDC and USDT
-  await testUSDC.transfer(await curvePool.getAddress(), stableUnits("500000"));
-  await testUSDT.transfer(await curvePool.getAddress(), stableUnits("500000"));
-
   // -------------------- Hyperstaking ---------------------
 
   const defaultWithdrawDelay = 3 * 24 * 60 * 60; // 3 days
@@ -116,10 +94,6 @@ export async function deployHyperStakingBase() {
       HyperStakingModule: {
         lockboxMailbox: mailboxAddress,
         lockboxDestination: testDestination,
-        superformFactory: await superformFactory.getAddress(),
-        superformRouter: await superformRouter.getAddress(),
-        superPositions: await superPositions.getAddress(),
-        curveRouter: await curveRouter.getAddress(),
       },
     },
   });
@@ -169,8 +143,8 @@ export async function deployHyperStakingBase() {
     hyperStaking, lumiaDiamond, // diamonds deployment
     defaultWithdrawDelay, // deposit parameter
     testERC20, testWstETH, testUSDC, testUSDT, erc4626Vault, // test tokens
-    superVault, superformFactory, // superform mock
-    curvePool, curveRouter, // curve mock
+    // superVault, superformFactory, // superform mock
+    // curvePool, curveRouter, // curve mock
     mailbox, // hyperlane test mailbox
     invariantChecker, // invariant checker
   };

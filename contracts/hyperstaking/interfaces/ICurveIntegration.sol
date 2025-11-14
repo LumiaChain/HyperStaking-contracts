@@ -56,7 +56,7 @@ interface ICurveIntegration {
     ) external returns (uint256 dy);
 
     /// @notice Points the facet to a new Curve Router address
-    function updateCurveRouter(address newRouter) external;
+    function setCurveRouter(address newRouter) external;
 
     /// @notice Updates the status of a Swap strategy
     function updateSwapStrategies(address strategy, bool status) external;

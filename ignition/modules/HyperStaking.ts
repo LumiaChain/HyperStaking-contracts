@@ -8,10 +8,6 @@ import DiamondModule from "./Diamond";
 const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
   const mailbox = m.getParameter("lockboxMailbox");
   const destination = m.getParameter("lockboxDestination");
-  const superformFactory = m.getParameter("superformFactory");
-  const superformRouter = m.getParameter("superformRouter");
-  const superPositions = m.getParameter("superPositions");
-  const curveRouter = m.getParameter("curveRouter");
 
   const { diamond } = m.useModule(DiamondModule);
 
@@ -117,10 +113,6 @@ const HyperStakingModule = buildModule("HyperStakingModule", (m) => {
       strategyManager,
       mailbox,
       destination,
-      superformFactory,
-      superformRouter,
-      superPositions,
-      curveRouter,
     ],
   );
 

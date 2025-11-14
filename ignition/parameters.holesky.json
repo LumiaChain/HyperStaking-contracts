@@ -18,10 +18,7 @@
   },
   "HyperStakingModule": {
     "lockboxMailbox": "0x46f7C5D896bbeC89bE1B19e4485e59b4Be49e9Cc",
-    "lockboxDestination": 1952959480,
-    "superformFactory": "0x0000000000000000000000000000000000000000",
-    "superformRouter": "0x0000000000000000000000000000000000000000",
-    "superPositions": "0x0000000000000000000000000000000000000000"
+    "lockboxDestination": 1952959480
   },
   "LumiaDiamondModule": {
     "lumiaMailbox": "0x0000000000000000000000000000000000000000",

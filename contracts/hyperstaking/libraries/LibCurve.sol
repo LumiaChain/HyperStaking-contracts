@@ -30,6 +30,8 @@ library LibCurve {
     bytes32 constant internal CURVE_STORAGE_POSITION
         = bytes32(uint256(keccak256("hyperstaking.curve-0.1.storage")) - 1);
 
+    error CurveRouterNotSet();
+
     function diamondStorage() internal pure returns (CurveStorage storage s) {
         bytes32 position = CURVE_STORAGE_POSITION;
         assembly {
@@ -37,8 +39,17 @@ library LibCurve {
         }
     }
 
-    /// initialize this storage
-    function init(
+    /// @notice Ensures Curve router is configured
+    function requireRouter() internal view {
+        CurveStorage storage s = diamondStorage();
+        require(
+            address(s.curveRouter) != address(0),
+            CurveRouterNotSet()
+        );
+    }
+
+    /// @notice Sets Curve router address
+    function setRouter(
         address curveRouter
     ) internal {
         require(curveRouter != address(0), ZeroAddress());

@@ -1,7 +1,7 @@
 import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import { ethers, ignition, network } from "hardhat";
-import { Signer, parseUnits, parseEther, ZeroAddress } from "ethers";
+import { Interface, Signer, parseUnits, parseEther, ZeroAddress } from "ethers";
 
 import SuperformStrategyModule from "../../ignition/modules/SuperformStrategy";
 
@@ -39,8 +39,24 @@ async function getMockedSuperform() {
 
 async function deployHyperStaking() {
   const {
-    signers, hyperStaking, lumiaDiamond, superVault, superformFactory, testUSDC, erc4626Vault, invariantChecker, defaultWithdrawDelay,
+    signers, hyperStaking, lumiaDiamond, testUSDC, erc4626Vault, invariantChecker, defaultWithdrawDelay,
   } = await deployHyperStakingBase();
+
+  // -------------------- Superform --------------------
+
+  const {
+    superformFactory, superformRouter, superVault, superPositions,
+  } = await shared.deploySuperformMock(erc4626Vault);
+
+  const superformConfig = {
+    superformFactory: await superformFactory.getAddress(),
+    superformRouter: await superformRouter.getAddress(),
+    superPositions: await superPositions.getAddress(),
+  };
+
+  await hyperStaking.superformIntegration.connect(signers.strategyManager).initializeStorage(
+    superformConfig,
+  );
 
   // -------------------- Apply Strategies --------------------
 
@@ -57,9 +73,6 @@ async function deployHyperStaking() {
   const superformId = await superformFactory.vaultToSuperforms(superVault, 0);
 
   // -------
-
-  const superformRouter = await ethers.getContractAt("SuperformRouter", await hyperStaking.superformIntegration.superformRouter());
-  const superPositions = await ethers.getContractAt("SuperPositions", await hyperStaking.superformIntegration.superPositions());
 
   const [superformAddress,,] = await superformFactory.getSuperform(superformId);
   const superform = await ethers.getContractAt("BaseForm", superformAddress);
@@ -280,6 +293,70 @@ describe("Superform", function () {
     afterEach(async () => {
       const c = globalThis.$invChecker;
       if (c) await c.check();
+    });
+
+    it("Superform Integration must be initialized", async function () {
+      clearGlobalInvariantChecker();
+
+      const {
+        signers, hyperStaking, erc4626Vault,
+      } = await deployHyperStakingBase();
+
+      const {
+        superformFactory, superformRouter, superPositions,
+      } = await shared.deploySuperformMock(erc4626Vault);
+
+      // missing superformIntegration storage initialization
+
+      const errors = {
+        interface: new Interface([
+          "error OnlyStrategyManager()",
+          "error SuperformNotConfigured()",
+          "error SuperformAlreadyInitialized()",
+        ]),
+      };
+
+      const randomStrategy = "0x0000000000000000000000000000000000001234";
+      await expect(hyperStaking.superformIntegration.connect(signers.strategyManager).updateSuperformStrategies(
+        randomStrategy,
+        true,
+      )).to.be.revertedWithCustomError(
+        errors,
+        "SuperformNotConfigured",
+      );
+
+      // initialize storage
+      const superformConfig = {
+        superformFactory: await superformFactory.getAddress(),
+        superformRouter: await superformRouter.getAddress(),
+        superPositions: await superPositions.getAddress(),
+      };
+
+      // only strategy manager
+      await expect(hyperStaking.superformIntegration.initializeStorage(
+        superformConfig,
+      )).to.be.revertedWithCustomError(
+        errors,
+        "OnlyStrategyManager",
+      );
+
+      await hyperStaking.superformIntegration.connect(signers.strategyManager).initializeStorage(
+        superformConfig,
+      );
+
+      // OK
+      await hyperStaking.superformIntegration.connect(signers.strategyManager).updateSuperformStrategies(
+        randomStrategy,
+        true,
+      );
+
+      // cannot initialize again
+      await expect(hyperStaking.superformIntegration.connect(signers.strategyManager).initializeStorage(
+        superformConfig,
+      )).to.be.revertedWithCustomError(
+        errors,
+        "SuperformAlreadyInitialized",
+      );
     });
 
     it("superform strategy with vault should be created and strategy registered on the lumia side", async function () {

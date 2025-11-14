@@ -4,7 +4,7 @@ pragma solidity =0.8.27;
 import {ISuperformIntegration} from "../../interfaces/ISuperformIntegration.sol";
 import {HyperStakingAcl} from "../../HyperStakingAcl.sol";
 
-import {LibSuperform, SuperformStorage} from "../../libraries/LibSuperform.sol";
+import {SuperformConfig, LibSuperform, SuperformStorage} from "../../libraries/LibSuperform.sol";
 
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
@@ -60,6 +60,12 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         _;
     }
 
+    /// @notice Requires storage to be initialized
+    modifier requireStorageInitialized() {
+        LibSuperform.requireInitialized();
+        _;
+    }
+
     //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
@@ -72,7 +78,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         uint256 assetAmount,
         address receiver,
         address receiverSP
-    ) external onlySuperStrategy returns (uint256 superPositionReceived) {
+    ) external onlySuperStrategy requireStorageInitialized returns (uint256 superPositionReceived) {
         SuperformStorage storage s = LibSuperform.diamondStorage();
 
         require(s.superformFactory.isSuperform(superformId), InvalidSuperformId(superformId));
@@ -122,7 +128,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         uint256 superPositionAmount,
         address receiver,
         address receiverSP
-    ) external onlySuperStrategy returns (uint256 assetReceived) {
+    ) external onlySuperStrategy requireStorageInitialized returns (uint256 assetReceived) {
         SuperformStorage storage s = LibSuperform.diamondStorage();
 
         require(s.superformFactory.isSuperform(superformId), InvalidSuperformId(superformId));
@@ -176,7 +182,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         uint256 superformId,
         uint256 assetAmount,
         address receiver
-    ) external onlySuperStrategy {
+    ) external onlySuperStrategy requireStorageInitialized {
         LibSuperform.diamondStorage().superPositions.transmuteToERC20(
             owner, superformId, assetAmount, receiver
         );
@@ -188,7 +194,7 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
         uint256 superformId,
         uint256 superPositionAmount,
         address receiver
-    ) external onlySuperStrategy {
+    ) external onlySuperStrategy requireStorageInitialized {
         LibSuperform.diamondStorage().superPositions.transmuteToERC1155A(
             owner, superformId, superPositionAmount, receiver
         );
@@ -197,10 +203,15 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
     /* ========== Strategy Manager  ========== */
 
     /// @inheritdoc ISuperformIntegration
+    function initializeStorage(SuperformConfig calldata config) external onlyStrategyManager {
+        LibSuperform.init(config);
+    }
+
+    /// @inheritdoc ISuperformIntegration
     function updateSuperformStrategies(
         address strategy,
         bool status
-    ) external onlyStrategyManager {
+    ) external onlyStrategyManager requireStorageInitialized {
         SuperformStorage storage s = LibSuperform.diamondStorage();
 
         // EnumerableSet returns a boolean indicating success
@@ -214,7 +225,9 @@ contract SuperformIntegrationFacet is ISuperformIntegration, HyperStakingAcl {
     }
 
     /// @inheritdoc ISuperformIntegration
-    function setMaxSlippage(uint256 newMaxSlippage) external onlyStrategyManager {
+    function setMaxSlippage(
+        uint256 newMaxSlippage
+    ) external onlyStrategyManager requireStorageInitialized {
         require(newMaxSlippage > 0, "Max slippage must be greater than 0");
 
         SuperformStorage storage s = LibSuperform.diamondStorage();
