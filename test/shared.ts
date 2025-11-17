@@ -263,6 +263,7 @@ const errorsIface = new Interface([
   "error ZeroAddress()",
   "error ZeroStakeExit()",
   "error ZeroAllocationExit()",
+  "error BadOriginDestination(uint32 originDestination)",
 ]);
 export const errors = { interface: errorsIface };
 

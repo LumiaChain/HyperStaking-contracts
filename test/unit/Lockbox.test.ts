@@ -574,5 +574,58 @@ describe("Lockbox", function () {
       expect(await testWrapper.sender(bytesSR)).to.equal(messageSR.sender);
       expect(await testWrapper.redeemAmount(bytesSR)).to.equal(messageSR.redeemAmount);
     });
+
+    it("should revert on forged messages from an invalid origin domain", async function () {
+      const { signers, hyperStaking, reserveStrategy, mailbox, mailboxFee } = await loadFixture(deployHyperStaking);
+      const { allocation, deposit, lockbox } = hyperStaking;
+      const { alice, bob } = signers;
+
+      const stakeAmount = parseEther("1");
+      await deposit.connect(alice).stakeDeposit(
+        reserveStrategy,
+        alice.address,
+        stakeAmount,
+        { value: stakeAmount + mailboxFee },
+      );
+
+      const reserveStrategyAddress = await reserveStrategy.getAddress();
+      const beforeStakeInfo = await allocation.stakeInfo(reserveStrategyAddress);
+      expect(beforeStakeInfo.pendingExitStake).to.equal(0n);
+
+      const lockboxState = await lockbox.lockboxData();
+      const destinationDomain = Number(lockboxState.destination);
+      const lumiaFactory = lockboxState.lumiaFactory;
+      const lockboxAddress = await lockbox.getAddress();
+
+      const attackerDomain = destinationDomain + 1;
+      const messageBody = ethers.solidityPacked(
+        ["uint64", "bytes32", "bytes32", "uint256"],
+        [
+          3n, // MessageType.StakeRedeem
+          ethers.zeroPadValue(reserveStrategyAddress, 32),
+          ethers.zeroPadValue(alice.address, 32),
+          stakeAmount,
+        ],
+      );
+
+      const forgedMessage = ethers.solidityPacked(
+        ["uint8", "uint32", "uint32", "bytes32", "uint32", "bytes32", "bytes"],
+        [
+          33,
+          42,
+          attackerDomain,
+          ethers.zeroPadValue(lumiaFactory, 32),
+          destinationDomain,
+          ethers.zeroPadValue(lockboxAddress, 32),
+          messageBody,
+        ],
+      );
+
+      // TODO
+      await expect(
+        mailbox.connect(bob).process("0x", forgedMessage),
+      ).to.be.revertedWithCustomError(shared.errors, "BadOriginDestination")
+        .withArgs(attackerDomain);
+    });
   });
 });

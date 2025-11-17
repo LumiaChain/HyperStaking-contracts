@@ -22,6 +22,8 @@ import {
     MessageType, HyperlaneMailboxMessages
 } from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
 
+import {BadOriginDestination } from "../../shared/Errors.sol";
+
 /**
  * @title HyperlaneHandlerFacet
  * @notice Handles interchain messaging via Hyperlane for LP token operations

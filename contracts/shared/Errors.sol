@@ -14,3 +14,6 @@ error ZeroStakeExit();
 error ZeroAllocationExit();
 
 error UpdateFailed();
+
+// cross-chain error
+error BadOriginDestination(uint32 originDestination);

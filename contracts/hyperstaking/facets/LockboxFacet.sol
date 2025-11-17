@@ -14,7 +14,7 @@ import {
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
-import {NotAuthorized} from "../../shared/Errors.sol";
+import {NotAuthorized, BadOriginDestination } from "../../shared/Errors.sol";
 
 import {
     LibHyperStaking, LockboxData, FailedRedeem, FailedRedeemData, PendingMailbox, PendingLumiaFactory
@@ -102,6 +102,8 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
             box.lastMessage.sender == address(box.lumiaFactory),
             NotFromLumiaFactory(box.lastMessage.sender)
         );
+
+        require(origin == box.destination, BadOriginDestination(origin));
 
         // parse message type (HyperlaneMailboxMessages)
         MessageType msgType = data.messageType();
