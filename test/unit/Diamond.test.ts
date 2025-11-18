@@ -12,8 +12,7 @@ import { assert } from "chai";
 import { Contract } from "ethers";
 import { ethers, ignition } from "hardhat";
 
-import { DiamondCutFacet, OwnershipFacet } from "../../typechain-types";
-import { DiamondLoupeFacet } from "../../typechain-types/diamond/facets";
+import { DiamondCutFacet, OwnershipFacet, DiamondLoupeFacet } from "../../typechain-types";
 
 describe("DiamondTest", async function () {
   let diamond: Contract;

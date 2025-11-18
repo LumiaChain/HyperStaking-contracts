@@ -14,7 +14,7 @@ import { deployHyperStakingBase } from "../setup";
 async function deployHyperStaking() {
   const {
     signers, hyperStaking, lumiaDiamond, testUSDC, testUSDT, erc4626Vault, invariantChecker, defaultWithdrawDelay,
-  } = await deployHyperStakingBase();
+  } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Superform --------------------
 
@@ -568,7 +568,7 @@ describe("CurveStrategy", function () {
 
       const {
         signers, hyperStaking, testUSDC, testUSDT,
-      } = await deployHyperStakingBase();
+      } = await loadFixture(deployHyperStakingBase);
 
       const { curveRouter } = await shared.deployCurveMock(testUSDC, testUSDT);
 

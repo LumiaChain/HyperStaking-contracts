@@ -73,7 +73,7 @@ async function getMockedGauntlet(testUSDC?: Contract) {
 async function deployHyperStaking() {
   const {
     signers, hyperStaking, lumiaDiamond, testUSDC, invariantChecker,
-  } = await deployHyperStakingBase();
+  } = await loadFixture(deployHyperStakingBase);
 
   // --------------------- Aera Mock --------------------
 
@@ -142,7 +142,7 @@ describe("Aera", function () {
         aeraProvisioner,
         aeraPriceAndFeeCalculator,
         aeraMultiDepositorVault,
-      } = await getMockedGauntlet();
+      } = await loadFixture(getMockedGauntlet);
 
       // sanity checks
       expect(await aeraProvisioner.owner()).to.equal(owner.address);
@@ -221,7 +221,7 @@ describe("Aera", function () {
         aeraProvisioner,
         aeraPriceAndFeeCalculator,
         aeraMultiDepositorVault,
-      } = await getMockedGauntlet();
+      } = await loadFixture(getMockedGauntlet);
 
       const depositAmountTokens = parseUnits("10000", 6); // 10,000 USDC
       const roundingModeFloor = 0;

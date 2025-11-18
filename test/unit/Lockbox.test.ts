@@ -14,7 +14,7 @@ import { deployHyperStakingBase } from "../setup";
 async function deployHyperStaking() {
   const {
     signers, testERC20, hyperStaking, lumiaDiamond, mailbox, invariantChecker, defaultWithdrawDelay,
-  } = await deployHyperStakingBase();
+  } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Apply Strategies --------------------
 

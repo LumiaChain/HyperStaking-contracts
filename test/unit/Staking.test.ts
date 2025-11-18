@@ -22,7 +22,7 @@ async function deployDiamond() {
 async function deployHyperStaking() {
   const {
     signers, testERC20, testWstETH, hyperStaking, lumiaDiamond, invariantChecker, defaultWithdrawDelay,
-  } = await deployHyperStakingBase();
+  } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Apply Strategies --------------------
 

@@ -25,7 +25,7 @@ async function getMockedPirex() {
 async function deployHyperStaking() {
   const {
     signers, testWstETH, hyperStaking, lumiaDiamond, invariantChecker, defaultWithdrawDelay,
-  } = await deployHyperStakingBase();
+  } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Apply Strategies --------------------
 

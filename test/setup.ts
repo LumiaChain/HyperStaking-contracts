@@ -143,8 +143,6 @@ export async function deployHyperStakingBase() {
     hyperStaking, lumiaDiamond, // diamonds deployment
     defaultWithdrawDelay, // deposit parameter
     testERC20, testWstETH, testUSDC, testUSDT, erc4626Vault, // test tokens
-    // superVault, superformFactory, // superform mock
-    // curvePool, curveRouter, // curve mock
     mailbox, // hyperlane test mailbox
     invariantChecker, // invariant checker
   };

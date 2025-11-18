@@ -40,7 +40,7 @@ async function getMockedSuperform() {
 async function deployHyperStaking() {
   const {
     signers, hyperStaking, lumiaDiamond, testUSDC, erc4626Vault, invariantChecker, defaultWithdrawDelay,
-  } = await deployHyperStakingBase();
+  } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Superform --------------------
 
@@ -300,7 +300,7 @@ describe("Superform", function () {
 
       const {
         signers, hyperStaking, erc4626Vault,
-      } = await deployHyperStakingBase();
+      } = await loadFixture(deployHyperStakingBase);
 
       const {
         superformFactory, superformRouter, superPositions,
