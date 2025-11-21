@@ -35,6 +35,7 @@ struct StakeInfo {
     uint256 totalStake;
     uint256 totalAllocation;
     uint256 pendingExitStake; // stake already queued to leave, not yet claimed
+    uint256 pendingExitFee; // fee queued to leave
 }
 
 // @param strategy That produced this claim

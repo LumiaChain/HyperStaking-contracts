@@ -207,7 +207,12 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
 
         // save stake information
         si.totalAllocation -= allocation;
-        si.pendingExitStake += stake;
+
+        if (feeWithdraw) {
+            si.pendingExitFee += stake;
+        } else {
+            si.pendingExitStake += stake;
+        }
 
         // integrated strategy does not require allowance
         if (!IStrategy(strategy).isIntegratedStakeStrategy()) {

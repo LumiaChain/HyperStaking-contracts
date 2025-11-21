@@ -2,7 +2,7 @@ import { expect } from "chai";
 import fc from "fast-check";
 import { ethers, ignition } from "hardhat";
 import { time, mine, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
-import { parseUnits, Log, Contract, ZeroAddress, Signer } from "ethers";
+import { parseUnits, parseEther, Log, Contract, ZeroAddress, Signer } from "ethers";
 import * as shared from "../shared";
 import { TokenDetailsStruct } from "../../typechain-types/contracts/external/aera/Provisioner";
 import { AeraConfigStruct } from "../../typechain-types/contracts/hyperstaking/strategies/GauntletStrategy";
@@ -566,8 +566,7 @@ describe("Aera", function () {
       const pricePlus10Pct = parseUnits("1.10", 6);
 
       await time.setNextBlockTimestamp(newTs);
-      await aeraMock.aeraPriceAndFeeCalculator
-        .connect(owner)
+      await aeraMock.aeraPriceAndFeeCalculator.connect(owner)
         .setUnitPrice(
           await aeraMock.aeraMultiDepositorVault.getAddress(),
           pricePlus10Pct,
@@ -651,8 +650,7 @@ describe("Aera", function () {
 
       const now = await shared.getCurrentBlockTimestamp();
       await time.setNextBlockTimestamp(now + 60);
-      await aeraMock.aeraPriceAndFeeCalculator
-        .connect(owner)
+      await aeraMock.aeraPriceAndFeeCalculator.connect(owner)
         .setUnitPrice(
           await aeraMock.aeraMultiDepositorVault.getAddress(),
           parseUnits("1.10", 6),
@@ -970,6 +968,35 @@ describe("Aera", function () {
       return (amount * BigInt(10_000 - bps)) / 10_000n;
     }
 
+    async function applyNewPrice(
+      aeraMock: {
+        aeraPriceAndFeeCalculator: Contract;
+        aeraMultiDepositorVault: Contract;
+      },
+      testUSDC: Contract,
+      owner: Signer,
+      totalStake: bigint,
+      newPrice: bigint,
+    ) {
+      const basePrice = parseUnits("1", 6);
+      const now = await shared.getCurrentBlockTimestamp();
+      const newTimestamp = now + 60;
+
+      await time.setNextBlockTimestamp(newTimestamp);
+
+      await aeraMock.aeraPriceAndFeeCalculator.connect(owner).setUnitPrice(
+        await aeraMock.aeraMultiDepositorVault.getAddress(),
+        newPrice,
+        newTimestamp,
+      );
+
+      // transfer extra USDC to aera vault
+      if (newPrice > basePrice) {
+        const gain = ((newPrice - basePrice) * totalStake) / basePrice;
+        await testUSDC.mint(aeraMock.aeraMultiDepositorVault, gain);
+      }
+    }
+
     it("fuzz stake/redeem across slippage, price moves, and redeem ratios", async () => {
       await fc.assert(
         fc.asyncProperty(
@@ -1036,20 +1063,7 @@ describe("Aera", function () {
             // avoid zero price (−100%); clamp to 1 unit
             const newPriceRaw = (base * (one + delta)) / one;
             const newPrice = newPriceRaw > 0n ? newPriceRaw : 1n;
-
-            const now = await shared.getCurrentBlockTimestamp();
-            await time.setNextBlockTimestamp(now + 60);
-            await aeraMock.aeraPriceAndFeeCalculator.connect(owner).setUnitPrice(
-              await aeraMock.aeraMultiDepositorVault.getAddress(),
-              newPrice,
-              now + 60,
-            );
-
-            // transfer extra USDC to aera vault
-            if (newPrice > base) {
-              const gain = ((newPrice - base) * stakeAmount) / base;
-              await testUSDC.mint(aeraMock.aeraMultiDepositorVault, gain);
-            }
+            await applyNewPrice(aeraMock, testUSDC, owner, stakeAmount, newPrice);
 
             // --- redeem fraction ---
             const redeemShares = (userShares * BigInt(redeemNum)) / BigInt(redeemDen);
@@ -1059,9 +1073,6 @@ describe("Aera", function () {
             await vaultShares.connect(alice).approve(realAssets, redeemAmt);
 
             const redeemTx = await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, redeemAmt);
-
-            const aeraConfig = await gauntletStrategy.aeraConfig();
-            const deadline = BigInt(await shared.getCurrentBlockTimestamp()) + aeraConfig.deadlineOffset;
 
             // requestId = 2 for the first redeem in this fixture
             const reqId = 2;
@@ -1078,9 +1089,8 @@ describe("Aera", function () {
               reqId,
             );
 
-            await time.setNextBlockTimestamp(Number(deadline));
             const lastId = await shared.getLastClaimId(deposit, gauntletStrategy, alice);
-            const claimTx = await deposit.connect(alice).claimWithdraws([lastId], alice);
+            const { claimTx } = await claimAtDeadline(deposit, alice, Number(lastId));
 
             await expect(claimTx)
               .to.emit(gauntletStrategy, "ExitClaimed")
@@ -1173,13 +1183,7 @@ describe("Aera", function () {
 
       // apply price loss
       const newPrice = parseUnits("0.75", 6); // 25% loss
-      const newTimestamp = (await shared.getCurrentBlockTimestamp()) + 60;
-      await time.setNextBlockTimestamp(newTimestamp);
-      await aeraMock.aeraPriceAndFeeCalculator.connect(owner).setUnitPrice(
-        await aeraMock.aeraMultiDepositorVault.getAddress(),
-        newPrice,
-        newTimestamp,
-      );
+      await applyNewPrice(aeraMock, testUSDC, owner, stakeAmount, newPrice);
 
       // Do two redeems of 1/2 each, do not claim in between, request ids start at 2
       const r1 = await redeemFraction(vaultShares, realAssets, gauntletStrategy, alice, 1, 2, 2);
@@ -1266,13 +1270,7 @@ describe("Aera", function () {
       );
 
       const newPrice = parseUnits("0.50", 6); // 50% loss
-      const newTimestamp = (await shared.getCurrentBlockTimestamp()) + 60;
-      await time.setNextBlockTimestamp(newTimestamp);
-      await aeraMock.aeraPriceAndFeeCalculator.connect(owner).setUnitPrice(
-        await aeraMock.aeraMultiDepositorVault.getAddress(),
-        newPrice,
-        newTimestamp,
-      );
+      await applyNewPrice(aeraMock, testUSDC, owner, stakeAmount, newPrice);
 
       const beforeSI = await allocation.stakeInfo(gauntletStrategy);
 
@@ -1355,16 +1353,7 @@ describe("Aera", function () {
 
       // push price up + mint gains into aera vault so accounting is consistent
       const newPrice = parseUnits("2.00", 6); // 100% gain
-      const newTimestamp = (await shared.getCurrentBlockTimestamp()) + 60;
-      await time.setNextBlockTimestamp(newTimestamp);
-      await aeraMock.aeraPriceAndFeeCalculator.connect(owner).setUnitPrice(
-        await aeraMock.aeraMultiDepositorVault.getAddress(),
-        newPrice,
-        newTimestamp,
-      );
-
-      const gain = ((newPrice - parseUnits("1", 6)) * stakeAmount) / parseUnits("1", 6);
-      await testUSDC.mint(aeraMock.aeraMultiDepositorVault, gain);
+      await applyNewPrice(aeraMock, testUSDC, owner, stakeAmount, newPrice);
 
       const r1 = await redeemFraction(vaultShares, realAssets, gauntletStrategy, alice, 1, 2, 2);
       const r2 = await redeemFraction(vaultShares, realAssets, gauntletStrategy, alice, 1, 1, 3);
@@ -1387,6 +1376,302 @@ describe("Aera", function () {
       const singleShot = bpsMul((stakeAmount * newPrice) / parseUnits("1", 6), 300);
       const sumMin = r1.minOut + r2.minOut;
       expect(sumMin).to.be.lte(singleShot);
+    });
+
+    it("high feeRate & big gain, report then 99% + 1% redeem behaves fairly", async () => {
+      const {
+        signers, hyperStaking, lumiaDiamond, gauntletStrategy, vaultShares, aeraMock, testUSDC,
+      } = await loadFixture(deployHyperStaking);
+
+      const { deposit, allocation } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
+      const { alice, owner, vaultManager, bob, strategyManager } = signers;
+
+      // track user's USDC balance to check principal later
+      const aliceBefore = await testUSDC.balanceOf(alice);
+
+      // --- 0% slippage for clean math ---
+      const cfg0 = await gauntletStrategy.aeraConfig();
+      await gauntletStrategy.connect(strategyManager).setAeraConfig({
+        solverTip: cfg0.solverTip,
+        deadlineOffset: cfg0.deadlineOffset,
+        maxPriceAge: cfg0.maxPriceAge,
+        slippageBps: 0,
+        isFixedPrice: cfg0.isFixedPrice,
+      } as AeraConfigStruct);
+
+      // --- high fee rate (20%) + fee recipient ---
+      const highFeeRate = parseEther("0.2"); // 20% in 18-dec precision
+      await allocation.connect(vaultManager).setFeeRecipient(gauntletStrategy, bob);
+      await allocation.connect(vaultManager).setFeeRate(gauntletStrategy, highFeeRate);
+
+      // --- user stakes & we settle deposit ---
+      const stakeAmount = parseUnits("5000", 6);
+      await testUSDC.connect(alice).approve(deposit, stakeAmount);
+
+      const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+
+      await shared.solveGauntletDepositRequest(
+        stakeTx,
+        gauntletStrategy,
+        aeraMock.aeraProvisioner,
+        testUSDC,
+        stakeAmount,
+        1, // allocation requestId
+      );
+
+      const siAfterStake = await allocation.stakeInfo(gauntletStrategy);
+      expect(siAfterStake.totalStake).to.eq(stakeAmount);
+      expect(siAfterStake.pendingExitStake).to.eq(0);
+
+      // --- +100% price and mint profit into Aera vault ---
+      const newPrice = parseUnits("2", 6);
+      await applyNewPrice(aeraMock, testUSDC, owner, stakeAmount, newPrice);
+
+      const revenueBefore = await allocation.checkRevenue(gauntletStrategy);
+      expect(revenueBefore).to.be.gt(0);
+
+      // --- report: queues fee via _leave, bumps totalStake by (1 - fee) * revenue ---
+      const reportTx = await allocation.connect(vaultManager).report(gauntletStrategy);
+      await expect(reportTx).to.emit(allocation, "StakeCompounded");
+
+      const siAfterReport = await allocation.stakeInfo(gauntletStrategy);
+      expect(siAfterReport.pendingExitFee).to.be.gt(0);
+      expect(siAfterReport.pendingExitStake).to.be.lte(siAfterReport.totalStake);
+
+      // --- user fully in Lumia shares at this point ---
+      const userShares = await vaultShares.balanceOf(alice);
+      expect(userShares).to.be.gt(0);
+
+      // split into 99% and 1%
+      let firstRedeemShares = (userShares * 99n) / 100n;
+      if (firstRedeemShares === 0n) firstRedeemShares = 1n;
+      const secondRedeemShares = userShares - firstRedeemShares;
+      expect(secondRedeemShares).to.be.gt(0n);
+
+      // --- first redeem: 99% ---
+      await vaultShares.connect(alice).approve(realAssets, firstRedeemShares);
+
+      const redeemTx1 = await realAssets.connect(alice)
+        .redeem(gauntletStrategy, alice, alice, firstRedeemShares);
+
+      // ids assuming sequence:
+      // 1: initial allocation, 2: fee leave in report, 3: first redeem
+      const firstReqId = 3;
+      const minOut1 = await gauntletStrategy.recordedExit(firstReqId);
+      expect(minOut1).to.be.gt(0);
+
+      const siAfterFirstQueue = await allocation.stakeInfo(gauntletStrategy);
+      expect(siAfterFirstQueue.pendingExitStake).to.be.lte(
+        siAfterFirstQueue.totalStake,
+      );
+
+      await shared.solveGauntletRedeemRequest(
+        redeemTx1,
+        gauntletStrategy,
+        aeraMock.aeraProvisioner,
+        testUSDC,
+        minOut1,
+        firstReqId,
+      );
+
+      const firstClaimId = await shared.getLastClaimId(
+        deposit,
+        gauntletStrategy,
+        alice,
+      );
+
+      await claimAtDeadline(deposit, alice, Number(firstClaimId));
+
+      // --- second redeem: remaining ~1% ---
+      await vaultShares.connect(alice).approve(realAssets, secondRedeemShares);
+
+      const redeemTx2 = await realAssets.connect(alice)
+        .redeem(gauntletStrategy, alice, alice, secondRedeemShares);
+
+      const secondReqId = 4;
+      const minOut2 = await gauntletStrategy.recordedExit(secondReqId);
+      expect(minOut2).to.be.gt(0);
+
+      const siAfterSecondQueue = await allocation.stakeInfo(gauntletStrategy);
+      expect(siAfterSecondQueue.pendingExitStake).to.be.lte(
+        siAfterSecondQueue.totalStake,
+      );
+
+      await shared.solveGauntletRedeemRequest(
+        redeemTx2,
+        gauntletStrategy,
+        aeraMock.aeraProvisioner,
+        testUSDC,
+        minOut2,
+        secondReqId,
+      );
+
+      const secondClaimId = await shared.getLastClaimId(
+        deposit,
+        gauntletStrategy,
+        alice,
+      );
+      await claimAtDeadline(deposit, alice, Number(secondClaimId));
+
+      // --- invariants: user economics & stake accounting ---
+
+      // user must not lose principal overall (fees only on REVENUE)
+      const aliceAfter = await testUSDC.balanceOf(alice);
+      expect(aliceAfter).to.be.gte(aliceBefore);
+
+      // and stake accounting should not explode
+      const siFinal = await allocation.stakeInfo(gauntletStrategy);
+      expect(siFinal.pendingExitStake).to.be.lte(siFinal.totalStake);
+    });
+
+    it("tracks pendingExitFee across report and fee claim", async () => {
+      const {
+        signers, hyperStaking, lumiaDiamond, gauntletStrategy, aeraMock, testUSDC, vaultShares,
+      } = await loadFixture(deployHyperStaking);
+
+      const { deposit, allocation, hyperFactory } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
+      const { alice, owner, vaultManager, bob, strategyManager } = signers;
+
+      const cfg0 = await gauntletStrategy.aeraConfig();
+      await gauntletStrategy.connect(strategyManager).setAeraConfig({
+        solverTip: cfg0.solverTip,
+        deadlineOffset: cfg0.deadlineOffset,
+        maxPriceAge: cfg0.maxPriceAge,
+        slippageBps: 0,
+        isFixedPrice: cfg0.isFixedPrice,
+      } as AeraConfigStruct);
+
+      // --- 20% fee + fee recipient ---
+      const feeRate = parseEther("0.2");
+      await allocation.connect(vaultManager).setFeeRecipient(gauntletStrategy, bob);
+      await allocation.connect(vaultManager).setFeeRate(gauntletStrategy, feeRate);
+
+      const vInfo = await hyperFactory.vaultInfo(gauntletStrategy);
+      expect(vInfo.feeRate).to.eq(feeRate);
+
+      // --- user stakes & we settle deposit ---
+      const stakeAmount = parseUnits("5000", 6);
+      await testUSDC.connect(alice).approve(deposit, stakeAmount);
+
+      const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+
+      await shared.solveGauntletDepositRequest(
+        stakeTx,
+        gauntletStrategy,
+        aeraMock.aeraProvisioner,
+        testUSDC,
+        stakeAmount,
+        1, // allocation requestId
+      );
+
+      const siAfterStake = await allocation.stakeInfo(gauntletStrategy);
+      expect(siAfterStake.totalStake).to.eq(stakeAmount);
+      expect(siAfterStake.pendingExitStake).to.eq(0);
+      expect(siAfterStake.pendingExitFee).to.eq(0);
+
+      // --- +100% price ---
+      const newPrice = parseUnits("2", 6); // 100% gain
+      await applyNewPrice(aeraMock, testUSDC, owner, stakeAmount, newPrice);
+
+      const revenueBefore = await allocation.checkRevenue(gauntletStrategy);
+      expect(revenueBefore).to.be.gt(0);
+
+      // --- report: should queue fee via _leave (pendingExitFee) ---
+      const expectedFeeAmount = (revenueBefore * feeRate) / parseEther("1");
+      const expectedStakeAdded = revenueBefore - expectedFeeAmount;
+
+      const stakeBeforeReport = (await allocation.stakeInfo(gauntletStrategy)).totalStake;
+
+      const reportTx = await allocation.connect(vaultManager).report(gauntletStrategy);
+
+      await expect(reportTx).to.emit(allocation, "StakeCompounded");
+
+      const siAfterReport = await allocation.stakeInfo(gauntletStrategy);
+
+      // pendingExitFee should equal the on-chain feeAmount
+      expect(siAfterReport.pendingExitFee).to.eq(expectedFeeAmount);
+      // totalStake increased only by stakeAdded (revenue minus fee)
+      expect(siAfterReport.totalStake - stakeBeforeReport).to.eq(expectedStakeAdded);
+
+      // --- claim the fee withdraw and ensure pendingExitFee goes back to 0 ---
+
+      // sequence: 1 = allocation for deposit, 2 = fee leave inside report
+      const feeReqId = 2;
+
+      const feeClaim = await deposit.pendingWithdraws([feeReqId]);
+      expect(feeClaim[0].strategy).to.eq(gauntletStrategy);
+      expect(feeClaim[0].feeWithdraw).to.eq(true);
+      expect(feeClaim[0].expectedAmount).to.eq(expectedFeeAmount);
+
+      // settle the fee withdraw redeem
+      const minOut1 = await gauntletStrategy.recordedExit(feeReqId);
+      expect(minOut1).to.be.gt(0);
+      await shared.solveGauntletRedeemRequest(
+        reportTx,
+        gauntletStrategy,
+        aeraMock.aeraProvisioner,
+        testUSDC,
+        minOut1,
+        feeReqId,
+      );
+      const { claimTx: feeClaimTx } = await claimAtDeadline(deposit, bob, Number(feeReqId));
+
+      await expect(feeClaimTx)
+        .to.emit(deposit, "FeeWithdrawClaimed")
+        .withArgs(
+          gauntletStrategy,
+          bob,
+          bob,
+          expectedFeeAmount,
+          await gauntletStrategy.recordedExit(feeReqId),
+        );
+
+      const siFinal = await allocation.stakeInfo(gauntletStrategy);
+      expect(siFinal.pendingExitFee).to.eq(0);
+      // user stake untouched by fee claim
+      expect(siFinal.totalStake).to.eq(siAfterReport.totalStake);
+
+      // --- finally: user redeems ---
+
+      const userShares = await vaultShares.balanceOf(alice);
+      expect(userShares).to.be.gt(0);
+
+      await vaultShares.connect(alice).approve(realAssets, userShares);
+      const redeemTx = await realAssets.connect(alice)
+        .redeem(gauntletStrategy, alice, alice, userShares);
+
+      const userReqId = 3;
+      const minTokensOut = await gauntletStrategy.recordedExit(userReqId);
+      expect(minTokensOut).to.be.gt(0);
+
+      // settle redeem on Gauntlet/Aera side
+      await shared.solveGauntletRedeemRequest(
+        redeemTx,
+        gauntletStrategy,
+        aeraMock.aeraProvisioner,
+        testUSDC,
+        minTokensOut,
+        userReqId,
+      );
+
+      // claim on HyperStaking side
+      const { claimTx } = await claimAtDeadline(deposit, alice, Number(userReqId));
+
+      await expect(claimTx)
+        .to.emit(gauntletStrategy, "ExitClaimed")
+        .withArgs(userReqId, alice, minTokensOut);
+
+      // user must not lose principal in this scenario (fees only on revenue)
+      expect(minTokensOut).to.be.gte(stakeAmount);
+
+      // user position closed on Lumia side
+      expect(await vaultShares.balanceOf(alice)).to.eq(0);
+
+      // and no user exits left pending
+      const siAfterUserExit = await allocation.stakeInfo(gauntletStrategy);
+      expect(siAfterUserExit.pendingExitStake).to.eq(0);
     });
   });
 });

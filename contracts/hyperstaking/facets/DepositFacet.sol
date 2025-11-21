@@ -95,15 +95,16 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             // because of possible price changes between request and claim,
             uint256 exitAmount = IStrategy(c.strategy).claimExit(ids, to);
 
-            v.stakeInfo[c.strategy].pendingExitStake -= stake;
-
             if (c.feeWithdraw) {
+                v.stakeInfo[c.strategy].pendingExitFee -= stake;
+
                 emit FeeWithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount);
                 continue;
             }
 
             // totalStake is not incremented by feeAmount
             v.stakeInfo[c.strategy].totalStake -= stake;
+            v.stakeInfo[c.strategy].pendingExitStake -= stake;
 
             emit WithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount);
         }
