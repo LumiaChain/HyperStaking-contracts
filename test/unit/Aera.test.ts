@@ -111,7 +111,7 @@ async function deployHyperStaking() {
   // -------------------- Setup Checker --------------------
 
   await invariantChecker.addStrategy(await gauntletStrategy.getAddress());
-  setInvChecker(invariantChecker);
+  setGlobalInvariantChecker(invariantChecker);
 
   // -------------------- Hyperlane Handler --------------------
 

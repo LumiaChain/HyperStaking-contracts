@@ -12,19 +12,37 @@ import InvariantCheckerModule from "../ignition/modules/test/InvariantChecker";
 
 declare global {
   /* eslint-disable no-var */
+
+  /**
+   * Stores the current instance of the InvariantChecker contract for use in tests.
+   * This global is set by test fixtures when deploying the contract
+   * to prevent cross-test contamination
+   *
+   * Lifecycle: Set by calling `setGlobalInvariantChecker` (test setup/fixtures),
+   * cleared by `clearGlobalInvariantChecker`
+   */
   var $invChecker: Contract | undefined;
-  var setInvChecker: (c: Contract) => void;
-  var clearInvChecker: () => void;
+
+  /**
+   * Registers the given InvariantChecker contract instance for use in tests by assigning it to `$invChecker`.
+   * Should be called in test setup or fixture code after deploying the contract
+   */
+  var setGlobalInvariantChecker: (c: Contract) => void;
+
+  /**
+   * Clears the global `$invChecker` reference
+   */
+  var clearGlobalInvariantChecker: () => void;
   /* eslint-enable no-var */
 }
 
 globalThis.$invChecker = undefined;
 
-globalThis.setInvChecker = (c: Contract) => {
+globalThis.setGlobalInvariantChecker = (c: Contract) => {
   globalThis.$invChecker = c;
 };
 
-globalThis.clearInvChecker = () => {
+globalThis.clearGlobalInvariantChecker = () => {
   globalThis.$invChecker = undefined;
 };
 

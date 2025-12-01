@@ -18,10 +18,10 @@ contract InvariantChecker {
     /// @notice Allocation facet used to read per-strategy StakeInfo
     IAllocation public allocationFacet;
 
-    /// @notice Allocation facet used to read per-strategy StakeInfo
+    /// @notice Lockbox facet used to read per-strategy lockbox data
     ILockbox public lockboxFacet;
 
-   /// @notice Hyperlane handler facet used to resolve strategy routing info
+    /// @notice Hyperlane handler facet used to resolve strategy routing info
     IHyperlaneHandler public hyperlaneHandlerFacet;
 
     /// @notice Strategies tracked by this checker

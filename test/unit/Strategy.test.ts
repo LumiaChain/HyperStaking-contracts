@@ -63,7 +63,7 @@ async function deployHyperStaking() {
   // -------------------- Setup Checker --------------------
 
   await invariantChecker.addStrategy(await dineroStrategy.getAddress());
-  setInvChecker(invariantChecker);
+  setGlobalInvariantChecker(invariantChecker);
 
   // -------------------- Hyperlane Handler --------------------
 

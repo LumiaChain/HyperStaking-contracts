@@ -54,7 +54,7 @@ async function deployHyperStaking() {
     await reserveStrategy1.getAddress(),
     await reserveStrategy2.getAddress(),
   ]);
-  setInvChecker(invariantChecker);
+  setGlobalInvariantChecker(invariantChecker);
 
   // -------------------- Hyperlane Handler --------------------
 
@@ -430,6 +430,9 @@ describe("Staking", function () {
         await allocation.connect(vaultManager).setFeeRecipient(reserveStrategy2, feeRecipient);
 
         const reportTx = allocation.connect(vaultManager).report(reserveStrategy2);
+
+        // check invariants right after report
+        globalThis.$invChecker!.check();
 
         // events
         const feeRate = 0;
