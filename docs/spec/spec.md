@@ -101,9 +101,9 @@ All accounting and reward synchronization are finalized through the **Lockbox Fa
 
 **Hyperlane** provides secure cross-chain messaging between origin-chain Diamond Proxies and the central Lumia Chain Diamond Proxy. This ensures:
 
-- **Stake Synchronization**: When a user stakes on the origin chain, a Hyperlane message triggers the minting of **Principal tokens** on the Lumia Chain that mirror the staked amount. This one-to-one relationship between origin-side stake and Principal supply forms a key invariant of the system. ERC4626 **Vault shares** are then issued to represent the yield-bearing side of the position, accruing revenue over time.
+* **Stake Synchronization**: When a user stakes on the origin chain, a Hyperlane message triggers the minting of **Principal tokens** on the Lumia Chain that mirror the staked amount. This one-to-one relationship between origin-side stake and Principal supply forms a key invariant of the system. ERC4626 **Vault shares** are then issued to represent the yield-bearing side of the position, accruing revenue over time.
 
-- **Redemption Flow**: Redemption Flow: When a user redeems shares on the Lumia Chain, a Hyperlane message instructs the origin-chain proxy to release the corresponding underlying assets and any yield accrued so far, while the associated **Principal tokens** and **Vault shares** are burned on the Lumia Chain.
+* **Redemption Flow**: Redemption Flow: When a user redeems shares on the Lumia Chain, a Hyperlane message instructs the origin-chain proxy to release the corresponding underlying assets and any yield accrued so far, while the associated **Principal tokens** and **Vault shares** are burned on the Lumia Chain.
 
 This design coordinates staking and redemption logic via Hyperlane messaging, enabling seamless interaction between origin and Lumia-chain components. It allows users to access multi-chain revenue streams transparently, without managing bridges, liquidity transfers, or deploying complex strategies on their own.
 

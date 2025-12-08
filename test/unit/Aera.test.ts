@@ -1412,12 +1412,7 @@ describe("Aera", function () {
       const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
 
       await shared.solveGauntletDepositRequest(
-        stakeTx,
-        gauntletStrategy,
-        aeraMock.aeraProvisioner,
-        testUSDC,
-        stakeAmount,
-        1, // allocation requestId
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1, // allocation requestId
       );
 
       const siAfterStake = await allocation.stakeInfo(gauntletStrategy);
@@ -1467,12 +1462,7 @@ describe("Aera", function () {
       );
 
       await shared.solveGauntletRedeemRequest(
-        redeemTx1,
-        gauntletStrategy,
-        aeraMock.aeraProvisioner,
-        testUSDC,
-        minOut1,
-        firstReqId,
+        redeemTx1, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, minOut1, firstReqId,
       );
 
       const firstClaimId = await shared.getLastClaimId(
@@ -1499,12 +1489,7 @@ describe("Aera", function () {
       );
 
       await shared.solveGauntletRedeemRequest(
-        redeemTx2,
-        gauntletStrategy,
-        aeraMock.aeraProvisioner,
-        testUSDC,
-        minOut2,
-        secondReqId,
+        redeemTx2, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, minOut2, secondReqId,
       );
 
       const secondClaimId = await shared.getLastClaimId(
@@ -1558,12 +1543,7 @@ describe("Aera", function () {
       const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
 
       await shared.solveGauntletDepositRequest(
-        stakeTx,
-        gauntletStrategy,
-        aeraMock.aeraProvisioner,
-        testUSDC,
-        stakeAmount,
-        1, // allocation requestId
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1, // allocation requestId
       );
 
       const siAfterStake = await allocation.stakeInfo(gauntletStrategy);
@@ -1609,23 +1589,14 @@ describe("Aera", function () {
       const minOut1 = await gauntletStrategy.recordedExit(feeReqId);
       expect(minOut1).to.be.gt(0);
       await shared.solveGauntletRedeemRequest(
-        reportTx,
-        gauntletStrategy,
-        aeraMock.aeraProvisioner,
-        testUSDC,
-        minOut1,
-        feeReqId,
+        reportTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, minOut1, feeReqId,
       );
       const { claimTx: feeClaimTx } = await claimAtDeadline(deposit, bob, Number(feeReqId));
 
       await expect(feeClaimTx)
         .to.emit(deposit, "FeeWithdrawClaimed")
         .withArgs(
-          gauntletStrategy,
-          bob,
-          bob,
-          expectedFeeAmount,
-          await gauntletStrategy.recordedExit(feeReqId),
+          gauntletStrategy, bob, bob, expectedFeeAmount, await gauntletStrategy.recordedExit(feeReqId),
         );
 
       const siFinal = await allocation.stakeInfo(gauntletStrategy);
@@ -1648,12 +1619,7 @@ describe("Aera", function () {
 
       // settle redeem on Gauntlet/Aera side
       await shared.solveGauntletRedeemRequest(
-        redeemTx,
-        gauntletStrategy,
-        aeraMock.aeraProvisioner,
-        testUSDC,
-        minTokensOut,
-        userReqId,
+        redeemTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, minTokensOut, userReqId,
       );
 
       // claim on HyperStaking side
