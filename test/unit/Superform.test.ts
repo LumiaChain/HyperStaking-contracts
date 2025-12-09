@@ -7,6 +7,7 @@ import SuperformStrategyModule from "../../ignition/modules/SuperformStrategy";
 
 import * as shared from "../shared";
 import { SingleDirectSingleVaultStateReqStruct } from "../../typechain-types/contracts/external/superform/core/BaseRouter";
+import { deployHyperStakingBase } from "../setup";
 
 async function getMockedSuperform() {
   const [superManager, alice] = await ethers.getSigners();
@@ -37,11 +38,9 @@ async function getMockedSuperform() {
 }
 
 async function deployHyperStaking() {
-  const signers = await shared.getSigners();
-
-  // -------------------- Hyperstaking Diamond --------------------
-
-  const hyperStaking = await shared.deployTestHyperStaking(0n);
+  const {
+    signers, hyperStaking, lumiaDiamond, superVault, superformFactory, testUSDC, erc4626Vault, invariantChecker, defaultWithdrawDelay,
+  } = await deployHyperStakingBase();
 
   // -------------------- Apply Strategies --------------------
 
@@ -49,26 +48,24 @@ async function deployHyperStaking() {
     parameters: {
       SuperformStrategyModule: {
         diamond: await hyperStaking.diamond.getAddress(),
-        superVault: await hyperStaking.superVault.getAddress(),
-        stakeToken: await hyperStaking.testUSDC.getAddress(),
+        superVault: await superVault.getAddress(),
+        stakeToken: await testUSDC.getAddress(),
       },
     },
   });
 
-  const superformId = await hyperStaking.superformFactory.vaultToSuperforms(hyperStaking.superVault, 0);
+  const superformId = await superformFactory.vaultToSuperforms(superVault, 0);
 
   // -------
 
-  const superformFactory = await ethers.getContractAt("SuperformFactory", await hyperStaking.superformIntegration.superformFactory());
   const superformRouter = await ethers.getContractAt("SuperformRouter", await hyperStaking.superformIntegration.superformRouter());
   const superPositions = await ethers.getContractAt("SuperPositions", await hyperStaking.superformIntegration.superPositions());
-  const superVault = hyperStaking.superVault;
 
   const [superformAddress,,] = await superformFactory.getSuperform(superformId);
   const superform = await ethers.getContractAt("BaseForm", superformAddress);
 
   const aerc20 = await shared.registerAERC20( // transmuted SuperUSDC
-    hyperStaking.superformIntegration, superVault, hyperStaking.testUSDC,
+    hyperStaking.superformIntegration, superVault, testUSDC,
   );
 
   // --------------------
@@ -87,10 +84,15 @@ async function deployHyperStaking() {
     true,
   );
 
+  // -------------------- Setup Checker --------------------
+
+  await invariantChecker.addStrategy(await superformStrategy.getAddress());
+  setGlobalInvariantChecker(invariantChecker);
+
   // -------------------- Hyperlane Handler --------------------
 
   const { principalToken, vaultShares } = await shared.getDerivedTokens(
-    hyperStaking.hyperlaneHandler,
+    lumiaDiamond.hyperlaneHandler,
     await superformStrategy.getAddress(),
   );
 
@@ -98,11 +100,12 @@ async function deployHyperStaking() {
 
   /* eslint-disable object-property-newline */
   return {
-    hyperStaking, // HyperStaking deployment
-    superformStrategy, aerc20, principalToken, vaultShares, // test contracts
+    signers, // signers
+    hyperStaking, lumiaDiamond, // diamonds deployment
+    defaultWithdrawDelay,
+    testUSDC, erc4626Vault, superformStrategy, aerc20, principalToken, vaultShares, // test contracts
     superform, superVault, superformFactory, superPositions, superformRouter, superformId, // superform
     vaultTokenName, vaultTokenSymbol, // values
-    signers, // signers
   };
   /* eslint-enable object-property-newline */
 }
@@ -274,9 +277,17 @@ describe("Superform", function () {
   });
 
   describe("Strategy", function () {
+    afterEach(async () => {
+      const c = globalThis.$invChecker;
+      if (c) await c.check();
+    });
+
     it("superform strategy with vault should be created and strategy registered on the lumia side", async function () {
-      const { hyperStaking, superformStrategy, superformId } = await loadFixture(deployHyperStaking);
-      const { testUSDC, diamond, hyperFactory, hyperlaneHandler } = hyperStaking;
+      const {
+        hyperStaking, lumiaDiamond, superformStrategy, superformId, testUSDC,
+      } = await loadFixture(deployHyperStaking);
+      const { diamond, hyperFactory } = hyperStaking;
+      const { hyperlaneHandler } = lumiaDiamond;
 
       expect(await superformStrategy.DIAMOND()).to.equal(diamond);
       expect(await superformStrategy.SUPERFORM_ID()).to.equal(superformId);
@@ -296,8 +307,12 @@ describe("Superform", function () {
     });
 
     it("staking using superform strategy", async function () {
-      const { hyperStaking, superformStrategy, vaultShares, aerc20, signers } = await loadFixture(deployHyperStaking);
-      const { testUSDC, erc4626Vault, deposit, defaultWithdrawDelay, allocation, hyperFactory, lockbox, hyperlaneHandler, realAssets } = hyperStaking;
+      const {
+        signers, hyperStaking, lumiaDiamond, superformStrategy, vaultShares, aerc20, testUSDC, erc4626Vault, defaultWithdrawDelay,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit, allocation, hyperFactory, lockbox } = hyperStaking;
+      const { hyperlaneHandler, realAssets } = lumiaDiamond;
+
       const { alice } = signers;
 
       const amount = parseUnits("2000", 6);
@@ -348,9 +363,10 @@ describe("Superform", function () {
 
     it("revenue from superform strategy", async function () {
       const {
-        hyperStaking, superVault, superformStrategy, superform, vaultShares, signers, principalToken,
+        signers, hyperStaking, lumiaDiamond, testUSDC, erc4626Vault, superVault, superformStrategy, superform, vaultShares, principalToken, defaultWithdrawDelay,
       } = await loadFixture(deployHyperStaking);
-      const { testUSDC, erc4626Vault, deposit, defaultWithdrawDelay, hyperFactory, allocation, realAssets } = hyperStaking;
+      const { deposit, hyperFactory, allocation } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
       const { vaultManager, alice, bob } = signers;
 
       // needed for simulate yield generation
@@ -410,8 +426,11 @@ describe("Superform", function () {
     });
 
     it("revenue should also depend on bridge safety margin", async function () {
-      const { hyperStaking, superformStrategy, superVault, vaultShares, signers } = await loadFixture(deployHyperStaking);
-      const { testUSDC, erc4626Vault, deposit, allocation, realAssets } = hyperStaking;
+      const {
+        signers, hyperStaking, lumiaDiamond, testUSDC, erc4626Vault, superformStrategy, superVault, vaultShares,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit, allocation } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
       const { alice, vaultManager } = signers;
 
       // needed for simulate yield generation

@@ -25,8 +25,7 @@ import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet
 /**
  * @title LockboxFacet
  * @notice A customized version of XERC20Lockbox and Factory for handling interchain communication
- *         via Hyperlane Mailbox. Locks DirectStake assets or VaultTokens shares
- *         Handles incoming messages to initiate the redeem/unstaking process
+ *         via Hyperlane Mailbox. Handles incoming messages to initiate the redeem/unstaking process
  */
 contract LockboxFacet is ILockbox, HyperStakingAcl {
     using HyperlaneMailboxMessages for bytes;

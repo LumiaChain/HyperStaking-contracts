@@ -9,17 +9,12 @@ import { RouteRegistryDataStruct } from "../../typechain-types/contracts/hyperst
 import { StakeInfoDataStruct } from "../../typechain-types/contracts/hyperstaking/interfaces/IStakeInfoRoute";
 import { StakeRewardDataStruct } from "../../typechain-types/contracts/hyperstaking/interfaces/IStakeRewardRoute";
 import { StakeRedeemDataStruct } from "../../typechain-types/contracts/lumia-diamond/interfaces/IStakeRedeemRoute";
+import { deployHyperStakingBase } from "../setup";
 
 async function deployHyperStaking() {
-  const signers = await shared.getSigners();
-
-  // -------------------- Deploy Tokens --------------------
-
-  const testReserveAsset = await shared.deployTestERC20("Test Reserve Asset", "tRaETH");
-
-  // -------------------- Hyperstaking Diamond --------------------
-
-  const hyperStaking = await shared.deployTestHyperStaking(0n);
+  const {
+    signers, testERC20, hyperStaking, lumiaDiamond, mailbox, invariantChecker, defaultWithdrawDelay,
+  } = await deployHyperStakingBase();
 
   // -------------------- Apply Strategies --------------------
 
@@ -27,7 +22,7 @@ async function deployHyperStaking() {
   const reserveAssetPrice = parseEther("2");
 
   const reserveStrategy = await shared.createReserveStrategy(
-    hyperStaking.diamond, shared.nativeTokenAddress, await testReserveAsset.getAddress(), reserveAssetPrice,
+    hyperStaking.diamond, shared.nativeTokenAddress, await testERC20.getAddress(), reserveAssetPrice,
   );
 
   await hyperStaking.hyperFactory.connect(signers.vaultManager).addStrategy(
@@ -38,20 +33,27 @@ async function deployHyperStaking() {
 
   // set fee after strategy is added
   const mailboxFee = parseEther("0.05");
-  await hyperStaking.mailbox.connect(signers.owner).setFee(mailboxFee);
+  await mailbox.connect(signers.owner).setFee(mailboxFee);
+
+  // -------------------- Setup Checker --------------------
+
+  await invariantChecker.addStrategy(await reserveStrategy.getAddress());
+  setGlobalInvariantChecker(invariantChecker);
 
   // -------------------- Hyperlane Handler --------------------
 
   const { principalToken, vaultShares } = await shared.getDerivedTokens(
-    hyperStaking.hyperlaneHandler,
+    lumiaDiamond.hyperlaneHandler,
     await reserveStrategy.getAddress(),
   );
 
   /* eslint-disable object-property-newline */
   return {
-    hyperStaking, // HyperStaking deployment
-    testReserveAsset, reserveStrategy, principalToken, vaultShares, // test contracts
+    hyperStaking, lumiaDiamond, // HyperStaking deployment
+    defaultWithdrawDelay,
+    testERC20, reserveStrategy, principalToken, vaultShares, // test contracts
     reserveAssetPrice, mailboxFee, // values
+    mailbox, // modules
     signers, // signers
   };
   /* eslint-enable object-property-newline */
@@ -59,14 +61,20 @@ async function deployHyperStaking() {
 
 describe("Lockbox", function () {
   describe("Lockbox Facet", function () {
+    afterEach(async () => {
+      const c = globalThis.$invChecker;
+      if (c) await c.check();
+    });
+
     it("vault token properties should be correct", async function () {
-      const { hyperStaking, signers, testReserveAsset } = await loadFixture(deployHyperStaking);
-      const { diamond, hyperFactory, mailbox } = hyperStaking;
+      const { signers, hyperStaking, lumiaDiamond, testERC20, mailbox } = await loadFixture(deployHyperStaking);
+      const { diamond, hyperFactory } = hyperStaking;
+      const { hyperlaneHandler } = lumiaDiamond;
       const { owner, vaultManager } = signers;
 
       const strangeToken = await shared.deployTestERC20("Test 14 dec Coin", "t14c", 14);
       const reserveStrategy2 = await shared.createReserveStrategy(
-        diamond, await strangeToken.getAddress(), await testReserveAsset.getAddress(), parseEther("1"),
+        diamond, await strangeToken.getAddress(), await testERC20.getAddress(), parseEther("1"),
       );
 
       const vname = "strange vault";
@@ -80,7 +88,7 @@ describe("Lockbox", function () {
       );
 
       const vault2 = await shared.getDerivedTokens(
-        hyperStaking.hyperlaneHandler,
+        hyperlaneHandler,
         await reserveStrategy2.getAddress(),
       );
 
@@ -94,8 +102,9 @@ describe("Lockbox", function () {
     });
 
     it("test origin update and acl", async function () {
-      const { hyperStaking, signers } = await loadFixture(deployHyperStaking);
-      const { hyperlaneHandler, lockbox } = hyperStaking;
+      const { signers, hyperStaking, lumiaDiamond } = await loadFixture(deployHyperStaking);
+      const { lockbox } = hyperStaking;
+      const { hyperlaneHandler } = lumiaDiamond;
       const { lumiaFactoryManager } = signers;
 
       await expect(hyperlaneHandler.setMailbox(lockbox)).to.be.reverted;
@@ -118,8 +127,11 @@ describe("Lockbox", function () {
     });
 
     it("proposes and applies mailbox and lumiaFactory updates after delay", async function () {
-      const { hyperStaking, signers, principalToken, vaultShares } = await loadFixture(deployHyperStaking);
-      const { lockbox, mailbox, hyperlaneHandler } = hyperStaking;
+      const {
+        signers, hyperStaking, lumiaDiamond, principalToken, vaultShares, mailbox,
+      } = await loadFixture(deployHyperStaking);
+      const { lockbox } = hyperStaking;
+      const { hyperlaneHandler } = lumiaDiamond;
       const { vaultManager } = signers;
 
       const DELAY = 60 * 60 * 24; // 1 day
@@ -162,7 +174,7 @@ describe("Lockbox", function () {
     });
 
     it("stake deposit with non-zero mailbox fee", async function () {
-      const { hyperStaking, reserveStrategy, vaultShares, mailboxFee, signers } = await loadFixture(deployHyperStaking);
+      const { signers, hyperStaking, reserveStrategy, vaultShares, mailboxFee } = await loadFixture(deployHyperStaking);
       const { deposit } = hyperStaking;
       const { owner, alice } = signers;
 
@@ -170,12 +182,11 @@ describe("Lockbox", function () {
 
       const stakeAmount = parseEther("2");
 
-      const depositType = 1;
       await expect(deposit.stakeDeposit(
         reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
       ))
         .to.emit(deposit, "StakeDeposit")
-        .withArgs(owner, alice, reserveStrategy, stakeAmount, depositType);
+        .withArgs(owner, alice, reserveStrategy, stakeAmount);
 
       const sharesAfter = await vaultShares.balanceOf(alice);
       expect(sharesAfter).to.be.gt(sharesBefore);
@@ -185,7 +196,7 @@ describe("Lockbox", function () {
     });
 
     it("mailbox fee is needed when adding strategy too", async function () {
-      const { hyperStaking, reserveStrategy, mailboxFee, signers } = await loadFixture(deployHyperStaking);
+      const { signers, hyperStaking, reserveStrategy, mailboxFee } = await loadFixture(deployHyperStaking);
       const { diamond, hyperFactory, routeRegistry } = hyperStaking;
       const { vaultManager } = signers;
 
@@ -221,8 +232,11 @@ describe("Lockbox", function () {
     });
 
     it("it should not be possible to frontrun redeem", async function () {
-      const { hyperStaking, reserveStrategy, vaultShares, mailboxFee, signers } = await loadFixture(deployHyperStaking);
-      const { deposit, stakeRedeemRoute, realAssets } = hyperStaking;
+      const {
+        signers, hyperStaking, lumiaDiamond, reserveStrategy, vaultShares, mailboxFee,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit } = hyperStaking;
+      const { stakeRedeemRoute, realAssets } = lumiaDiamond;
       const { alice, bob } = signers;
 
       const stakeAmount = parseEther("3");
@@ -259,8 +273,11 @@ describe("Lockbox", function () {
     });
 
     it("redeem the should triger leave on the origin chain - non-zero mailbox fee", async function () {
-      const { hyperStaking, reserveStrategy, principalToken, vaultShares, testReserveAsset, reserveAssetPrice, mailboxFee, signers } = await loadFixture(deployHyperStaking);
-      const { deposit, defaultWithdrawDelay, lockbox, realAssets, stakeRedeemRoute, mailbox } = hyperStaking;
+      const {
+        signers, hyperStaking, lumiaDiamond, reserveStrategy, principalToken, vaultShares, testERC20, reserveAssetPrice, mailboxFee, mailbox, defaultWithdrawDelay,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit, lockbox } = hyperStaking;
+      const { realAssets, stakeRedeemRoute } = lumiaDiamond;
       const { alice } = signers;
 
       const stakeAmount = parseEther("3");
@@ -303,7 +320,7 @@ describe("Lockbox", function () {
       await expect(redeemTx).to.changeTokenBalance(vaultShares, alice, -sharesAfter);
       await expect(redeemTx).to.changeTokenBalance(principalToken, vaultShares, -stakeAmount);
 
-      await expect(redeemTx).to.changeTokenBalances(testReserveAsset,
+      await expect(redeemTx).to.changeTokenBalances(testERC20,
         [lockbox, reserveStrategy],
         [-expectedAllocation, expectedAllocation],
       );
@@ -322,9 +339,10 @@ describe("Lockbox", function () {
 
     it("should store failed redeem when strategy reverts", async function () {
       const {
-        hyperStaking, signers, reserveStrategy, vaultShares, mailboxFee,
+        signers, hyperStaking, lumiaDiamond, reserveStrategy, vaultShares, mailboxFee,
       } = await loadFixture(deployHyperStaking);
-      const { deposit, lockbox, realAssets, stakeRedeemRoute } = hyperStaking;
+      const { deposit, lockbox } = hyperStaking;
+      const { realAssets, stakeRedeemRoute } = lumiaDiamond;
       const { alice, strategyManager } = signers;
 
       const stakeAmount = parseEther("2");
@@ -376,9 +394,10 @@ describe("Lockbox", function () {
 
     it("should allow re-executing a previously failed redeem", async function () {
       const {
-        hyperStaking, signers, reserveStrategy, principalToken, vaultShares, mailboxFee, testReserveAsset, reserveAssetPrice,
+        signers, hyperStaking, lumiaDiamond, reserveStrategy, principalToken, vaultShares, mailboxFee, testERC20, reserveAssetPrice,
       } = await loadFixture(deployHyperStaking);
-      const { deposit, lockbox, realAssets, stakeRedeemRoute } = hyperStaking;
+      const { deposit, lockbox } = hyperStaking;
+      const { realAssets, stakeRedeemRoute } = lumiaDiamond;
       const { owner, alice, strategyManager } = signers;
 
       const stakeAmount = parseEther("2");
@@ -426,8 +445,8 @@ describe("Lockbox", function () {
         .withArgs(reserveStrategy, alice, shares, id);
 
       // should move the funds
-      await expect(reexecuteTx).to.changeTokenBalance(testReserveAsset, lockbox, -expectedAllocation);
-      await expect(reexecuteTx).to.changeTokenBalances(testReserveAsset,
+      await expect(reexecuteTx).to.changeTokenBalance(testERC20, lockbox, -expectedAllocation);
+      await expect(reexecuteTx).to.changeTokenBalances(testERC20,
         [lockbox, reserveStrategy],
         [-expectedAllocation, expectedAllocation],
       );

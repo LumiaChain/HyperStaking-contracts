@@ -18,15 +18,15 @@ const reportSize = process.env.REPORT_SIZE?.toLowerCase() === "true";
 // Build a forking config; otherwise undefined.
 const FORK = process.env.FORK;
 
-let forkingConfig;
+let forkingConfig: { url: string; blockNumber: number } | undefined;
 if (FORK === "ethereum") {
   forkingConfig = {
-    url: process.env.ETHEREUM_RPC_URL,
+    url: process.env.ETHEREUM_RPC_URL!,
     blockNumber: 22_000_000,
   };
 } else if (FORK === "base") {
   forkingConfig = {
-    url: process.env.BASE_RPC_URL,
+    url: process.env.BASE_RPC_URL!,
     blockNumber: 35_600_000,
   };
 } else {
@@ -124,6 +124,7 @@ const config: HardhatUserConfig = {
 
   mocha: {
     timeout: 200_000, // 200 seconds
+    require: ["./test/setup.ts"],
   },
 
   gasReporter: {

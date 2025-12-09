@@ -40,11 +40,11 @@ Together, these flows illustrate how HyperStaking unifies multi-chain deposits, 
 </p>
 
 The diagram illustrates how staking requests move through the HyperStaking Diamond Proxy from a user’s perspective.
-Users initiate deposits through the **Deposit Facet**, which routes incoming assets, either native tokens or ERC20s to the appropriate staking currency pool represented by the chosen strategy.
+Users initiate deposits through the **Deposit Facet**, which routes incoming assets, either native tokens or ERC20s to the designated staking strategy.
 
-Depending on the configuration, deposits may represent **direct stakes** (bypassing strategies) or **strategy-based allocations** in external protocols handled by the **Allocation Facet**.
+Each deposit represents a strategy-based allocation, where assets are forwarded to external protocols via the Allocation Facet.
 
-All stake and withdrawal operations pass through the **Lockbox Facet**, where allocations are locked and cross-chain operations, including coordination with the **Lumia Chain**, are managed.
+All stake and withdrawal operations pass through the Lockbox Facet, which manages the locked allocations, pending exits, and cross-chain coordination with the Lumia Chain.
 
 <div style="page-break-after: always;"></div>
 
@@ -101,13 +101,11 @@ All accounting and reward synchronization are finalized through the **Lockbox Fa
 
 **Hyperlane** provides secure cross-chain messaging between origin-chain Diamond Proxies and the central Lumia Chain Diamond Proxy. This ensures:
 
-- **Direct Staking**: Direct staking allows users to stake assets directly on the Lumia Chain without needing to pass through the revenue strategy. This enables faster processing and more flexible staking options, while still maintaining cross-chain compatibility through Hyperlane's messaging infrastructure.
+* **Stake Synchronization**: When a user stakes on the origin chain, a Hyperlane message triggers the minting of **Principal tokens** on the Lumia Chain that mirror the staked amount. This one-to-one relationship between origin-side stake and Principal supply forms a key invariant of the system. ERC4626 **Vault shares** are then issued to represent the yield-bearing side of the position, accruing revenue over time.
 
-- **Stake Synchronization**: When a user stakes on an origin chain, a Hyperlane message is sent to mint ERC4626 shares on the Lumia Chain representing the stake plus accrued revenue.
+* **Redemption Flow**: Redemption Flow: When a user redeems shares on the Lumia Chain, a Hyperlane message instructs the origin-chain proxy to release the corresponding underlying assets and any yield accrued so far, while the associated **Principal tokens** and **Vault shares** are burned on the Lumia Chain.
 
-- **Redemption Flow**: When a user redeems or exits shares on the Lumia Chain, Hyperlane relays a burn-and-withdraw instruction to the origin-chain proxy to burn the shares and release the underlying assets and rewards.
-
-This design centralizes staking and redemption logic around Hyperlane messaging, enabling users to seamlessly access multi-chain revenue streams without interacting directly with multiple protocols or bridges.
+This design coordinates staking and redemption logic via Hyperlane messaging, enabling seamless interaction between origin and Lumia-chain components. It allows users to access multi-chain revenue streams transparently, without managing bridges, liquidity transfers, or deploying complex strategies on their own.
 
 ---
 
@@ -210,20 +208,9 @@ whether they are claimable or already claimed.
 
 ### 2.3 Strategy Type Flags
 
-To support different flow patterns, each strategy also exposes two boolean flags:
+To support different flow patterns, each strategy also exposes a boolean flag:
 
 ```solidity
-    /**
-     * @notice Indicates whether the strategy is a DirectStakeStrategy.
-     * @dev  Direct stake strategies bypass yield‑generating logic and
-     *       exist solely to allow 1:1 deposits into the vault. They:
-     *         - Store currency info for compatibility with the vault.
-     *         - Revert on any `allocate`, `exit`, or preview calls.
-     *         - Perform no token or native transfers.
-     * @return Always `true` for direct stake strategies, `false` otherwise.
-     */
-    function isDirectStakeStrategy() external view returns (bool);
-
     /**
      * @notice Returns true if this stake strategy is an integrated strategy.
      * @dev  Integrated strategies delegate all asset movements to the
@@ -237,7 +224,6 @@ To support different flow patterns, each strategy also exposes two boolean flags
     function isIntegratedStakeStrategy() external view returns (bool);
 ```
 
-* **Direct strategies** are effectively placeholders: they exist to satisfy the vault’s strategy interface without moving funds into any external protocol. Perfect for simple 1:1 deposit/withdraw flows.
 * **Integrated strategies** rely on the diamond’s IntegrationFacet to handle every asset movement internally. No external allowance setup or approval calls are needed; the facet’s permission covers both ERC20 and native transfers.
 
 This separation of allocation/exit logic from strategy‑type flags ensures clarity: the vault always calls `allocate` and `exit` in the same way, while each strategy declares its operational mode via its flags.
@@ -301,7 +287,7 @@ Another example strategy is the [**Dinero Protocol**](https://dinero.xyz/) **Int
 <img src="img/dinero_strategy.png" alt="Dinero Strategy" width="250">
 </p>
 
-When users stake ETH, the strategy interacts directly with the Dinero Protocol, converting ETH into pxETH, which is then auto-compounded into apxETH. This allows users to benefit from the compounding returns offered by the Dinero Protocol.
+When users stake ETH, the strategy interacts with the Dinero Protocol, converting ETH into pxETH, which is then auto-compounded into apxETH. This allows users to benefit from the compounding returns offered by the Dinero Protocol.
 
 When users unstake, the Dinero Protocol is used to redeem pxETH from apxETH (an ERC4626 vault). pxETH is then converted to ETH for withdrawal, plus accumulated interest, with a 0.5% fee applied.
 

@@ -8,6 +8,7 @@ import RevertingContractModule from "../../ignition/modules/test/RevertingContra
 
 import * as shared from "../shared";
 import { ClaimStruct } from "../../typechain-types/contracts/hyperstaking/facets/DepositFacet";
+import { deployHyperStakingBase } from "../setup";
 
 async function deployDiamond() {
   const [owner, alice] = await ethers.getSigners();
@@ -19,19 +20,9 @@ async function deployDiamond() {
 }
 
 async function deployHyperStaking() {
-  const signers = await shared.getSigners();
-
-  // -------------------- Deploy Tokens --------------------
-
-  const testERC20 = await shared.deployTestERC20("Test ERC20 Token", "tERC20");
-  const testWstETH = await shared.deployTestERC20("Test Wrapped Liquid Staked ETH", "tWstETH");
-
-  await testERC20.mint(signers.alice, parseEther("1000"));
-  await testERC20.mint(signers.bob, parseEther("1000"));
-
-  // -------------------- Hyperstaking Diamond --------------------
-
-  const hyperStaking = await shared.deployTestHyperStaking(0n);
+  const {
+    signers, testERC20, testWstETH, hyperStaking, lumiaDiamond, invariantChecker, defaultWithdrawDelay,
+  } = await deployHyperStakingBase();
 
   // -------------------- Apply Strategies --------------------
 
@@ -57,23 +48,33 @@ async function deployHyperStaking() {
     "vERC2",
   );
 
+  // -------------------- Setup Checker --------------------
+
+  await invariantChecker.addStrategies([
+    await reserveStrategy1.getAddress(),
+    await reserveStrategy2.getAddress(),
+  ]);
+  setGlobalInvariantChecker(invariantChecker);
+
   // -------------------- Hyperlane Handler --------------------
 
   const lumiaTokens1 = await shared.getDerivedTokens(
-    hyperStaking.hyperlaneHandler,
+    lumiaDiamond.hyperlaneHandler,
     await reserveStrategy1.getAddress(),
   );
 
   const lumiaTokens2 = await shared.getDerivedTokens(
-    hyperStaking.hyperlaneHandler,
+    lumiaDiamond.hyperlaneHandler,
     await reserveStrategy2.getAddress(),
   );
 
   /* eslint-disable object-property-newline */
   return {
-    hyperStaking, // HyperStaking deployment
-    testERC20, testWstETH, reserveStrategy1, reserveStrategy2, lumiaTokens1, lumiaTokens2, // test contracts
     signers, // signers
+    defaultWithdrawDelay,
+    hyperStaking, lumiaDiamond, // diamonds deployment
+    testERC20, testWstETH, // test tokens
+    reserveStrategy1, reserveStrategy2, lumiaTokens1, lumiaTokens2, // test contracts
   };
   /* eslint-enable object-property-newline */
 }
@@ -95,6 +96,11 @@ describe("Staking", function () {
   });
 
   describe("Staking", function () {
+    afterEach(async () => {
+      const c = globalThis.$invChecker;
+      if (c) await c.check();
+    });
+
     it("deposit staking can be paused", async function () {
       const { hyperStaking, reserveStrategy1, signers } = await loadFixture(deployHyperStaking);
       const { deposit, hyperFactory } = hyperStaking;
@@ -190,17 +196,16 @@ describe("Staking", function () {
         );
 
       // event
-      const depositType = 1;
       await expect(deposit.stakeDeposit(reserveStrategy1, owner, stakeAmount, { value: stakeAmount }))
         .to.emit(deposit, "StakeDeposit")
-        .withArgs(owner, owner, reserveStrategy1, stakeAmount, depositType);
+        .withArgs(owner, owner, reserveStrategy1, stakeAmount);
 
       const stakeAmountForAlice = parseEther("11");
       await expect(deposit.connect(alice).stakeDeposit(
         reserveStrategy1, alice, stakeAmountForAlice, { value: stakeAmountForAlice }),
       )
         .to.emit(deposit, "StakeDeposit")
-        .withArgs(alice, alice, reserveStrategy1, stakeAmountForAlice, depositType);
+        .withArgs(alice, alice, reserveStrategy1, stakeAmountForAlice);
 
       // Allocation
       const vaultInfo = await allocation.stakeInfo(reserveStrategy1);
@@ -209,8 +214,11 @@ describe("Staking", function () {
     });
 
     it("should be able to withdraw stake", async function () {
-      const { hyperStaking, reserveStrategy1, lumiaTokens1, signers } = await loadFixture(deployHyperStaking);
-      const { deposit, allocation, lockbox, realAssets, defaultWithdrawDelay } = hyperStaking;
+      const {
+        signers, hyperStaking, lumiaDiamond, defaultWithdrawDelay, reserveStrategy1, lumiaTokens1,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit, allocation, lockbox } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
       const { owner, alice } = signers;
 
       const stakeAmount = parseEther("6.4");
@@ -294,23 +302,22 @@ describe("Staking", function () {
           [withdrawAmount, -withdrawAmount],
         );
 
-      const depositType = 1;
       await expect(claimTx)
         .to.emit(deposit, "WithdrawClaimed")
-        .withArgs(reserveStrategy1, alice, alice, withdrawAmount, withdrawAmount, depositType);
+        .withArgs(reserveStrategy1, alice, alice, withdrawAmount, withdrawAmount);
 
       // Allocation
       const vaultInfo = await allocation.stakeInfo(reserveStrategy1);
       expect(vaultInfo.totalStake).to.equal(stakeAmount - 3n * withdrawAmount);
       expect(vaultInfo.totalAllocation).to.equal(stakeAmount - 3n * withdrawAmount);
-
-      const directVaultInfo = await deposit.directStakeInfo(reserveStrategy1);
-      expect(directVaultInfo.totalStake).to.equal(0);
     });
 
     it("it should be possible to stake and withdraw with erc20", async function () {
-      const { hyperStaking, testERC20, reserveStrategy2, signers, lumiaTokens2 } = await loadFixture(deployHyperStaking);
-      const { deposit, defaultWithdrawDelay, allocation, lockbox, realAssets } = hyperStaking;
+      const {
+        signers, hyperStaking, lumiaDiamond, testERC20, reserveStrategy2, lumiaTokens2, defaultWithdrawDelay,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit, allocation, lockbox } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
       const { owner, alice, bob } = signers;
 
       const stakeAmount = parseEther("7.8");
@@ -331,7 +338,6 @@ describe("Staking", function () {
           [withdrawAmount, -withdrawAmount],
         );
 
-      const depositType = 1;
       await lumiaTokens2.vaultShares.approve(realAssets, withdrawAmount);
       expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await realAssets.redeem(reserveStrategy2, owner, owner, withdrawAmount);
@@ -340,7 +346,7 @@ describe("Staking", function () {
       await time.setNextBlockTimestamp(expectedUnlock);
       await expect(deposit.claimWithdraws([lastClaimId2], owner))
         .to.emit(deposit, "WithdrawClaimed")
-        .withArgs(reserveStrategy2, owner, owner, withdrawAmount, withdrawAmount, depositType);
+        .withArgs(reserveStrategy2, owner, owner, withdrawAmount, withdrawAmount);
 
       // wihdraw to another address
       await lumiaTokens2.vaultShares.approve(realAssets, withdrawAmount);
@@ -375,17 +381,15 @@ describe("Staking", function () {
       // UserInfo
       expect(await lumiaTokens2.vaultShares.balanceOf(owner)).to.equal(stakeAmount - 3n * withdrawAmount);
       expect(await lumiaTokens2.vaultShares.balanceOf(alice)).to.equal(0);
-
-      const directVaultInfo = await deposit.directStakeInfo(reserveStrategy2);
-      expect(directVaultInfo.totalStake).to.equal(0);
     });
 
     describe("Allocation Report", function () {
       it("report in case of zero feeRate", async function () {
         const {
-          hyperStaking, reserveStrategy2, testERC20, lumiaTokens2, signers,
+          signers, hyperStaking, lumiaDiamond, reserveStrategy2, testERC20, lumiaTokens2, defaultWithdrawDelay,
         } = await loadFixture(deployHyperStaking);
-        const { deposit, defaultWithdrawDelay, hyperFactory, lockbox, allocation, realAssets } = hyperStaking;
+        const { deposit, hyperFactory, lockbox, allocation } = hyperStaking;
+        const { realAssets } = lumiaDiamond;
         const { vaultManager, strategyManager, alice, bob } = signers;
 
         const amount = parseEther("10");
@@ -427,6 +431,9 @@ describe("Staking", function () {
 
         const reportTx = allocation.connect(vaultManager).report(reserveStrategy2);
 
+        // check invariants right after report
+        globalThis.$invChecker!.check();
+
         // events
         const feeRate = 0;
         const feeAmount = 0;
@@ -443,8 +450,11 @@ describe("Staking", function () {
       });
 
       it("revenue and bridge safety margin", async function () {
-        const { hyperStaking, reserveStrategy1, lumiaTokens1, signers } = await loadFixture(deployHyperStaking);
-        const { deposit, defaultWithdrawDelay, allocation, hyperFactory, realAssets } = hyperStaking;
+        const {
+          signers, hyperStaking, lumiaDiamond, reserveStrategy1, lumiaTokens1, defaultWithdrawDelay,
+        } = await loadFixture(deployHyperStaking);
+        const { deposit, allocation, hyperFactory } = hyperStaking;
+        const { realAssets } = lumiaDiamond;
         const { alice, vaultManager, strategyManager } = signers;
 
         // safety margin == 0 as default
@@ -598,8 +608,11 @@ describe("Staking", function () {
       });
 
       it("Withdraw call failed", async function () {
-        const { hyperStaking, reserveStrategy1, lumiaTokens1, signers } = await loadFixture(deployHyperStaking);
-        const { deposit, defaultWithdrawDelay, realAssets } = hyperStaking;
+        const {
+          signers, hyperStaking, lumiaDiamond, reserveStrategy1, lumiaTokens1, defaultWithdrawDelay,
+        } = await loadFixture(deployHyperStaking);
+        const { deposit } = hyperStaking;
+        const { realAssets } = lumiaDiamond;
         const { owner } = signers;
 
         // test contract which reverts on payable call

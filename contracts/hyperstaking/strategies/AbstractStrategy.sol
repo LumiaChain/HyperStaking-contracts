@@ -144,11 +144,6 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
     // ========= Flags ========= //
 
     /// @inheritdoc IStrategy
-    function isDirectStakeStrategy() external pure virtual returns (bool) {
-        return false;
-    }
-
-    /// @inheritdoc IStrategy
     function isIntegratedStakeStrategy() external pure virtual returns (bool) {
         return false;
     }

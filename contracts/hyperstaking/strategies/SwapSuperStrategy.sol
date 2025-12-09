@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.27;
 
+// solhint-disable var-name-mixedcase
+
 import {IStrategy} from "../interfaces/IStrategy.sol";
 import {Currency, SuperformStrategy} from "./SuperformStrategy.sol";
 import {ICurveIntegration} from "../interfaces/ICurveIntegration.sol";
