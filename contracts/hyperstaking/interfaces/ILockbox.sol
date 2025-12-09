@@ -47,7 +47,6 @@ interface ILockbox {
 
     error NotFromMailbox(address from);
     error NotFromLumiaFactory(address sender);
-    error BadLumiaDestination(uint32 lumiaDestination);
 
     error UnsupportedMessage();
 

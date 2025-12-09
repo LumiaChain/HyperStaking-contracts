@@ -1640,6 +1640,72 @@ describe("Aera", function () {
       expect(siAfterUserExit.pendingExitStake).to.eq(0);
     });
 
+    it("edge-case: redeem after heavy loss", async function () {
+      const {
+        signers, hyperStaking, lumiaDiamond, gauntletStrategy, vaultShares, aeraMock, testUSDC,
+      } = await loadFixture(deployHyperStaking);
+
+      const { deposit, allocation, lockbox } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
+      const { alice, owner, strategyManager } = signers;
+
+      // set some slippage to make tiny exits even more likely to round to zero
+      const cfg0 = await gauntletStrategy.aeraConfig();
+      await gauntletStrategy.connect(strategyManager).setAeraConfig({
+        solverTip: cfg0.solverTip,
+        deadlineOffset: cfg0.deadlineOffset,
+        maxPriceAge: cfg0.maxPriceAge,
+        slippageBps: 3000, // 30%
+        isFixedPrice: cfg0.isFixedPrice,
+      });
+
+      // --- stake & settle ---
+      const stakeAmount = parseUnits("1000", 6);
+      await testUSDC.connect(alice).approve(deposit, stakeAmount);
+      const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+
+      await shared.solveGauntletDepositRequest(
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
+      );
+
+      // --- crash price to a very low but non zero level ---
+      const ts = (await shared.getCurrentBlockTimestamp()) + 60;
+      await time.setNextBlockTimestamp(ts);
+
+      await aeraMock.aeraPriceAndFeeCalculator.connect(owner).setUnitPrice(
+        await aeraMock.aeraMultiDepositorVault.getAddress(),
+        10n, // still non zero price, heavy loss
+        ts,
+      );
+
+      // preview for a share size is still > 0
+      const sharesAmt = 1000n;
+      const stakeAmt = await vaultShares.previewRedeem(sharesAmt);
+      const leaveAmt = await gauntletStrategy.previewAllocation(stakeAmt);
+      const exitAmt = await gauntletStrategy.previewExit(leaveAmt);
+      expect(exitAmt).to.be.gt(0n);
+
+      const stakeInfo = await allocation.stakeInfo(gauntletStrategy);
+
+      // but including cap it ends up at zero
+      const capLossLeaveAmt = stakeInfo.totalAllocation * stakeAmt / stakeInfo.totalStake;
+      const capLossExitAmt = await gauntletStrategy.previewExit(capLossLeaveAmt);
+
+      expect(capLossExitAmt).to.eq(0n);
+
+      // try to redeem that amount
+      await vaultShares.connect(alice).approve(realAssets, stakeAmt);
+      await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, stakeAmt);
+
+      const failedRedeem = await lockbox.getUserFailedRedeemIds(alice);
+      expect(failedRedeem.length).to.eq(1);
+
+      // re execute should revert as we cannot fulfill zero amount exit
+      await expect(
+        lockbox.connect(alice).reexecuteFailedRedeem(failedRedeem[0]),
+      ).to.be.revertedWithCustomError(shared.errors, "ZeroStakeExit");
+    });
+
     it("edge-case: redeem 1 wei after total loss", async function () {
       const {
         signers, hyperStaking, lumiaDiamond, gauntletStrategy, vaultShares, aeraMock, testUSDC,

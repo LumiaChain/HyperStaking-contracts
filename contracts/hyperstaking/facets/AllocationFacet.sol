@@ -203,16 +203,13 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         }
 
         // enforces proportional exits under loss
-        allocation = need;
-        if (need > capUnits) {
-            // edge-case: check ZeroStakeExit
-            require(IStrategy(strategy).previewExit(allocation) > 0, ZeroStakeExit());
-            // min(need, capUnits) also fix +1 ceil from previewAllocation
-            allocation = capUnits;
-        }
+        allocation = need <= capUnits ? need : capUnits;
 
         // edge-case: prevent zero shares exit
         require(allocation > 0, ZeroAllocationExit());
+
+        // edge-case: check if exit will result in zero assets
+        require(IStrategy(strategy).previewExit(allocation) > 0, ZeroStakeExit());
 
         // save stake information
         si.totalAllocation -= allocation;

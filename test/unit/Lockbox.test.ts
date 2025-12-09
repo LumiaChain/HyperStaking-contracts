@@ -621,7 +621,6 @@ describe("Lockbox", function () {
         ],
       );
 
-      // TODO
       await expect(
         mailbox.connect(bob).process("0x", forgedMessage),
       ).to.be.revertedWithCustomError(shared.errors, "BadOriginDestination")
