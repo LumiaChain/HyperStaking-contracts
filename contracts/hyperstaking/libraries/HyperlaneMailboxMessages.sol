@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 // inspired by Hyperlane: token/libs/TokenMessage.sol
 pragma solidity =0.8.27;
 
