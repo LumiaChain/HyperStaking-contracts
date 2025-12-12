@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity =0.8.27;
 
 import {StrategyKind, StrategyRequest, IStrategy} from "../hyperstaking/interfaces/IStrategy.sol";
