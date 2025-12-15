@@ -1,5 +1,4 @@
 import { loadFixture, impersonateAccount, stopImpersonatingAccount } from "@nomicfoundation/hardhat-toolbox/network-helpers";
-import { parseUnits } from "ethers";
 
 import { ethers, ignition } from "hardhat";
 
@@ -8,6 +7,7 @@ import TestSwapIntegrationModule from "../../ignition/modules/test/TestSwapInteg
 
 import { expect } from "chai";
 import * as shared from "../shared";
+import { stableUnits } from "../shared";
 
 // ------------------ Mainet Addresses ------------------
 
@@ -29,7 +29,6 @@ const USDT_ADDRESS = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 
 // ----
 
-const stableUnits = (val: string) => parseUnits(val, 6);
 const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";
 
 describe("Swap Test Integration", function () {

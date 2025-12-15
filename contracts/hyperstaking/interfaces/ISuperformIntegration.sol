@@ -7,6 +7,8 @@ import {ISuperPositions} from "../../external/superform/core/interfaces/ISuperPo
 
 import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 
+import {SuperformConfig} from "../libraries/LibSuperform.sol";
+
 /**
  * @title ISuperformIntegration
  * @dev Interface for SuperformIntegrationFacet
@@ -84,6 +86,10 @@ interface ISuperformIntegration is IERC1155Receiver {
         uint256 superPositionAmount,
         address receiver
     ) external;
+
+    /// @notice Initializes Superform storage with factory, router and positions
+    /// @dev Can be called only once and only by the authorized manager
+    function initializeStorage(SuperformConfig calldata config) external;
 
     /// @dev Updates the status of a Superform strategy
     /// @param strategy The address of the strategy to update

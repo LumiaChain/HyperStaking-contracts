@@ -19,6 +19,8 @@ import {
     HyperlaneMailboxMessages, StakeRedeemData
 } from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
 
+import {ZeroAddress, ZeroAmount} from "../../shared/Errors.sol";
+
 /**
  * @title RealAssetsFacet
  * @notice Facet responsible for minting and redeeming RWA (Real-World Asset) tokens
@@ -84,6 +86,9 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
         address to,
         uint256 shares
     ) external payable nonReentrant {
+        require(strategy != address(0) && from != address(0) && to != address(0), ZeroAddress());
+        require(shares > 0, ZeroAmount());
+
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
 
         LibInterchainFactory.checkRoute(ifs, strategy);

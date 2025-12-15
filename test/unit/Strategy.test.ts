@@ -1,7 +1,7 @@
 import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import { ethers, ignition } from "hardhat";
-import { parseEther } from "ethers";
+import { parseEther, ZeroAddress } from "ethers";
 
 import DineroStrategyModule from "../../ignition/modules/DineroStrategy";
 import PirexMockModule from "../../ignition/modules/test/PirexMock";
@@ -25,7 +25,7 @@ async function getMockedPirex() {
 async function deployHyperStaking() {
   const {
     signers, testWstETH, hyperStaking, lumiaDiamond, invariantChecker, defaultWithdrawDelay,
-  } = await deployHyperStakingBase();
+  } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Apply Strategies --------------------
 
@@ -321,6 +321,20 @@ describe("Strategy", function () {
           .withArgs(badStrategy);
       });
 
+      it("ZeroAddress strategy", async function () {
+        const { signers, hyperStaking } = await loadFixture(deployHyperStaking);
+        const { hyperFactory } = hyperStaking;
+        const { vaultManager } = signers;
+
+        const zeroStrategy = ZeroAddress;
+
+        await expect(hyperFactory.connect(vaultManager).addStrategy(
+          zeroStrategy,
+          "zero vault",
+          "v0",
+        )).to.be.revertedWithCustomError(shared.errors, "ZeroAddress");
+      });
+
       it("VaultAlreadyExist", async function () {
         const { signers, hyperStaking, reserveStrategy } = await loadFixture(deployHyperStaking);
         const { hyperFactory } = hyperStaking;
@@ -330,8 +344,7 @@ describe("Strategy", function () {
           reserveStrategy,
           "vault5",
           "V5",
-        ))
-          .to.be.revertedWithCustomError(hyperFactory, "VaultAlreadyExist");
+        )).to.be.revertedWithCustomError(hyperFactory, "VaultAlreadyExist");
       });
 
       it("Vault external functions not be accessible outside deposit", async function () {

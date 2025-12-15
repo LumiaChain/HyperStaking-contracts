@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.27;
 
+// solhint-disable var-name-mixedcase
+
 import {Currency} from "../libraries/CurrencyHandler.sol";
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 
@@ -110,6 +112,7 @@ struct HyperStakingStorage {
 
     /// @notice General lockbox data
     LockboxData lockboxData;
+    uint256[12] __gap_lockboxData;
 
     /// @notice Pending lockbox mailbox update
     PendingMailbox pendingMailbox;
@@ -119,6 +122,7 @@ struct HyperStakingStorage {
 
     /// @notice Records failed redeem attempts for later re-execution
     FailedRedeemData failedRedeems;
+    uint256[8] __gap_failedRedeems;
 }
 
 library LibHyperStaking {

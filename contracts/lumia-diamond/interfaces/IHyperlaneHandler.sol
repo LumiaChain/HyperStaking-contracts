@@ -46,7 +46,6 @@ interface IHyperlaneHandler {
     error UnsupportedMessage();
 
     error NotFromHyperStaking(address sender);
-    error BadOriginDestination(uint32 originDestination);
 
     error RouteAlreadyExist();
 

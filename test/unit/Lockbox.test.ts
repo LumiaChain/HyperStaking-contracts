@@ -14,7 +14,7 @@ import { deployHyperStakingBase } from "../setup";
 async function deployHyperStaking() {
   const {
     signers, testERC20, hyperStaking, lumiaDiamond, mailbox, invariantChecker, defaultWithdrawDelay,
-  } = await deployHyperStakingBase();
+  } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Apply Strategies --------------------
 
@@ -438,7 +438,7 @@ describe("Lockbox", function () {
         value: reserveStrategySupply,
       });
 
-      const reexecuteTx = lockbox.connect(alice).reexecuteStakeRedeem(id);
+      const reexecuteTx = lockbox.connect(alice).reexecuteFailedRedeem(id);
 
       await expect(reexecuteTx)
         .to.emit(lockbox, "StakeRedeemReexecuted")
@@ -454,6 +454,49 @@ describe("Lockbox", function () {
       // should no longer be retrievable
       const failed = await lockbox.getFailedRedeems([id]);
       expect(failed[0].user).to.eq(ZeroAddress);
+    });
+
+    it("edge-case: redeem 1 wei after 10x gain: allocation rounds to 0", async function () {
+      const {
+        signers,
+        hyperStaking,
+        lumiaDiamond,
+        reserveStrategy,
+        vaultShares,
+        mailbox,
+        reserveAssetPrice,
+      } = await loadFixture(deployHyperStaking);
+
+      const { deposit, lockbox } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
+      const { alice, owner, strategyManager } = signers;
+
+      await mailbox.connect(owner).setFee(0n);
+
+      // --- stake so Alice has shares ---
+      const stakeAmount = parseEther("10");
+      await deposit.connect(alice).stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
+
+      const userShares = await vaultShares.balanceOf(alice);
+      expect(userShares).to.eq(stakeAmount);
+
+      // --- pump price on the strategy ---
+      await reserveStrategy.connect(strategyManager).setAssetPrice(reserveAssetPrice * 10n); // 10x gain
+
+      // for a 1-wei share, capUnits should floor to 0
+      const tinyShares = 1n;
+
+      // redeeming this tiny amount should revert because allocation exit is zero
+      await vaultShares.connect(alice).approve(realAssets, tinyShares);
+      await realAssets.connect(alice).redeem(reserveStrategy, alice, alice, tinyShares);
+
+      const failedRedeem = await lockbox.getUserFailedRedeemIds(alice);
+      expect(failedRedeem.length).to.eq(1);
+
+      // re-execute should revert (cannot fulfill zero-amount exit)
+      await expect(
+        lockbox.connect(alice).reexecuteFailedRedeem(failedRedeem[0]),
+      ).to.be.revertedWithCustomError(shared.errors, "ZeroAllocationExit");
     });
   });
 
@@ -530,6 +573,58 @@ describe("Lockbox", function () {
       expect(await testWrapper.strategy(bytesSR)).to.equal(messageSR.strategy);
       expect(await testWrapper.sender(bytesSR)).to.equal(messageSR.sender);
       expect(await testWrapper.redeemAmount(bytesSR)).to.equal(messageSR.redeemAmount);
+    });
+
+    it("should revert on forged messages from an invalid origin domain", async function () {
+      const { signers, hyperStaking, reserveStrategy, mailbox, mailboxFee } = await loadFixture(deployHyperStaking);
+      const { allocation, deposit, lockbox } = hyperStaking;
+      const { alice, bob } = signers;
+
+      const stakeAmount = parseEther("1");
+      await deposit.connect(alice).stakeDeposit(
+        reserveStrategy,
+        alice.address,
+        stakeAmount,
+        { value: stakeAmount + mailboxFee },
+      );
+
+      const reserveStrategyAddress = await reserveStrategy.getAddress();
+      const beforeStakeInfo = await allocation.stakeInfo(reserveStrategyAddress);
+      expect(beforeStakeInfo.pendingExitStake).to.equal(0n);
+
+      const lockboxState = await lockbox.lockboxData();
+      const destinationDomain = Number(lockboxState.destination);
+      const lumiaFactory = lockboxState.lumiaFactory;
+      const lockboxAddress = await lockbox.getAddress();
+
+      const attackerDomain = destinationDomain + 1;
+      const messageBody = ethers.solidityPacked(
+        ["uint64", "bytes32", "bytes32", "uint256"],
+        [
+          3n, // MessageType.StakeRedeem
+          ethers.zeroPadValue(reserveStrategyAddress, 32),
+          ethers.zeroPadValue(alice.address, 32),
+          stakeAmount,
+        ],
+      );
+
+      const forgedMessage = ethers.solidityPacked(
+        ["uint8", "uint32", "uint32", "bytes32", "uint32", "bytes32", "bytes"],
+        [
+          33,
+          42,
+          attackerDomain,
+          ethers.zeroPadValue(lumiaFactory, 32),
+          destinationDomain,
+          ethers.zeroPadValue(lockboxAddress, 32),
+          messageBody,
+        ],
+      );
+
+      await expect(
+        mailbox.connect(bob).process("0x", forgedMessage),
+      ).to.be.revertedWithCustomError(shared.errors, "BadOriginDestination")
+        .withArgs(attackerDomain);
     });
   });
 });

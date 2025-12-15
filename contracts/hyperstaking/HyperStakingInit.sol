@@ -19,8 +19,6 @@ import {IMailbox} from "../external/hyperlane/interfaces/IMailbox.sol";
 
 import {LibAcl} from "./libraries/LibAcl.sol";
 import {LibHyperStaking, HyperStakingStorage, LockboxData} from "./libraries/LibHyperStaking.sol";
-import {LibSuperform} from "./libraries/LibSuperform.sol";
-import {LibCurve} from "./libraries/LibCurve.sol";
 
 /**
  * @title HyperStakingInit
@@ -39,11 +37,7 @@ contract HyperStakingInit is AccessControlEnumerableUpgradeable, ReentrancyGuard
         address initVaultManager,
         address initStrategyManager,
         address lockboxMailbox,
-        uint32 lockboxDestination,
-        address superformFactory,
-        address superformRouter,
-        address superPositions,
-        address curveRouter
+        uint32 lockboxDestination
     ) external initializer {
         __AccessControlEnumerable_init();
         __ReentrancyGuard_init();
@@ -74,11 +68,5 @@ contract HyperStakingInit is AccessControlEnumerableUpgradeable, ReentrancyGuard
 
         box.destination = lockboxDestination;
         box.mailbox = IMailbox(lockboxMailbox);
-
-        // initialize superform-integration storage
-        LibSuperform.init(superformFactory, superformRouter, superPositions);
-
-        // initialize curve-integration storage
-        LibCurve.init(curveRouter);
     }
 }

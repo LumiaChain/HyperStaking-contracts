@@ -6,7 +6,7 @@ import {IStrategy} from "../hyperstaking/interfaces/IStrategy.sol";
 import {CurveIntegrationFacet} from "../hyperstaking/facets/integrations/CurveIntegrationFacet.sol";
 import {SuperformIntegrationFacet} from "../hyperstaking/facets/integrations/SuperformIntegrationFacet.sol";
 
-import {LibSuperform} from "../hyperstaking/libraries/LibSuperform.sol";
+import {SuperformConfig, LibSuperform} from "../hyperstaking/libraries/LibSuperform.sol";
 import {LibCurve} from "../hyperstaking/libraries/LibCurve.sol";
 import {LibAcl} from "../hyperstaking/libraries/LibAcl.sol";
 import {Currency, CurrencyHandler} from "../hyperstaking/libraries/CurrencyHandler.sol";
@@ -42,9 +42,15 @@ contract TestSwapIntegration is SuperformIntegrationFacet, CurveIntegrationFacet
 
         _grantRole(LibAcl.STRATEGY_MANAGER_ROLE, strategyManager);
 
+        SuperformConfig memory superformConfig = SuperformConfig({
+            superformFactory: superformFactory_,
+            superformRouter: superformRouter_,
+            superPositions: superPositions_
+        });
+
         // init Superform and Curve storage
-        LibSuperform.init(superformFactory_, superformRouter_, superPositions_);
-        LibCurve.init(curveRouter_);
+        LibSuperform.init(superformConfig);
+        LibCurve.setRouter(curveRouter_);
     }
 
     /* ========== Test Functions ========== */

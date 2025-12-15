@@ -313,5 +313,53 @@ describe("VaultShares", function () {
 
       expect(await testERC20.balanceOf(lockbox)).to.be.eq(0);
     });
+
+    it("redeem: zero values validation - reverts", async function () {
+      const {
+        signers, hyperStaking, lumiaDiamond, reserveStrategy, vaultShares,
+      } = await loadFixture(deployHyperStaking);
+
+      const { deposit } = hyperStaking;
+      const { realAssets, stakeRedeemRoute } = lumiaDiamond;
+      const { alice } = signers;
+
+      const stakeAmount = parseEther("1");
+      await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
+
+      const redeemAmount = parseEther("0.1");
+      const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem({
+        strategy: reserveStrategy,
+        sender: alice,
+        redeemAmount,
+      });
+
+      await vaultShares.connect(alice).approve(realAssets, redeemAmount);
+
+      // zero amount
+      await expect(
+        realAssets.connect(alice).redeem(reserveStrategy, alice, alice, 0n),
+      ).to.be.revertedWithCustomError(shared.errors, "ZeroAmount");
+
+      // zero strategy
+      await expect(
+        realAssets.connect(alice).redeem(ZeroAddress, alice, alice, redeemAmount, {
+          value: dispatchFee,
+        }),
+      ).to.be.revertedWithCustomError(shared.errors, "ZeroAddress");
+
+      // zero owner
+      await expect(
+        realAssets.connect(alice).redeem(reserveStrategy, ZeroAddress, alice, redeemAmount, {
+          value: dispatchFee,
+        }),
+      ).to.be.revertedWithCustomError(shared.errors, "ZeroAddress");
+
+      // zero receiver
+      await expect(
+        realAssets.connect(alice).redeem(reserveStrategy, alice, ZeroAddress, redeemAmount, {
+          value: dispatchFee,
+        }),
+      ).to.be.revertedWithCustomError(shared.errors, "ZeroAddress");
+    });
   });
 });

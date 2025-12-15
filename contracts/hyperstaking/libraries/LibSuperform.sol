@@ -10,6 +10,19 @@ import {ISuperPositions} from "../../external/superform/core/interfaces/ISuperPo
 import {LibDiamond} from "../../diamond/libraries/LibDiamond.sol";
 import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 
+import { ZeroAddress } from "../../shared/Errors.sol";
+
+//================================================================================================//
+//                                            Types                                               //
+//================================================================================================//
+
+// params for setup
+struct SuperformConfig {
+    address superformFactory;
+    address superformRouter;
+    address superPositions;
+}
+
 //================================================================================================//
 //                                           Storage                                              //
 //================================================================================================//
@@ -17,6 +30,8 @@ import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Re
 struct SuperformStorage {
     EnumerableSet.AddressSet superformStrategies;
     uint256 maxSlippage; // where 10000 = 100%
+
+    bool initialized; // one-time setup flag
 
     ISuperformFactory superformFactory;
     IBaseRouterImplementation superformRouter;
@@ -27,7 +42,8 @@ library LibSuperform {
     bytes32 constant internal SUPERFORM_STORAGE_POSITION
         = bytes32(uint256(keccak256("hyperstaking.superform-0.1.storage")) - 1);
 
-    error ZeroAddress();
+    error SuperformAlreadyInitialized();
+    error SuperformNotConfigured();
 
     function diamondStorage() internal pure returns (SuperformStorage storage s) {
         bytes32 position = SUPERFORM_STORAGE_POSITION;
@@ -36,22 +52,29 @@ library LibSuperform {
         }
     }
 
-    /// initialize this storage
-    function init(
-        address superformFactory,
-        address superformRouter,
-        address superPositions
-    ) internal {
-        require(superformFactory != address(0), ZeroAddress());
-        require(superformRouter != address(0), ZeroAddress());
-        require(superPositions != address(0), ZeroAddress());
+    /// @notice Ensures Superform is initialized
+    function requireInitialized() internal view {
+        SuperformStorage storage s = diamondStorage();
+        require(s.initialized, SuperformNotConfigured());
+    }
 
-        SuperformStorage storage s = LibSuperform.diamondStorage();
+    /// @notice One-time initialization of this storage
+    /// @dev Called from facet, sets router/factory/positions and default slippage
+    function init(SuperformConfig memory config) internal {
+        SuperformStorage storage s = diamondStorage();
 
-        s.superformFactory = ISuperformFactory(superformFactory);
-        s.superformRouter = IBaseRouterImplementation(superformRouter);
-        s.superPositions = ISuperPositions(superPositions);
-        s.maxSlippage = 50; // default value: 0.5%
+        require(!s.initialized, SuperformAlreadyInitialized());
+        require(config.superformFactory != address(0), ZeroAddress());
+        require(config.superformRouter != address(0), ZeroAddress());
+        require(config.superPositions != address(0), ZeroAddress());
+
+        s.superformFactory = ISuperformFactory(config.superformFactory);
+        s.superformRouter = IBaseRouterImplementation(config.superformRouter);
+        s.superPositions = ISuperPositions(config.superPositions);
+
+        // default value: 0.5%
+        s.maxSlippage = 50;
+        s.initialized = true;
 
         // add IERC1155Receiver to supportedInterfaces
         LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();

@@ -1,7 +1,8 @@
 import { expect } from "chai";
 import { ignition, ethers, network } from "hardhat";
-import { Contract, ZeroAddress, ZeroBytes32, parseEther, parseUnits, Addressable, TransactionResponse, Log } from "ethers";
+import { Contract, Interface, ZeroAddress, ZeroBytes32, parseEther, parseUnits, Addressable, TransactionResponse, Log } from "ethers";
 import SuperformMockModule from "../ignition/modules/test/SuperformMock";
+import CurveMockModule from "../ignition/modules/test/CurveMock";
 
 import TestERC20Module from "../ignition/modules/test/TestERC20";
 import ReserveStrategyModule from "../ignition/modules/test/MockReserveStrategy";
@@ -14,6 +15,8 @@ import { SingleDirectSingleVaultStateReqStruct } from "../typechain-types/contra
 
 // full - because there are two differnet vesions of IERC20 used in the project
 export const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";
+
+export const stableUnits = (val: string) => parseUnits(val, 6);
 
 // -------------------- Accounts --------------------
 
@@ -66,6 +69,23 @@ export async function deploySuperformMock(erc4626Vault: Contract) {
       },
     },
   });
+}
+
+export async function deployCurveMock(testUSDC: Contract, testUSDT: Contract) {
+  const { curvePool, curveRouter } = await ignition.deploy(CurveMockModule, {
+    parameters: {
+      CurveMockModule: {
+        usdcAddress: await testUSDC.getAddress(),
+        usdtAddress: await testUSDT.getAddress(),
+      },
+    },
+  });
+
+  // fill the pool with some USDC and USDT
+  await testUSDC.transfer(await curvePool.getAddress(), stableUnits("500000"));
+  await testUSDT.transfer(await curvePool.getAddress(), stableUnits("500000"));
+
+  return { curvePool, curveRouter };
 }
 
 // -------------------- Tokens --------------------
@@ -236,6 +256,16 @@ export async function solveGauntletRedeemRequest(
 }
 
 // -------------------- Other Helpers --------------------
+
+// shared custom errors declared in a standalone Solidity file (no contract or library)
+const errorsIface = new Interface([
+  "error ZeroAmount()",
+  "error ZeroAddress()",
+  "error ZeroStakeExit()",
+  "error ZeroAllocationExit()",
+  "error BadOriginDestination(uint32 originDestination)",
+]);
+export const errors = { interface: errorsIface };
 
 export async function getLastClaimId(deposit: Contract, reserveStrategy1: Addressable, owner: Addressable) {
   const lastClaims = await deposit.lastClaims(reserveStrategy1, owner, 1);

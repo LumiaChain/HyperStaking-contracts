@@ -79,7 +79,7 @@ interface ILockbox {
 
     /// @notice Re-executes a previously failed stake redeem operation
     /// @param id The ID of the failed redeem to reattempt
-    function reexecuteStakeRedeem(uint256 id) external;
+    function reexecuteFailedRedeem(uint256 id) external;
 
     /**
      * @notice Updates the destination chain ID for the route

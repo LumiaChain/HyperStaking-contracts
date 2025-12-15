@@ -11,7 +11,7 @@ import {ICurveRouterMinimal} from "../../strategies/integrations/curve/interface
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import * as Errors from "../../Errors.sol";
+import * as Errors from "../../../shared/Errors.sol";
 
 /**
  * @title CurveIntegration
@@ -35,6 +35,12 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
         _;
     }
 
+    /// @notice Requires Curve router to be configured
+    modifier requireRouter() {
+        LibCurve.requireRouter();
+        _;
+    }
+
     //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
@@ -49,7 +55,7 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
         uint256 amountIn,
         uint256 minDy,
         address receiver
-    ) external onlySwapStrategy returns (uint256 dy) {
+    ) external onlySwapStrategy requireRouter returns (uint256 dy) {
         ICurveRouterMinimal router = LibCurve.diamondStorage().curveRouter;
 
         (
@@ -73,15 +79,17 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
     /* ========== Strategy Manager ========== */
 
     /// @inheritdoc ICurveIntegration
-    function updateCurveRouter(address newRouter) external onlyStrategyManager {
-        require(newRouter != address(0), Errors.ZeroAddress());
-        LibCurve.diamondStorage().curveRouter = ICurveRouterMinimal(newRouter);
+    function setCurveRouter(address newRouter) external onlyStrategyManager {
+        LibCurve.setRouter(newRouter);
 
         emit CurveRouterUpdated(newRouter);
     }
 
     /// @inheritdoc ICurveIntegration
-    function updateSwapStrategies(address strategy, bool status) external onlyStrategyManager {
+    function updateSwapStrategies(
+        address strategy,
+        bool status
+    ) external onlyStrategyManager requireRouter {
         CurveStorage storage s = LibCurve.diamondStorage();
 
         // EnumerableSet returns a boolean indicating success
@@ -100,7 +108,7 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
         uint8 nCoins,
         address[] calldata tokens,
         uint8[] calldata indexes
-    ) external onlyStrategyManager {
+    ) external onlyStrategyManager requireRouter {
         require(tokens.length == indexes.length && tokens.length == nCoins, PoolSizeMismatch());
         require(nCoins > 1 && nCoins <= 8, PoolBadNCoins());
 

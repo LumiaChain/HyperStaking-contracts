@@ -1,20 +1,42 @@
 import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 
 import { ethers, ignition } from "hardhat";
-import { parseEther, parseUnits, Contract, ZeroAddress } from "ethers";
+import { Interface, parseEther, parseUnits, Contract, ZeroAddress } from "ethers";
 import SwapSuperStrategyModule from "../../ignition/modules/SwapSuperStrategy";
 import TestSwapIntegrationModule from "../../ignition/modules/test/TestSwapIntegration";
 
 import { expect } from "chai";
 import * as shared from "../shared";
-import { deployHyperStakingBase } from "../setup";
+import { stableUnits } from "../shared";
 
-const stableUnits = (val: string) => parseUnits(val, 6);
+import { deployHyperStakingBase } from "../setup";
 
 async function deployHyperStaking() {
   const {
-    signers, hyperStaking, lumiaDiamond, testUSDC, testUSDT, erc4626Vault, curvePool, superVault, superformFactory, invariantChecker, defaultWithdrawDelay,
-  } = await deployHyperStakingBase();
+    signers, hyperStaking, lumiaDiamond, testUSDC, testUSDT, erc4626Vault, invariantChecker, defaultWithdrawDelay,
+  } = await loadFixture(deployHyperStakingBase);
+
+  // -------------------- Superform --------------------
+
+  const {
+    superformFactory, superformRouter, superVault, superPositions,
+  } = await shared.deploySuperformMock(erc4626Vault);
+
+  const superformConfig = {
+    superformFactory: await superformFactory.getAddress(),
+    superformRouter: await superformRouter.getAddress(),
+    superPositions: await superPositions.getAddress(),
+  };
+
+  await hyperStaking.superformIntegration.connect(signers.strategyManager).initializeStorage(
+    superformConfig,
+  );
+
+  // -------------------- Curve --------------------
+
+  const { curvePool, curveRouter } = await shared.deployCurveMock(testUSDC, testUSDT);
+
+  await hyperStaking.curveIntegration.connect(signers.strategyManager).setCurveRouter(curveRouter);
 
   // -------------------- Apply Strategies --------------------
 
@@ -539,6 +561,52 @@ describe("CurveStrategy", function () {
     afterEach(async () => {
       const c = globalThis.$invChecker;
       if (c) await c.check();
+    });
+
+    it("Curve Integration must be initialized", async function () {
+      clearGlobalInvariantChecker();
+
+      const {
+        signers, hyperStaking, testUSDC, testUSDT,
+      } = await loadFixture(deployHyperStakingBase);
+
+      const { curveRouter } = await shared.deployCurveMock(testUSDC, testUSDT);
+
+      // missing router setting
+
+      const errors = {
+        interface: new Interface([
+          "error OnlyStrategyManager()",
+          "error CurveRouterNotSet()",
+        ]),
+      };
+
+      const randomStrategy = "0x0000000000000000000000000000000000001234";
+      await expect(hyperStaking.curveIntegration.connect(signers.strategyManager).updateSwapStrategies(
+        randomStrategy,
+        true,
+      )).to.be.revertedWithCustomError(
+        errors,
+        "CurveRouterNotSet",
+      );
+
+      // only strategy manager
+      await expect(hyperStaking.curveIntegration.setCurveRouter(
+        curveRouter,
+      )).to.be.revertedWithCustomError(
+        errors,
+        "OnlyStrategyManager",
+      );
+
+      await hyperStaking.curveIntegration.connect(signers.strategyManager).setCurveRouter(
+        curveRouter,
+      );
+
+      // OK
+      await hyperStaking.curveIntegration.connect(signers.strategyManager).updateSwapStrategies(
+        randomStrategy,
+        true,
+      );
     });
 
     it("swap strategy is also a superform strategy", async function () {
