@@ -18,7 +18,7 @@ import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
     LibHyperStaking, HyperStakingStorage, VaultInfo, StakeInfo
 } from "../libraries/LibHyperStaking.sol";
-import {ZeroStakeExit, ZeroAllocationExit} from "../../shared/Errors.sol";
+import {ZeroStakeExit, ZeroAllocationExit, RewardDonationZeroSupply } from "../../shared/Errors.sol";
 
 /**
  * @title AllocationFacet
@@ -72,6 +72,9 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
 
         address feeRecipient = vault.feeRecipient;
         require(feeRecipient != address(0), FeeRecipientUnset());
+
+        // prevent reward distribution when no shares exist in the vault
+        require(si.totalStake > 0, RewardDonationZeroSupply());
 
         uint256 revenue = checkRevenue(strategy);
         require(revenue > 0, InsufficientRevenue());

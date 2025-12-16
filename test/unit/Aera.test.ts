@@ -705,15 +705,29 @@ describe("Aera", function () {
       // ensure feeRate = 0 for this test
       expect((await hyperFactory.vaultInfo(gauntletStrategy)).feeRate).to.eq(0);
 
+      // it should not be possible to report, when vault has no shares
+      await expect(allocation.connect(vaultManager).report(gauntletStrategy))
+        .to.be.revertedWithCustomError(shared.errors, "RewardDonationZeroSupply");
+
+      // stake again, so report can proceed
+      await testUSDC.connect(alice).approve(deposit, stakeAmount);
+      const stakeTx2 = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+
+      await shared.solveGauntletDepositRequest(
+        stakeTx2, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 3,
+      );
+
+      // now report should work
+
       const reportTx = allocation.connect(vaultManager).report(gauntletStrategy);
 
       await expect(reportTx).to.emit(allocation, "StakeCompounded").withArgs(
         gauntletStrategy, bob, 0, 0, 0, expectedRevenue,
       );
 
-      // totalStake increases by revenue; allocation remains (future reports will eat into it)
+      // totalStake increases; revenue remains (future reports will compound it)
       si = await allocation.stakeInfo(gauntletStrategy);
-      expect(si.totalStake).to.eq(expectedRevenue);
+      expect(si.totalStake).to.eq(expectedRevenue + stakeAmount);
       expect(await allocation.checkRevenue(gauntletStrategy)).to.be.lte(expectedRevenue); // should not grow
 
       await expect(reportTx).to.changeTokenBalance(principalToken, vaultShares, expectedRevenue);

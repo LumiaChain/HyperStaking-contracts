@@ -26,6 +26,20 @@ struct Currency {
 library CurrencyHandler {
     using SafeERC20 for IERC20;
 
+    /* ========== Erorrs ========== */
+
+    error InsufficientBalance();
+    error InsufficientValue();
+
+    error TransferFailed();
+    error RefundFailed();
+
+    error ApproveNotSupported();
+    error IncreaseNotSupported();
+    error DecreaseNotSupported();
+
+    /* ========== Functions ========== */
+
     /**
      * @notice Simple check, if the given currency is a native coin
      * @param currency The Currency struct (token address or native coin)
@@ -65,24 +79,25 @@ library CurrencyHandler {
         uint256 amount
     ) internal {
         if (isNativeCoin(currency)) {
-            require(address(this).balance >= amount, "Transfer insufficient balance");
+            require(address(this).balance >= amount, InsufficientBalance());
 
             // Transfer native coin (ETH) to recipient
             (bool success, ) = recipient.call{value: amount}("");
-            require(success, "Transfer call failed");
+            require(success, TransferFailed());
         } else {
             IERC20(currency.token).safeTransfer(recipient, amount);
         }
     }
 
     /**
-     * @dev Transfers tokens or native coins from one address to another
-     * For ERC20 tokens, it uses `transferFrom`
-     * For native chain coins, it checks if `msg.value` is sufficient
+     * @dev Transfers ERC20 tokens or native coin between addresses
+     * For ERC20 tokens uses `transferFrom`
+     * For native coin expects ETH in msg.value, forwards `amount` to `to`
+     * and refunds any excess back to `from`
      * @param currency The Currency struct (token address or native coin)
-     * @param from The address from which the tokens/coins will be transferred
+     * @param from The address providing tokens/ETH
      * @param to The recipient address
-     * @param amount The amount of tokens/native coin to transfer
+     * @param amount The amount of tokens/ETH to transfer
      */
     function transferFrom(
         Currency memory currency,
@@ -91,10 +106,25 @@ library CurrencyHandler {
         uint256 amount
     ) internal {
         if (isNativeCoin(currency)) {
-            // native coin transfer: only check
-            require(msg.value >= amount, "Insufficient native value");
+            // Validate sufficient ETH was sent
+            require(msg.value >= amount, InsufficientValue());
 
+            // Forward ETH if recipient is different from this contract
+            // Note: If to == address(this), ETH is already here from msg.value
+            if (to != address(this)) {
+                (bool success, ) = to.call{value: amount}("");
+                require(success, TransferFailed());
+            }
+
+            // Refund excess ETH to sender
+            uint256 excess = msg.value - amount;
+            if (excess > 0) {
+                (bool success, ) = from.call{value: excess}("");
+                require(success, RefundFailed());
+
+            }
         } else {
+            // ERC20 path remains unchanged
             IERC20(currency.token).safeTransferFrom(from, to, amount);
         }
     }
@@ -119,7 +149,7 @@ library CurrencyHandler {
         // Revert if the currency is a native coin, as native coins don't use pull pattern
         // Make sure to check that the currency is an ERC20 token before calling approve
         if (isNativeCoin(currency)) {
-            revert("Approve not allowed for native coins");
+            revert ApproveNotSupported();
         }
 
         IERC20(currency.token).approve(spender, amount);
@@ -138,7 +168,7 @@ library CurrencyHandler {
         uint256 addedValue
     ) internal {
         if (isNativeCoin(currency)) {
-            revert("Increase not allowed for native coins");
+            revert IncreaseNotSupported();
         }
         IERC20(currency.token).safeIncreaseAllowance(spender, addedValue);
     }
@@ -157,7 +187,7 @@ library CurrencyHandler {
         uint256 subtractedValue
     ) internal {
         if (isNativeCoin(currency)) {
-            revert("Decrease not allowed for native coins");
+            revert DecreaseNotSupported();
         }
         IERC20(currency.token).safeDecreaseAllowance(spender, subtractedValue);
     }

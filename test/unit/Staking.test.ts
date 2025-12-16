@@ -144,8 +144,7 @@ describe("Staking", function () {
       expect(withdrawDelay).to.equal(defaultDelay);
 
       await expect(deposit.connect(alice).setWithdrawDelay(3600))
-        // .to.be.revertedWithCustomError(deposit, "OnlyStakingManager");
-        .to.be.reverted;
+        .to.be.revertedWithCustomError(shared.errors, "OnlyStakingManager");
 
       const month = 3600 * 24 * 30;
       expect(await deposit.MAX_WITHDRAW_DELAY()).to.equal(month);
@@ -429,6 +428,14 @@ describe("Staking", function () {
         const feeRecipient = bob;
         await allocation.connect(vaultManager).setFeeRecipient(reserveStrategy2, feeRecipient);
 
+        // it should not be possible to report, when vault has no shares
+        await expect(allocation.connect(vaultManager).report(reserveStrategy2))
+          .to.be.revertedWithCustomError(shared.errors, "RewardDonationZeroSupply");
+
+        // stake again, so report can proceed
+        await testERC20.connect(alice).approve(deposit, amount);
+        await deposit.connect(alice).stakeDeposit(reserveStrategy2, alice, amount);
+
         const reportTx = allocation.connect(vaultManager).report(reserveStrategy2);
 
         // check invariants right after report
@@ -445,8 +452,6 @@ describe("Staking", function () {
         // balance
         await expect(reportTx)
           .to.changeTokenBalance(lumiaTokens2.principalToken, lumiaTokens2.vaultShares, expectedRevenue);
-
-        expect(await lumiaTokens2.vaultShares.balanceOf(alice)).to.be.eq(0);
       });
 
       it("revenue and bridge safety margin", async function () {

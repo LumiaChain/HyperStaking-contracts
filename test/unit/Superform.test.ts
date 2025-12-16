@@ -486,6 +486,14 @@ describe("Superform", function () {
       const feeRecipient = bob;
       await allocation.connect(vaultManager).setFeeRecipient(superformStrategy, feeRecipient);
 
+      // it should not be possible to report, when vault has no shares
+      await expect(allocation.connect(vaultManager).report(superformStrategy))
+        .to.be.revertedWithCustomError(shared.errors, "RewardDonationZeroSupply");
+
+      // stake again, so report can proceed
+      await testUSDC.connect(alice).approve(deposit, amount);
+      await deposit.connect(alice).stakeDeposit(superformStrategy, alice, amount);
+
       const reportTx = allocation.connect(vaultManager).report(superformStrategy);
 
       // events
@@ -498,8 +506,6 @@ describe("Superform", function () {
 
       // balance
       await expect(reportTx).to.changeTokenBalance(principalToken, vaultShares, expectedRevenue);
-
-      expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
     });
 
     it("revenue should also depend on bridge safety margin", async function () {

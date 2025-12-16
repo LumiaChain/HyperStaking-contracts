@@ -19,7 +19,7 @@ import {
     HyperlaneMailboxMessages, StakeRedeemData
 } from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
 
-import {ZeroAddress, ZeroAmount} from "../../shared/Errors.sol";
+import {ZeroAddress, ZeroAmount, RewardDonationZeroSupply } from "../../shared/Errors.sol";
 
 /**
  * @title RealAssetsFacet
@@ -69,6 +69,9 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
         LibInterchainFactory.checkRoute(ifs, strategy);
 
         RouteInfo storage r = ifs.routes[strategy];
+
+        // block donation if the vault has no outstanding shares
+        require(r.vaultShares.totalSupply() > 0, RewardDonationZeroSupply());
 
         // mint additional principal
         LumiaPrincipal(address(r.assetToken)).mint(address(this), stakeAdded);
