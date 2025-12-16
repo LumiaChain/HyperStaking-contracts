@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.27;
 
-import {StakeInfoData} from "../libraries/HyperlaneMailboxMessages.sol";
+import {StakeInfoData} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 
 /**
  * @title IStakeInfoRoute

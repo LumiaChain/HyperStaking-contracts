@@ -9,6 +9,7 @@ import RevertingContractModule from "../../ignition/modules/test/RevertingContra
 import * as shared from "../shared";
 import { ClaimStruct } from "../../typechain-types/contracts/hyperstaking/facets/DepositFacet";
 import { deployHyperStakingBase } from "../setup";
+import { TestCurrencyHandler } from "../../typechain-types";
 
 async function deployDiamond() {
   const [owner, alice] = await ethers.getSigners();
@@ -599,7 +600,16 @@ describe("Staking", function () {
       });
     });
 
-    describe("CurrencyHandler Errors", function () {
+    describe("CurrencyHandler", function () {
+      let testCurrencyHandler: TestCurrencyHandler;
+
+      beforeEach(async () => {
+        testCurrencyHandler = await ethers.deployContract(
+          "TestCurrencyHandler",
+          [],
+        );
+      });
+
       it("Invalid deposit value", async function () {
         const { hyperStaking, reserveStrategy1, signers } = await loadFixture(deployHyperStaking);
         const { deposit } = hyperStaking;
@@ -609,7 +619,7 @@ describe("Staking", function () {
         const value = parseEther("0.99");
 
         await expect(deposit.stakeDeposit(reserveStrategy1, owner, stakeAmount, { value }))
-          .to.be.revertedWith("Insufficient native value");
+          .to.be.revertedWithCustomError(shared.errors, "InsufficientValue");
       });
 
       it("Withdraw call failed", async function () {
@@ -634,7 +644,82 @@ describe("Staking", function () {
         const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy1, owner);
         await time.setNextBlockTimestamp(expectedUnlock);
         await expect(deposit.claimWithdraws([lastClaimId], revertingContract))
-          .to.be.revertedWith("Transfer call failed");
+          .to.be.revertedWithCustomError(shared.errors, "TransferFailed");
+      });
+
+      it("refunds excess value when staking native asset", async function () {
+        const { hyperStaking, reserveStrategy1, signers } =
+          await loadFixture(deployHyperStaking);
+        const { deposit } = hyperStaking;
+        const { alice } = signers;
+
+        const stakeAmount = parseEther("1");
+        const extra = parseEther("0.5");
+        const totalValue = stakeAmount + extra;
+
+        const beforeBalance = await ethers.provider.getBalance(alice);
+
+        const tx = await deposit.connect(alice).stakeDeposit(
+          reserveStrategy1,
+          alice,
+          stakeAmount,
+          { value: totalValue },
+        );
+        const receipt = await tx.wait();
+
+        const gasCost = receipt.gasUsed * receipt.gasPrice;
+        const afterBalance = await ethers.provider.getBalance(alice);
+
+        const netPaid = beforeBalance - afterBalance - BigInt(gasCost);
+
+        // user should effectively pay only the stakeAmount; extra must be refunded
+        expect(netPaid).to.equal(stakeAmount);
+      });
+
+      it("refunds excess value back to sender for native transferFrom", async function () {
+        const [owner] = await ethers.getSigners();
+
+        const amount = parseEther("1");
+        const extra = parseEther("0.3");
+        const total = amount + extra;
+
+        const beforeBalance = await ethers.provider.getBalance(await testCurrencyHandler.getAddress());
+        expect(beforeBalance).to.equal(0n);
+
+        await testCurrencyHandler
+          .connect(owner)
+          .transferFromNativeToThis(
+            owner.address,
+            amount,
+            { value: total },
+          );
+
+        const afterBalance = await ethers.provider.getBalance(await testCurrencyHandler.getAddress());
+
+        // contract should keep only `amount`, the `extra` must have been refunded
+        expect(afterBalance).to.equal(amount);
+      });
+
+      it("reverts with RefundFailed when refund receiver reverts", async function () {
+        const { revertingContract } = await ignition.deploy(
+          RevertingContractModule,
+        );
+        const [owner] = await ethers.getSigners();
+
+        const amount = parseEther("1");
+        const extra = parseEther("0.3");
+        const total = amount + extra;
+
+        await expect(
+          testCurrencyHandler
+            .connect(owner)
+            .transferFromNativeTo(
+              revertingContract,    // from (refund target)
+              owner.address,        // to
+              amount,
+              { value: total },
+            ),
+        ).to.be.revertedWithCustomError(shared.errors, "RefundFailed");
       });
     });
   });

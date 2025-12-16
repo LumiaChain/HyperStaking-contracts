@@ -167,4 +167,13 @@ interface IDeposit {
         external
         view
         returns (uint256[] memory ids);
+
+    /* ========== */
+
+    /// @notice Helper to easily quote the dispatch fee for stakeDeposit
+    function quoteStakeDeposit(
+        address strategy,
+        address to,
+        uint256 stake
+    ) external view returns (uint256);
 }

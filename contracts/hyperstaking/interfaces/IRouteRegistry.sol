@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.27;
 
-import {RouteRegistryData} from "../libraries/HyperlaneMailboxMessages.sol";
+import {RouteRegistryData} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 
 /**
  * @title IRouteRegistry

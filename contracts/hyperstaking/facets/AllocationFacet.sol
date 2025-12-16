@@ -5,6 +5,7 @@ import {IAllocation} from "../interfaces/IAllocation.sol";
 import {IDeposit} from "../interfaces/IDeposit.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 import {ILockbox} from "../interfaces/ILockbox.sol";
+import {IStakeRewardRoute} from "../interfaces/IStakeRewardRoute.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {
@@ -14,10 +15,12 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {
     LibHyperStaking, HyperStakingStorage, VaultInfo, StakeInfo
 } from "../libraries/LibHyperStaking.sol";
+import {StakeRewardData} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
+
+import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
 import {ZeroStakeExit, ZeroAllocationExit, RewardDonationZeroSupply } from "../../shared/Errors.sol";
 
 /**
@@ -63,6 +66,7 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
     /// @inheritdoc IAllocation
     function report(address strategy)
         external
+        payable
         onlyVaultManager
         nonReentrant
     {
@@ -79,7 +83,7 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         uint256 revenue = checkRevenue(strategy);
         require(revenue > 0, InsufficientRevenue());
 
-        uint256 feeAmount = vault.feeRate * revenue / LibHyperStaking.PERCENT_PRECISION;
+        uint256 feeAmount = _calculateFee(vault.feeRate, revenue);
         uint256 feeAllocation;
 
         if (feeAmount > 0) {
@@ -90,6 +94,10 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
 
         // increase total stake value
         si.totalStake += stakeAdded;
+
+        // quote message fee for forwarding a StakeReward message across chains
+        uint256 dispatchFee = quoteReport(strategy);
+        ILockbox(address(this)).collectDispatchFee{value: msg.value}(msg.sender, dispatchFee);
 
         // bridge StakeReward message
         ILockbox(address(this)).bridgeStakeReward(strategy, stakeAdded);
@@ -174,6 +182,21 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         }
 
         return stake - (bridgeCollateral + marginAmount);
+    }
+
+    /// @inheritdoc IAllocation
+    function quoteReport(address strategy) public view returns (uint256) {
+        VaultInfo storage vault = LibHyperStaking.diamondStorage().vaultInfo[strategy];
+
+        uint256 revenue = checkRevenue(strategy);
+        uint256 feeAmount = _calculateFee(vault.feeRate, revenue);
+        uint256 stakeAdded = revenue - feeAmount;
+
+        StakeRewardData memory data = StakeRewardData({
+            strategy: strategy,
+            stakeAdded: stakeAdded
+        });
+        return IStakeRewardRoute(address(this)).quoteDispatchStakeReward(data);
     }
 
     //============================================================================================//
@@ -262,5 +285,10 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
 
         // save information
         si.totalAllocation += allocation;
+    }
+
+    /// @notice Calculates fee based on feeRate and revenue
+    function _calculateFee(uint256 feeRate, uint256 revenue) internal pure returns (uint256) {
+        return feeRate * revenue / LibHyperStaking.PERCENT_PRECISION;
     }
 }

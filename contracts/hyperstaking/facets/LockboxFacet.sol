@@ -4,17 +4,17 @@ pragma solidity =0.8.27;
 import {ILockbox} from "../interfaces/ILockbox.sol";
 import {IAllocation} from "../interfaces/IAllocation.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
-
 import {IStakeInfoRoute} from "../interfaces/IStakeInfoRoute.sol";
 import {IStakeRewardRoute} from "../interfaces/IStakeRewardRoute.sol";
 
 import {
     StakeInfoData, StakeRewardData, MessageType, HyperlaneMailboxMessages
-} from "../libraries/HyperlaneMailboxMessages.sol";
+} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
-import {NotAuthorized, BadOriginDestination } from "../../shared/Errors.sol";
+import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
+import {NotAuthorized, BadOriginDestination, DispatchUnderpaid } from "../../shared/Errors.sol";
 
 import {
     LibHyperStaking,
@@ -35,6 +35,7 @@ import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet
  */
 contract LockboxFacet is ILockbox, HyperStakingAcl {
     using HyperlaneMailboxMessages for bytes;
+    using CurrencyHandler for Currency;
     using EnumerableSet for EnumerableSet.UintSet;
 
     //============================================================================================//

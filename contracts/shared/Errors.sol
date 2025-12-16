@@ -21,3 +21,4 @@ error RewardDonationZeroSupply();
 
 // cross-chain error
 error BadOriginDestination(uint32 originDestination);
+error DispatchUnderpaid();

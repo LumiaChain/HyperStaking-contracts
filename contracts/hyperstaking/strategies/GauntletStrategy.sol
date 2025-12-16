@@ -6,13 +6,14 @@ pragma solidity =0.8.27;
 import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
 import {AbstractStrategy} from "./AbstractStrategy.sol";
 import {LumiaGtUSDa} from "./tokens/LumiaGtUSDa.sol";
-import {Currency} from "../libraries/CurrencyHandler.sol";
 
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {Provisioner} from "../../external/aera/Provisioner.sol";
 import {RequestType} from "../../external/aera/Types.sol";
 import {IPriceAndFeeCalculator} from "../../external/aera/interfaces/IPriceAndFeeCalculator.sol";
+
+import {Currency} from "../../shared/libraries/CurrencyHandler.sol";
 
 // @notice Config for Aera Provisioner deposit/redeem calls
 struct AeraConfig {

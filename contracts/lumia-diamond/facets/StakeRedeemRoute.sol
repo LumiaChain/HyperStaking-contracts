@@ -8,7 +8,7 @@ import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
 import {
     HyperlaneMailboxMessages, StakeRedeemData
-} from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
+} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 
 import {
     LibInterchainFactory, InterchainFactoryStorage, RouteInfo

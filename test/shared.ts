@@ -259,12 +259,17 @@ export async function solveGauntletRedeemRequest(
 
 // shared custom errors declared in a standalone Solidity file (no contract or library)
 const errorsIface = new Interface([
+  "error OnlyStakingManager()",
   "error ZeroAmount()",
   "error ZeroAddress()",
   "error ZeroStakeExit()",
   "error ZeroAllocationExit()",
   "error RewardDonationZeroSupply()",
   "error BadOriginDestination(uint32 originDestination)",
+  "error DispatchUnderpaid()",
+  "error InsufficientValue()",
+  "error TransferFailed()",
+  "error RefundFailed()",
 ]);
 export const errors = { interface: errorsIface };
 

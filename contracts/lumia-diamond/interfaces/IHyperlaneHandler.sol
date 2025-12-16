@@ -63,6 +63,16 @@ interface IHyperlaneHandler {
     ) external payable;
 
     /**
+     * @notice Collects required native dispatch fee into the diamond
+     * @dev CurrencyHandler used in this function checks msg.value against
+     *      required native amount and refunds any excess value back
+     */
+    function collectDispatchFee(
+        address from,
+        uint256 dispatchFee
+    ) external payable;
+
+    /**
      * @notice Updates the mailbox address used for interchain messaging
      * @param newMailbox The new mailbox address
      */

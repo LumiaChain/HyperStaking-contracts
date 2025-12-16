@@ -3,15 +3,16 @@ pragma solidity =0.8.27;
 
 import {IStrategy} from "../hyperstaking/interfaces/IStrategy.sol";
 
+import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
 import {CurveIntegrationFacet} from "../hyperstaking/facets/integrations/CurveIntegrationFacet.sol";
 import {SuperformIntegrationFacet} from "../hyperstaking/facets/integrations/SuperformIntegrationFacet.sol";
 
 import {SuperformConfig, LibSuperform} from "../hyperstaking/libraries/LibSuperform.sol";
 import {LibCurve} from "../hyperstaking/libraries/LibCurve.sol";
 import {LibAcl} from "../hyperstaking/libraries/LibAcl.sol";
-import {Currency, CurrencyHandler} from "../hyperstaking/libraries/CurrencyHandler.sol";
 
-import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Currency, CurrencyHandler} from "../shared/libraries/CurrencyHandler.sol";
 
 /**
  * @title TestSwapIntegration

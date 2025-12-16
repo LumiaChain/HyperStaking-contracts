@@ -4,6 +4,7 @@ pragma solidity =0.8.27;
 import {IHyperFactory} from "../interfaces/IHyperFactory.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 import {IRouteRegistry} from "../interfaces/IRouteRegistry.sol";
+import {ILockbox} from "../interfaces/ILockbox.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -12,13 +13,12 @@ import {
     ReentrancyGuardUpgradeable
 } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
-import {RouteRegistryData} from "../libraries/HyperlaneMailboxMessages.sol";
-
-import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
+import {RouteRegistryData} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 import {
     LibHyperStaking, HyperStakingStorage, VaultInfo, StakeInfo
 } from "../libraries/LibHyperStaking.sol";
 
+import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
 import {ZeroAddress} from "../../shared/Errors.sol";
 
 /**
@@ -51,18 +51,20 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         // Currency struct supports both native coin and erc20 tokens
         Currency memory stakeCurrency = IStrategy(strategy).stakeCurrency();
 
-        address revenueAsset = address(0);
-
         // The ERC20-compliant asset associated with the strategy
-        revenueAsset = IStrategy(strategy).revenueAsset();
+        address revenueAsset = IStrategy(strategy).revenueAsset();
 
         _storeVaultInfo(strategy, stakeCurrency, revenueAsset);
 
         // use stake currency decimals
         uint8 vaultDecimals = stakeCurrency.decimals();
 
+        // quote message fee for forwarding a RouteRegistry message across chains
+        uint256 dispatchFee = quoteAddStrategy(strategy, vaultTokenName, vaultTokenSymbol);
+        ILockbox(address(this)).collectDispatchFee{value: msg.value}(msg.sender, dispatchFee);
+
         // register new route on lumia, deploy token representing it on lumia
-        _dispatchRouteRegistry(strategy, vaultTokenName, vaultTokenSymbol, vaultDecimals);
+        _dispatchRouteRegistry(strategy, vaultTokenName, vaultTokenSymbol, vaultDecimals, dispatchFee);
 
         emit VaultCreate(
             msg.sender,
@@ -94,6 +96,27 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
     function vaultInfo(address strategy) external view returns (VaultInfo memory) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         return v.vaultInfo[strategy];
+    }
+
+    /// @inheritdoc IHyperFactory
+    function quoteAddStrategy(
+        address strategy,
+        string memory vaultTokenName,
+        string memory vaultTokenSymbol
+    ) public view returns (uint256) {
+        Currency memory stakeCurrency = IStrategy(strategy).stakeCurrency();
+        uint8 vaultDecimals = stakeCurrency.decimals();
+
+        RouteRegistryData memory dispatchData = RouteRegistryData({
+            strategy: strategy,
+            name: vaultTokenName,
+            symbol: vaultTokenSymbol,
+            decimals: vaultDecimals,
+            metadata: bytes("")
+        });
+
+        // quote message fee for forwarding a RouteRegistry message across chains
+        return IRouteRegistry(address(this)).quoteDispatchRouteRegistry(dispatchData);
     }
 
     //============================================================================================//
@@ -140,7 +163,8 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         address strategy,
         string memory name,
         string memory symbol,
-        uint8 decimals
+        uint8 decimals,
+        uint256 dispatchFee
     ) internal {
         RouteRegistryData memory data = RouteRegistryData({
             strategy: strategy,
@@ -150,10 +174,7 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
             metadata: bytes("")
         });
 
-        // quote message fee for forwarding a RouteRegistry message across chains
-        uint256 fee = IRouteRegistry(address(this)).quoteDispatchRouteRegistry(data);
-
         // actual route dispatch
-        IRouteRegistry(address(this)).routeRegistryDispatch{value: fee}(data);
+        IRouteRegistry(address(this)).routeRegistryDispatch{value: dispatchFee}(data);
     }
 }

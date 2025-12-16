@@ -5,7 +5,10 @@ import {HyperStakingAcl} from "../../HyperStakingAcl.sol";
 import {IStakeInfoRoute} from "../../interfaces/IStakeInfoRoute.sol";
 
 import {TypeCasts} from "../../../external/hyperlane/libs/TypeCasts.sol";
-import {StakeInfoData, HyperlaneMailboxMessages} from "../../libraries/HyperlaneMailboxMessages.sol";
+import {
+    StakeInfoData,
+    HyperlaneMailboxMessages
+} from "../../../shared/libraries/HyperlaneMailboxMessages.sol";
 
 import {LibHyperStaking, LockboxData} from "../../libraries/LibHyperStaking.sol";
 

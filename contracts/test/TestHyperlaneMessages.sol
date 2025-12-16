@@ -8,7 +8,7 @@ import {
     StakeRewardData,
     StakeRedeemData,
     HyperlaneMailboxMessages
-} from "../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
+} from "../shared/libraries/HyperlaneMailboxMessages.sol";
 
 /// @notice Test wrapper for HyperlaneMailboxMessages library
 contract TestHyperlaneMessages {

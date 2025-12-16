@@ -211,6 +211,63 @@ describe("VaultShares", function () {
       expect(await vaultShares.totalAssets()).to.be.eq(totalStake);
     });
 
+    it("reverts report when vault totalSupply is zero", async function () {
+      const {
+        hyperStaking, lumiaDiamond, reserveStrategy, signers, vaultShares, defaultWithdrawDelay,
+      } = await loadFixture(deployHyperStaking);
+
+      const { deposit, allocation } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
+      const { alice, strategyManager, vaultManager } = signers;
+
+      const initialDeposit = parseEther("10");
+
+      // deposits native into the strategy
+      await expect(deposit.connect(alice).stakeDeposit(reserveStrategy, alice, initialDeposit, {
+        value: initialDeposit,
+      }))
+        .to.emit(deposit, "StakeDeposit");
+
+      // double the asset price (2 -> 4)
+      const assetPrice = await reserveStrategy.assetPrice();
+      await reserveStrategy.connect(strategyManager).setAssetPrice(assetPrice * 2n);
+
+      // Alice redeems all shares on Lumia side, then claims withdrawal
+      const aliceShares = await vaultShares.balanceOf(alice);
+      expect(aliceShares).to.equal(initialDeposit);
+
+      await vaultShares.connect(alice).approve(realAssets, aliceShares);
+
+      const expectedUnlockAlice = (await shared.getCurrentBlockTimestamp()) + defaultWithdrawDelay;
+
+      await expect(realAssets.connect(alice).redeem(reserveStrategy, alice, alice, aliceShares))
+        .to.emit(realAssets, "RwaRedeem");
+
+      const lastClaimIdAlice = await shared.getLastClaimId(
+        deposit,
+        reserveStrategy,
+        alice,
+      );
+
+      await time.setNextBlockTimestamp(expectedUnlockAlice);
+      await deposit.connect(alice).claimWithdraws([lastClaimIdAlice], alice);
+
+      // vault has zero shares
+      expect(await vaultShares.totalSupply()).to.equal(0);
+
+      // there is still some revenue to report from the strategy
+      const expectedRevenue = await allocation.checkRevenue(reserveStrategy);
+      expect(expectedRevenue).to.be.gt(0);
+
+      await allocation.connect(vaultManager).setFeeRecipient(reserveStrategy, vaultManager);
+
+      // report now must revert with custom error, because vault totalSupply == 0
+      // covers ERC4626 edge-case, donation to empty shares vault
+      await expect(
+        allocation.connect(vaultManager).report(reserveStrategy),
+      ).to.be.revertedWithCustomError(shared.errors, "RewardDonationZeroSupply");
+    });
+
     it("shares should be minted equally regardless of the deposit order", async function () {
       const {
         signers, hyperStaking, reserveStrategy, vaultShares,

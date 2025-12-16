@@ -47,6 +47,7 @@ interface ILockbox {
 
     error NotFromMailbox(address from);
     error NotFromLumiaFactory(address sender);
+    error BadLumiaDestination(uint32 lumiaDestination);
 
     error UnsupportedMessage();
 
@@ -69,6 +70,15 @@ interface ILockbox {
         uint256 stakeAdded
     ) external payable;
 
+    /**
+     * @notice Collects required native dispatch fee into the diamond
+     * @dev CurrencyHandler used in this function checks msg.value against
+     *      required native amount and refunds any excess value back
+     */
+    function collectDispatchFee(
+        address from,
+        uint256 dispatchFee
+    ) external payable;
 
     /// @notice Function called by the Mailbox contract when a message is received
     function handle(
@@ -77,8 +87,10 @@ interface ILockbox {
         bytes calldata data
     ) external payable;
 
-    /// @notice Re-executes a previously failed stake redeem operation
-    /// @param id The ID of the failed redeem to reattempt
+    /**
+     * @notice Re-executes a previously failed stake redeem operation
+     * @param id The ID of the failed redeem to reattempt
+     */
     function reexecuteFailedRedeem(uint256 id) external;
 
     /**
@@ -93,9 +105,7 @@ interface ILockbox {
      */
     function proposeMailbox(address mailbox) external;
 
-    /**
-     * @notice Applies the proposed mailbox address after the delay
-     */
+    /// @notice Applies the proposed mailbox address after the delay
     function applyMailbox() external;
 
     /**
@@ -104,9 +114,7 @@ interface ILockbox {
      */
     function proposeLumiaFactory(address lumiaFactory) external;
 
-    /**
-     * @notice Applies the proposed lumia factory address after the delay
-     */
+    /// @notice Applies the proposed lumia factory address after the delay
     function applyLumiaFactory() external;
 
     //============================================================================================//
@@ -119,8 +127,10 @@ interface ILockbox {
     /// @notice Returns the total number of failed redeem attempts (counter)
     function getFailedRedeemCount() external view returns (uint256);
 
-    /// @notice Returns failed redeem records by their IDs
-    /// @param ids The list of failed redeem IDs to fetch
+    /**
+     * @notice Returns failed redeem records by their IDs
+     * @param ids The list of failed redeem IDs to fetch
+     */
     function getFailedRedeems(uint256[] calldata ids)
         external
         view

@@ -20,9 +20,10 @@ import {
 
 import {
     MessageType, HyperlaneMailboxMessages
-} from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
+} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 
-import {BadOriginDestination } from "../../shared/Errors.sol";
+import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
+import {BadOriginDestination, DispatchUnderpaid} from "../../shared/Errors.sol";
 
 /**
  * @title HyperlaneHandlerFacet
@@ -30,6 +31,7 @@ import {BadOriginDestination } from "../../shared/Errors.sol";
  */
 contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
     using EnumerableSet for EnumerableSet.AddressSet;
+    using CurrencyHandler for Currency;
     using HyperlaneMailboxMessages for bytes;
 
     //============================================================================================//
@@ -81,6 +83,29 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         }
 
         revert UnsupportedMessage();
+    }
+
+    /// @inheritdoc IHyperlaneHandler
+    function collectDispatchFee(
+        address from,
+        uint256 dispatchFee
+    ) external payable diamondInternal {
+        if (dispatchFee == 0) return;
+
+        if (msg.value < dispatchFee) {
+            revert DispatchUnderpaid();
+        }
+
+        Currency memory nativeCurrency = Currency({
+            token: address(0)
+        });
+
+        // required native fee vaule from msg.sender into this (diamond)
+        nativeCurrency.transferFrom(
+            from,
+            address(this),
+            dispatchFee
+        );
     }
 
     // ========= Restricted ========= //

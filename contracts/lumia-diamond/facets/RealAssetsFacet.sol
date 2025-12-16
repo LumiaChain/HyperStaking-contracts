@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {IRealAssets} from "../interfaces/IRealAssets.sol";
+import {IHyperlaneHandler} from "../interfaces/IHyperlaneHandler.sol";
 import {IStakeRedeemRoute} from "../interfaces/IStakeRedeemRoute.sol";
 import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
 import {
@@ -17,7 +18,7 @@ import {
 
 import {
     HyperlaneMailboxMessages, StakeRedeemData
-} from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
+} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 
 import {ZeroAddress, ZeroAmount, RewardDonationZeroSupply } from "../../shared/Errors.sol";
 
@@ -108,15 +109,38 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
         // burn assets, so they can be unlocked on the origin chain
         LumiaPrincipal(address(r.assetToken)).burnFrom(address(r.vaultShares), assets);
 
+        // quote message fee for forwarding a message across chains
+        uint256 dispatchFee = quoteRedeem(strategy, to, shares);
+        IHyperlaneHandler(address(this)).collectDispatchFee{value: msg.value}(msg.sender, dispatchFee);
+
         // use hyperlane handler function for dispatching stake redeem msg
         StakeRedeemData memory data = StakeRedeemData({
             strategy: strategy,
             sender: to,
             redeemAmount: assets
         });
-        IStakeRedeemRoute(address(this)).stakeRedeemDispatch{value: msg.value}(data);
+        IStakeRedeemRoute(address(this)).stakeRedeemDispatch{value: dispatchFee}(data);
 
         emit RwaRedeem(strategy, from, to, assets, shares);
     }
 
+    // ========= View ========= //
+
+    /// @inheritdoc IRealAssets
+    function quoteRedeem(
+        address strategy,
+        address to,
+        uint256 shares
+    ) public view returns (uint256) {
+        RouteInfo storage r = LibInterchainFactory.diamondStorage().routes[strategy];
+
+        uint256 assets = r.vaultShares.previewRedeem(shares);
+
+        StakeRedeemData memory dispatchData = StakeRedeemData({
+            strategy: strategy,
+            sender: to,
+            redeemAmount: assets
+        });
+        return IStakeRedeemRoute(address(this)).quoteDispatchStakeRedeem(dispatchData);
+    }
 }

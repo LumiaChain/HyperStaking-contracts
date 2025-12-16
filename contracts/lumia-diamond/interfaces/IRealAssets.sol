@@ -53,4 +53,15 @@ interface IRealAssets {
         address to,
         uint256 shares
     ) external payable;
+
+    //============================================================================================//
+    //                                           View                                             //
+    //============================================================================================//
+
+    /// @notice Helper to easily quote the dispatch fee for redeem
+    function quoteRedeem(
+        address strategy,
+        address to,
+        uint256 shares
+    ) external view returns (uint256);
 }

@@ -70,4 +70,11 @@ interface IHyperFactory {
      * @return A VaultInfo struct containing details about the vault
      */
     function vaultInfo(address strategy) external view returns (VaultInfo memory);
+
+    /// @notice Helper to easily quote the dispatch fee for addStrategy
+    function quoteAddStrategy(
+        address strategy,
+        string memory vaultTokenName,
+        string memory vaultTokenSymbol
+    ) external view returns (uint256);
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.27;
 
-import {StakeRedeemData} from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
+import {StakeRedeemData} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 
 /**
  * @title IStakeRedeemRoute
