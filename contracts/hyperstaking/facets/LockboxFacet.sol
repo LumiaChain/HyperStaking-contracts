@@ -17,7 +17,13 @@ import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 import {NotAuthorized, BadOriginDestination } from "../../shared/Errors.sol";
 
 import {
-    LibHyperStaking, LockboxData, FailedRedeem, FailedRedeemData, PendingMailbox, PendingLumiaFactory
+    LibHyperStaking,
+    LockboxData,
+    HyperlaneMessage,
+    FailedRedeem,
+    FailedRedeemData,
+    PendingMailbox,
+    PendingLumiaFactory
 } from "../libraries/LibHyperStaking.sol";
 
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
@@ -86,24 +92,53 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     }
 
     /// @inheritdoc ILockbox
+    function collectDispatchFee(
+        address from,
+        uint256 dispatchFee
+    ) external payable diamondInternal {
+        if (dispatchFee == 0) return;
+
+        if (msg.value < dispatchFee) {
+            revert DispatchUnderpaid();
+        }
+
+        Currency memory nativeCurrency = Currency({
+            token: address(0)
+        });
+
+        // required native fee vaule from msg.sender into this (diamond)
+        nativeCurrency.transferFrom(
+            from,
+            address(this),
+            dispatchFee
+        );
+    }
+
+    /// @inheritdoc ILockbox
     function handle(
         uint32 origin,
         bytes32 sender,
         bytes calldata data
     ) external payable onlyMailbox {
+        // parse sender
+        address senderAddress = TypeCasts.bytes32ToAddress(sender);
         LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
 
-        emit ReceivedMessage(origin, sender, msg.value, string(data));
-
-        box.lastMessage.sender = TypeCasts.bytes32ToAddress(sender);
-        box.lastMessage.data = data;
-
+        // checks
         require(
-            box.lastMessage.sender == address(box.lumiaFactory),
+            senderAddress == address(box.lumiaFactory),
             NotFromLumiaFactory(box.lastMessage.sender)
         );
-
         require(origin == box.destination, BadOriginDestination(origin));
+
+        // save lastMessage in the storage
+        box.lastMessage = HyperlaneMessage({
+            sender: senderAddress,
+            data: data
+        });
+
+        // emit event before route
+        emit ReceivedMessage(origin, sender, msg.value, string(data));
 
         // parse message type (HyperlaneMailboxMessages)
         MessageType msgType = data.messageType();

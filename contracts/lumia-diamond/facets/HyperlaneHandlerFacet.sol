@@ -42,27 +42,24 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         bytes32 sender,
         bytes calldata data
     ) external payable onlyMailbox {
-        emit ReceivedMessage(origin, sender, msg.value, string(data));
-
-        // parse sender, store lastMsg
+        // parse sender
         address originLockbox = TypeCasts.bytes32ToAddress(sender);
-        LastMessage memory lastMsg = LastMessage({
+        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+
+        // checks
+        require(ifs.authorizedOrigins.contains(originLockbox),
+            NotFromHyperStaking(originLockbox)
+        );
+        require(origin == ifs.destinations[originLockbox], BadOriginDestination(origin));
+
+        // save lastMessage in the storage
+        ifs.lastMessage = LastMessage({
             sender: originLockbox,
             data: data
         });
 
-        // save in the storage
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        ifs.lastMessage = lastMsg;
-
-        // ---
-
-        require(
-            ifs.authorizedOrigins.contains(originLockbox),
-            NotFromHyperStaking(originLockbox)
-        );
-
-        require(origin == ifs.destinations[originLockbox], BadOriginDestination(origin));
+        // emit event before route
+        emit ReceivedMessage(origin, sender, msg.value, string(data));
 
         // parse message type (HyperlaneMailboxMessages)
         MessageType msgType = data.messageType();

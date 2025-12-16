@@ -626,5 +626,53 @@ describe("Lockbox", function () {
       ).to.be.revertedWithCustomError(shared.errors, "BadOriginDestination")
         .withArgs(attackerDomain);
     });
+
+    it("stake / redeem and check hyperlane messages", async function () {
+      const {
+        signers, hyperStaking, lumiaDiamond, reserveStrategy, vaultShares, mailboxFee,
+      } = await loadFixture(deployHyperStaking);
+      const { deposit, lockbox } = hyperStaking;
+      const { hyperlaneHandler, realAssets, stakeRedeemRoute } = lumiaDiamond;
+      const { alice } = signers;
+
+      const testWrapper = await loadFixture(deployTestWrapper);
+
+      const stakeAmount = parseEther("1.2");
+      await deposit.stakeDeposit(
+        reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
+      );
+
+      const lastMessage = await hyperlaneHandler.lastMessage();
+      expect(lastMessage.sender).to.eq(await lockbox.getAddress());
+
+      // check StakeInfo message data
+      expect(await testWrapper.messageType(lastMessage.data)).to.eq(1);
+      expect(await testWrapper.strategy(lastMessage.data)).to.eq(reserveStrategy);
+      expect(await testWrapper.sender(lastMessage.data)).to.eq(alice);
+      expect(await testWrapper.stake(lastMessage.data)).to.eq(stakeAmount);
+
+      const sharesAfter = await vaultShares.balanceOf(alice);
+      expect(sharesAfter).to.eq(stakeAmount);
+
+      const stakeRedeemData: StakeRedeemDataStruct = {
+        strategy: reserveStrategy,
+        sender: alice,
+        redeemAmount: sharesAfter,
+      };
+      const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem(stakeRedeemData);
+
+      await realAssets.connect(alice).redeem(
+        reserveStrategy, alice, alice, sharesAfter, { value: dispatchFee },
+      );
+
+      const lockboxData = await lockbox.lockboxData();
+      expect(lockboxData.lastMessage.sender).to.eq(hyperlaneHandler.target);
+
+      // check StakeRedeem message data
+      expect(await testWrapper.messageType(lockboxData.lastMessage.data)).to.eq(3);
+      expect(await testWrapper.strategy(lockboxData.lastMessage.data)).to.eq(reserveStrategy);
+      expect(await testWrapper.sender(lockboxData.lastMessage.data)).to.eq(alice);
+      expect(await testWrapper.redeemAmount(lockboxData.lastMessage.data)).to.eq(sharesAfter);
+    });
   });
 });
