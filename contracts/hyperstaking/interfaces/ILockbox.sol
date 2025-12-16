@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.27;
 
+import {IMessageRecipient} from "../../external/hyperlane//interfaces/IMessageRecipient.sol";
+import {
+    IInterchainSecurityModule,
+    ISpecifiesInterchainSecurityModule
+} from "../../external/hyperlane/interfaces/IInterchainSecurityModule.sol";
+
 import {LockboxData, FailedRedeem} from "../libraries/LibHyperStaking.sol";
 
 /**
  * @title ILockbox
  * @dev Interface for LockboxFacet
  */
-interface ILockbox {
+interface ILockbox is IMessageRecipient, ISpecifiesInterchainSecurityModule {
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
@@ -26,6 +32,8 @@ interface ILockbox {
 
     event LumiaFactoryUpdated(address indexed oldLumiaFactory, address indexed newLumiaFactory);
     event LumiaFactoryChangeProposed(address newLumiaFactory, uint256 applyAfter);
+
+    event HyperlaneISMUpdated(address ism);
 
     event StakeRedeemFailed(address indexed strategy, address indexed user, uint256 amount, uint256 id);
     event StakeRedeemReexecuted(
@@ -80,13 +88,6 @@ interface ILockbox {
         uint256 dispatchFee
     ) external payable;
 
-    /// @notice Function called by the Mailbox contract when a message is received
-    function handle(
-        uint32 origin,
-        bytes32 sender,
-        bytes calldata data
-    ) external payable;
-
     /**
      * @notice Re-executes a previously failed stake redeem operation
      * @param id The ID of the failed redeem to reattempt
@@ -116,6 +117,12 @@ interface ILockbox {
 
     /// @notice Applies the proposed lumia factory address after the delay
     function applyLumiaFactory() external;
+
+    /**
+     * @notice Sets ISM for this recipient
+     * @dev May be zero for Mailbox default ISM
+     */
+    function setInterchainSecurityModule(IInterchainSecurityModule ism) external;
 
     //============================================================================================//
     //                                           View                                             //

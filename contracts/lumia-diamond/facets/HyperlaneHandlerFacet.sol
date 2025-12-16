@@ -13,6 +13,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ILumiaVaultShares} from "../interfaces/ILumiaVaultShares.sol";
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
+import {IInterchainSecurityModule} from "../../external/hyperlane/interfaces/IInterchainSecurityModule.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
 import {
@@ -40,7 +41,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
     //                                      Public Functions                                      //
     //============================================================================================//
 
-    /// @inheritdoc IHyperlaneHandler
+    /// @dev implements hyperlane IMessageRecipient
     function handle(
         uint32 origin,
         bytes32 sender,
@@ -165,11 +166,23 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         emit AuthorizedOriginUpdated(originLockbox, authorized, originDestination);
     }
 
+    /// @inheritdoc IHyperlaneHandler
+    function setInterchainSecurityModule(IInterchainSecurityModule ism) external onlyLumiaFactoryManager {
+        LibInterchainFactory.diamondStorage().ism = ism;
+        emit HyperlaneISMUpdated(address(ism));
+    }
+
     // ========= View ========= //
 
     /// @inheritdoc IHyperlaneHandler
     function mailbox() external view returns(IMailbox) {
         return LibInterchainFactory.diamondStorage().mailbox;
+    }
+
+    /// @notice Called by Mailbox.recipientIsm() to determine which ISM to use
+    /// @dev implements hyperlane ISpecifiesInterchainSecurityModule
+    function interchainSecurityModule() external view returns (IInterchainSecurityModule) {
+        return LibInterchainFactory.diamondStorage().ism;
     }
 
     /// @inheritdoc IHyperlaneHandler

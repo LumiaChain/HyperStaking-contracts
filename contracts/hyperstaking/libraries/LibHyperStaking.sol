@@ -4,6 +4,7 @@ pragma solidity =0.8.27;
 // solhint-disable var-name-mixedcase
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
+import {IInterchainSecurityModule} from "../../external/hyperlane/interfaces/IInterchainSecurityModule.sol";
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
@@ -62,6 +63,7 @@ struct HyperlaneMessage {
 
 struct LockboxData {
     IMailbox mailbox; /// Hyperlane Mailbox
+    IInterchainSecurityModule ism; // May be zero if default ISM is used
     uint32 destination; /// ChainID - route destination
     address lumiaFactory; /// Destinaion contract which will be receiving messages
     HyperlaneMessage lastMessage; /// Information about last mailbox message received

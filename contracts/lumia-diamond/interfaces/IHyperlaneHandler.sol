@@ -2,13 +2,19 @@
 pragma solidity =0.8.27;
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
+import {IMessageRecipient} from "../../external/hyperlane//interfaces/IMessageRecipient.sol";
+import {
+    IInterchainSecurityModule,
+    ISpecifiesInterchainSecurityModule
+} from "../../external/hyperlane/interfaces/IInterchainSecurityModule.sol";
+
 import {RouteInfo, LastMessage} from "../libraries/LibInterchainFactory.sol";
 
 /**
  * @title IHyperlaneHandler
  * @dev Interface for HyperlaneHandlerFacet
  */
-interface IHyperlaneHandler {
+interface IHyperlaneHandler is IMessageRecipient, ISpecifiesInterchainSecurityModule {
     //============================================================================================//
     //                                          Events                                            //
     //============================================================================================//
@@ -21,6 +27,8 @@ interface IHyperlaneHandler {
     );
 
     event MailboxUpdated(address oldMailbox, address newMailbox);
+
+    event HyperlaneISMUpdated(address ism);
 
     event AuthorizedOriginUpdated(
         address originLockbox,
@@ -52,15 +60,6 @@ interface IHyperlaneHandler {
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
-
-    /**
-     * @notice Function called by the Mailbox contract when a message is received
-     */
-    function handle(
-        uint32 origin,
-        bytes32 sender,
-        bytes calldata data
-    ) external payable;
 
     /**
      * @notice Bridges a redeem request through hyperlane
@@ -100,6 +99,12 @@ interface IHyperlaneHandler {
         bool authorized,
         uint32 originDestination
     ) external;
+
+    /**
+     * @notice Sets ISM for this recipient
+     * @dev May be zero for Mailbox default ISM
+     */
+    function setInterchainSecurityModule(IInterchainSecurityModule ism) external;
 
     //============================================================================================//
     //                                           View                                             //
