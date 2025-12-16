@@ -236,8 +236,6 @@ describe("VaultShares", function () {
       const aliceShares = await vaultShares.balanceOf(alice);
       expect(aliceShares).to.equal(initialDeposit);
 
-      await vaultShares.connect(alice).approve(realAssets, aliceShares);
-
       const expectedUnlockAlice = (await shared.getCurrentBlockTimestamp()) + defaultWithdrawDelay;
 
       await expect(realAssets.connect(alice).redeem(reserveStrategy, alice, alice, aliceShares))
@@ -326,8 +324,6 @@ describe("VaultShares", function () {
         .to.be.revertedWithCustomError(vaultShares, "OwnableUnauthorizedAccount");
 
       // interchain redeem
-      await vaultShares.connect(alice).approve(realAssets, stakeAmount);
-
       const stakeRedeemData: StakeRedeemDataStruct = {
         strategy: reserveStrategy,
         sender: alice,
@@ -335,7 +331,6 @@ describe("VaultShares", function () {
       };
       const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem(stakeRedeemData);
 
-      await vaultShares.connect(alice).approve(realAssets, stakeAmount);
       await realAssets.connect(alice).redeem(
         reserveStrategy, alice, alice, stakeAmount, { value: dispatchFee },
       );
@@ -349,7 +344,6 @@ describe("VaultShares", function () {
       await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
       // alice withdraw for bob
-      await vaultShares.connect(alice).approve(realAssets, stakeAmount);
       const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
 
       await expect(realAssets.connect(alice).redeem(
@@ -371,9 +365,94 @@ describe("VaultShares", function () {
       expect(await testERC20.balanceOf(lockbox)).to.be.eq(0);
     });
 
-    it("redeem: zero values validation - reverts", async function () {
+    it("redeem flow: owner, receiver and third-party approvals", async function () {
       const {
         signers, hyperStaking, lumiaDiamond, reserveStrategy, vaultShares,
+      } = await loadFixture(deployHyperStaking);
+
+      const { deposit } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
+      const { alice, bob } = signers;
+
+      const stakeAmount = parseEther("3");
+      await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, {
+        value: stakeAmount,
+      });
+
+      const oneShare = stakeAmount / 3n;
+
+      // sanity check: no allowance set
+      expect(await vaultShares.allowance(alice, realAssets)).to.eq(0);
+      expect(await vaultShares.allowance(realAssets, vaultShares)).to.eq(0);
+
+      // --- owner redeem: no approval, self receiver ---
+
+      await expect(
+        realAssets.connect(alice).redeem(
+          reserveStrategy,
+          alice, // from
+          alice, // to
+          oneShare,
+        ),
+      ).to.not.be.reverted;
+
+      expect(await vaultShares.balanceOf(alice)).to.eq(stakeAmount - oneShare);
+
+      // --- owner redeem: no approval, different receiver "to" ---
+
+      await expect(
+        realAssets.connect(alice).redeem(
+          reserveStrategy,
+          alice, // from
+          bob,   // to
+          oneShare,
+        ),
+      ).to.not.be.reverted;
+
+      expect(await vaultShares.balanceOf(alice)).to.eq(stakeAmount - 2n * oneShare);
+
+      // shares are burned, not transferred to bob
+      expect(await vaultShares.balanceOf(bob)).to.eq(0);
+
+      // --- third party redeem: requires approval from owner ---
+
+      const remainingShares = await vaultShares.balanceOf(alice);
+      expect(remainingShares).to.eq(oneShare);
+
+      // no approval: bob cannot redeem alice shares
+      await expect(
+        realAssets.connect(bob).redeem(
+          reserveStrategy,
+          alice, // from
+          bob,   // to
+          remainingShares,
+        ),
+      ).to.be.reverted;
+
+      // after approval: bob can redeem on behalf of alice
+      await vaultShares.connect(alice).approve(bob, remainingShares);
+
+      await expect(
+        realAssets.connect(bob).redeem(
+          reserveStrategy,
+          alice, // from
+          bob,   // to
+          remainingShares,
+        ),
+      ).to.not.be.reverted;
+
+      expect(await vaultShares.balanceOf(alice)).to.eq(0);
+      expect(await vaultShares.balanceOf(bob)).to.eq(0);
+
+      expect(await vaultShares.allowance(alice, bob)).to.eq(0);
+      expect(await vaultShares.allowance(alice, realAssets)).to.eq(0);
+      expect(await vaultShares.allowance(bob, realAssets)).to.eq(0);
+      expect(await vaultShares.allowance(realAssets, vaultShares)).to.eq(0);
+    });
+
+    it("redeem: zero values validation - reverts", async function () {
+      const {
+        signers, hyperStaking, lumiaDiamond, reserveStrategy,
       } = await loadFixture(deployHyperStaking);
 
       const { deposit } = hyperStaking;
@@ -389,8 +468,6 @@ describe("VaultShares", function () {
         sender: alice,
         redeemAmount,
       });
-
-      await vaultShares.connect(alice).approve(realAssets, redeemAmount);
 
       // zero amount
       await expect(

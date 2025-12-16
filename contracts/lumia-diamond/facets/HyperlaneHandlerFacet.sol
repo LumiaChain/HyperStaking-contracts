@@ -3,6 +3,7 @@ pragma solidity =0.8.27;
 
 import {IHyperlaneHandler} from "../interfaces/IHyperlaneHandler.sol";
 import {IRealAssets} from "../interfaces/IRealAssets.sol";
+import {IStakeRedeemRoute} from "../interfaces/IStakeRedeemRoute.sol";
 import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
 import {LumiaPrincipal} from "../tokens/LumiaPrincipal.sol";
 import {LumiaVaultShares} from "../tokens/LumiaVaultShares.sol";
@@ -19,7 +20,7 @@ import {
 } from "../libraries/LibInterchainFactory.sol";
 
 import {
-    MessageType, HyperlaneMailboxMessages
+    MessageType, HyperlaneMailboxMessages, StakeRedeemData
 } from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 
 import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
@@ -83,6 +84,21 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         }
 
         revert UnsupportedMessage();
+    }
+
+    /// @inheritdoc IHyperlaneHandler
+    function bridgeStakeRedeem(
+        address strategy,
+        address user,
+        uint256 redeemAmount,
+        uint256 dispatchFee
+    ) external diamondInternal {
+        StakeRedeemData memory data = StakeRedeemData({
+            strategy: strategy,
+            sender: user,
+            redeemAmount: redeemAmount
+        });
+        IStakeRedeemRoute(address(this)).stakeRedeemDispatch{value: dispatchFee}(data);
     }
 
     /// @inheritdoc IHyperlaneHandler

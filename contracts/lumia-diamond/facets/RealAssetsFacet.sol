@@ -99,12 +99,9 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
 
         RouteInfo storage r = ifs.routes[strategy];
 
-        if (from != msg.sender) {
-            r.vaultShares.spendAllowance(from, msg.sender, shares);
-        }
-
-        // redeem shares `from` to this contract (require user allowance to burn shares)
-        uint256 assets = r.vaultShares.redeem(shares, address(this), from);
+        // redeem shares from `from` into this contract using the explicit `caller`
+        // when caller != from an allowance from `from` to `caller` is required to burn the shares
+        uint256 assets = r.vaultShares.diamondRedeem(shares, msg.sender, address(this), from);
 
         // burn assets, so they can be unlocked on the origin chain
         LumiaPrincipal(address(r.assetToken)).burnFrom(address(r.vaultShares), assets);
@@ -114,12 +111,12 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
         IHyperlaneHandler(address(this)).collectDispatchFee{value: msg.value}(msg.sender, dispatchFee);
 
         // use hyperlane handler function for dispatching stake redeem msg
-        StakeRedeemData memory data = StakeRedeemData({
-            strategy: strategy,
-            sender: to,
-            redeemAmount: assets
-        });
-        IStakeRedeemRoute(address(this)).stakeRedeemDispatch{value: dispatchFee}(data);
+        IHyperlaneHandler(address(this)).bridgeStakeRedeem(
+            strategy,
+            to,
+            assets,
+            dispatchFee
+        );
 
         emit RwaRedeem(strategy, from, to, assets, shares);
     }

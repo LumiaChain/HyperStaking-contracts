@@ -61,7 +61,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         address strategy,
         address user,
         uint256 stake
-    ) external payable diamondInternal {
+    ) external diamondInternal {
         StakeInfoData memory data = StakeInfoData({
             strategy: strategy,
             sender: user,
@@ -79,7 +79,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     function bridgeStakeReward(
         address strategy,
         uint256 stakeAdded
-    ) external payable diamondInternal {
+    ) external diamondInternal {
         StakeRewardData memory data = StakeRewardData({
             strategy: strategy,
             stakeAdded: stakeAdded

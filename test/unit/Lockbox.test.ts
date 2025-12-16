@@ -267,8 +267,6 @@ describe("Lockbox", function () {
       const sharesAfter = await vaultShares.balanceOf(alice);
       expect(sharesAfter).to.be.gt(0);
 
-      await vaultShares.connect(alice).approve(realAssets, sharesAfter);
-
       const stakeRedeemData: StakeRedeemDataStruct = {
         strategy: reserveStrategy,
         sender: alice,
@@ -319,8 +317,6 @@ describe("Lockbox", function () {
 
       const sharesAfter = await vaultShares.balanceOf(alice);
       expect(sharesAfter).to.eq(stakeAmount);
-
-      await vaultShares.connect(alice).approve(realAssets, sharesAfter);
 
       await expect(realAssets.connect(alice).redeem(
         reserveStrategy, alice, alice, sharesAfter,
@@ -384,7 +380,6 @@ describe("Lockbox", function () {
       await reserveStrategy.connect(strategyManager).withdrawStakeAsset(reserveStrategySupply);
 
       const shares = await vaultShares.balanceOf(alice);
-      await vaultShares.connect(alice).approve(realAssets, shares);
 
       const stakeRedeemData: StakeRedeemDataStruct = {
         strategy: reserveStrategy,
@@ -436,7 +431,6 @@ describe("Lockbox", function () {
       });
 
       const shares = await vaultShares.balanceOf(alice);
-      await vaultShares.connect(alice).approve(realAssets, shares);
 
       const stakeRedeemData: StakeRedeemDataStruct = {
         strategy: reserveStrategy,
@@ -515,7 +509,6 @@ describe("Lockbox", function () {
       const tinyShares = 1n;
 
       // redeeming this tiny amount should revert because allocation exit is zero
-      await vaultShares.connect(alice).approve(realAssets, tinyShares);
       await realAssets.connect(alice).redeem(reserveStrategy, alice, alice, tinyShares);
 
       const failedRedeem = await lockbox.getUserFailedRedeemIds(alice);
@@ -639,10 +632,6 @@ describe("Lockbox", function () {
       // --- redeem
 
       const userShares = await vaultShares.balanceOf(alice);
-      await vaultShares.connect(alice).approve(
-        realAssets,
-        userShares,
-      );
 
       const qRedeem = await realAssets.quoteRedeem(
         erc20Strategy,
@@ -807,8 +796,6 @@ describe("Lockbox", function () {
 
             const userShares = await vaultShares.balanceOf(alice);
             expect(userShares).to.be.gt(0n);
-
-            await vaultShares.connect(alice).approve(realAssets, userShares);
 
             // split into two redeems to ensure fee is required each time
             const halfShares = userShares / 2n || 1n;
@@ -1041,8 +1028,6 @@ describe("Lockbox", function () {
 
       const sharesAfter = await vaultShares.balanceOf(alice);
       expect(sharesAfter).to.eq(stakeAmount);
-
-      await vaultShares.connect(alice).approve(realAssets, sharesAfter);
 
       const stakeRedeemData: StakeRedeemDataStruct = {
         strategy: reserveStrategy,

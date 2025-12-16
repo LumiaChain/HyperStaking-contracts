@@ -480,7 +480,6 @@ describe("Aera", function () {
 
       // --- redeem ---
       const redeemShares = userShares;
-      await vaultShares.connect(alice).approve(realAssets, redeemShares);
 
       // move to next block to avoid "same block timestamp" for deposit and redeem
       await time.increase(1);
@@ -576,7 +575,6 @@ describe("Aera", function () {
       // ---------- Queue full redeem ----------
 
       const lumiaShares = await vaultShares.balanceOf(alice);
-      await vaultShares.connect(alice).approve(realAssets, lumiaShares);
 
       const redeemTx = await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, lumiaShares);
 
@@ -660,7 +658,6 @@ describe("Aera", function () {
       // ---------- Full redeem for user ----------
 
       const lumiaShares = await vaultShares.balanceOf(alice);
-      await vaultShares.connect(alice).approve(realAssets, lumiaShares);
 
       const redeemTx = await realAssets.connect(alice)
         .redeem(gauntletStrategy, alice, alice, lumiaShares);
@@ -786,7 +783,6 @@ describe("Aera", function () {
 
       // --- User queues full redeem & claim ---
       const userShares = await vaultShares.balanceOf(alice);
-      await vaultShares.connect(alice).approve(realAssets, userShares);
 
       // calculate expected exit
       const exitAmount = await vaultShares.previewRedeem(userShares);
@@ -954,7 +950,6 @@ describe("Aera", function () {
       const part = (userShares * BigInt(num)) / BigInt(den);
       const amount = part > 0n ? part : 1n;
 
-      await vaultShares.connect(alice).approve(realAssets, amount);
       const tx = await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, amount);
 
       const minOut = await gauntletStrategy.recordedExit(reqId);
@@ -1083,8 +1078,6 @@ describe("Aera", function () {
             const redeemShares = (userShares * BigInt(redeemNum)) / BigInt(redeemDen);
             // ensure we always redeem at least 1 wei of shares
             const redeemAmt = redeemShares > 0n ? redeemShares : 1n;
-
-            await vaultShares.connect(alice).approve(realAssets, redeemAmt);
 
             const redeemTx = await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, redeemAmt);
 
@@ -1459,8 +1452,6 @@ describe("Aera", function () {
       expect(secondRedeemShares).to.be.gt(0n);
 
       // --- first redeem: 99% ---
-      await vaultShares.connect(alice).approve(realAssets, firstRedeemShares);
-
       const redeemTx1 = await realAssets.connect(alice)
         .redeem(gauntletStrategy, alice, alice, firstRedeemShares);
 
@@ -1488,8 +1479,6 @@ describe("Aera", function () {
       await claimAtDeadline(deposit, alice, Number(firstClaimId));
 
       // --- second redeem: remaining ~1% ---
-      await vaultShares.connect(alice).approve(realAssets, secondRedeemShares);
-
       const redeemTx2 = await realAssets.connect(alice)
         .redeem(gauntletStrategy, alice, alice, secondRedeemShares);
 
@@ -1623,7 +1612,6 @@ describe("Aera", function () {
       const userShares = await vaultShares.balanceOf(alice);
       expect(userShares).to.be.gt(0);
 
-      await vaultShares.connect(alice).approve(realAssets, userShares);
       const redeemTx = await realAssets.connect(alice)
         .redeem(gauntletStrategy, alice, alice, userShares);
 
@@ -1768,7 +1756,6 @@ describe("Aera", function () {
       expect(expectedOut).to.eq(0n);
 
       // redeem 1 wei -> should fail
-      await vaultShares.connect(alice).approve(realAssets, oneWeiShare);
       await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, oneWeiShare);
 
       const failedRedeem = await lockbox.getUserFailedRedeemIds(alice);

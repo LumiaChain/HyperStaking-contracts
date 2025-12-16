@@ -61,14 +61,14 @@ interface ILockbox {
         address strategy,
         address user,
         uint256 stake
-    ) external payable;
+    ) external;
 
     /// @notice Helper function which inform about stake added after report-compounding
-    /// @dev Through StakeRreward route
+    /// @dev Through StakeReward route
     function bridgeStakeReward(
         address strategy,
         uint256 stakeAdded
-    ) external payable;
+    ) external;
 
     /**
      * @notice Collects required native dispatch fee into the diamond

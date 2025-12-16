@@ -63,6 +63,17 @@ interface IHyperlaneHandler {
     ) external payable;
 
     /**
+     * @notice Bridges a redeem request through hyperlane
+     * @dev The `dispatchFee` must be collected from sender into this contract before calling
+     */
+    function bridgeStakeRedeem(
+        address strategy,
+        address user,
+        uint256 redeemAmount,
+        uint256 dispatchFee
+    ) external;
+
+    /**
      * @notice Collects required native dispatch fee into the diamond
      * @dev CurrencyHandler used in this function checks msg.value against
      *      required native amount and refunds any excess value back

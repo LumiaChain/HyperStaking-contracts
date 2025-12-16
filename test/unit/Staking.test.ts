@@ -215,7 +215,7 @@ describe("Staking", function () {
 
     it("should be able to withdraw stake", async function () {
       const {
-        signers, hyperStaking, lumiaDiamond, defaultWithdrawDelay, reserveStrategy1, lumiaTokens1,
+        signers, hyperStaking, lumiaDiamond, defaultWithdrawDelay, reserveStrategy1,
       } = await loadFixture(deployHyperStaking);
       const { deposit, allocation, lockbox } = hyperStaking;
       const { realAssets } = lumiaDiamond;
@@ -226,7 +226,6 @@ describe("Staking", function () {
 
       await deposit.stakeDeposit(reserveStrategy1, owner, stakeAmount, { value: stakeAmount });
 
-      await lumiaTokens1.vaultShares.approve(realAssets, withdrawAmount);
       let blockTime = await shared.getCurrentBlockTimestamp();
 
       const revenueAsset = await shared.getRevenueAsset(reserveStrategy1);
@@ -265,7 +264,6 @@ describe("Staking", function () {
       expect(deletedClaim.expectedAmount).to.equal(0);
       expect(deletedClaim.feeWithdraw).to.eq(false);
 
-      await lumiaTokens1.vaultShares.approve(realAssets, withdrawAmount);
       expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await expect(realAssets.redeem(reserveStrategy1, owner, owner, withdrawAmount))
         .to.emit(deposit, "WithdrawQueued")
@@ -282,7 +280,6 @@ describe("Staking", function () {
       await deposit.claimWithdraws([lastClaimId2], owner);
 
       // wihdraw to another address
-      await lumiaTokens1.vaultShares.approve(realAssets, withdrawAmount);
       expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await expect(realAssets.redeem(reserveStrategy1, owner, alice, withdrawAmount))
         .to.changeTokenBalances(revenueAsset,
@@ -326,7 +323,6 @@ describe("Staking", function () {
       await testERC20.approve(deposit, stakeAmount);
       await deposit.stakeDeposit(reserveStrategy2, owner, stakeAmount);
 
-      await lumiaTokens2.vaultShares.approve(realAssets, withdrawAmount);
       let expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await realAssets.redeem(reserveStrategy2, owner, owner, withdrawAmount);
 
@@ -338,7 +334,6 @@ describe("Staking", function () {
           [withdrawAmount, -withdrawAmount],
         );
 
-      await lumiaTokens2.vaultShares.approve(realAssets, withdrawAmount);
       expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await realAssets.redeem(reserveStrategy2, owner, owner, withdrawAmount);
 
@@ -349,7 +344,6 @@ describe("Staking", function () {
         .withArgs(reserveStrategy2, owner, owner, withdrawAmount, withdrawAmount);
 
       // wihdraw to another address
-      await lumiaTokens2.vaultShares.approve(realAssets, withdrawAmount);
       expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
 
       const revenueAsset = await shared.getRevenueAsset(reserveStrategy2);
@@ -407,7 +401,6 @@ describe("Staking", function () {
 
         const revenueAsset = await shared.getRevenueAsset(reserveStrategy2);
 
-        await lumiaTokens2.vaultShares.connect(alice).approve(realAssets, rwaBalance);
         const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
         await expect(realAssets.connect(alice).redeem(reserveStrategy2, alice, alice, rwaBalance))
           .to.changeTokenBalances(revenueAsset,
@@ -475,7 +468,6 @@ describe("Staking", function () {
         await reserveStrategy1.connect(strategyManager).setAssetPrice(assetPrice * 15n / 10n); // 50% increase
 
         // withdraw half of the assets
-        await lumiaTokens1.vaultShares.connect(alice).approve(realAssets, stakeAmount / 2n);
         let expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
         await realAssets.connect(alice).redeem(reserveStrategy1, alice, alice, stakeAmount / 2n);
 
@@ -504,7 +496,6 @@ describe("Staking", function () {
 
         // redeem the rest (it should be enough revenue asset to cover it)
         const availableShares = await lumiaTokens1.vaultShares.balanceOf(alice);
-        await lumiaTokens1.vaultShares.connect(alice).approve(realAssets, availableShares);
         await realAssets.connect(alice).redeem(reserveStrategy1, alice, alice, availableShares);
 
         expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
@@ -624,7 +615,7 @@ describe("Staking", function () {
 
       it("Withdraw call failed", async function () {
         const {
-          signers, hyperStaking, lumiaDiamond, reserveStrategy1, lumiaTokens1, defaultWithdrawDelay,
+          signers, hyperStaking, lumiaDiamond, reserveStrategy1, defaultWithdrawDelay,
         } = await loadFixture(deployHyperStaking);
         const { deposit } = hyperStaking;
         const { realAssets } = lumiaDiamond;
@@ -637,7 +628,6 @@ describe("Staking", function () {
 
         await deposit.stakeDeposit(reserveStrategy1, owner, stakeAmount, { value: stakeAmount });
 
-        await lumiaTokens1.vaultShares.approve(realAssets, stakeAmount);
         const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
         await realAssets.redeem(reserveStrategy1, owner, owner, stakeAmount);
 
