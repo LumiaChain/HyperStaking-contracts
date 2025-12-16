@@ -11,10 +11,11 @@
     "check": "solhint -c .solhint.json 'contracts/**/*.sol'",
     "prepare": "husky",
     "docgen": "npx hardhat docgen",
-    "deploy-hyperstaking-holesky": "npx hardhat ignition deploy ignition/modules/HyperStaking.ts --network holesky",
-    "deploy-lumia-diamond-holesky": "npx hardhat ignition deploy ignition/modules/LumiaDiamond.ts --parameters ignition/parameters.holesky.json --network holesky",
-    "deploy-dinero-strategy-holesky": "npx hardhat ignition deploy ignition/modules/DineroStrategy.ts --parameters ignition/parameters.holesky.json --network holesky",
-    "deploy-superform-strategy-holesky": "npx hardhat ignition deploy ignition/modules/SuperformStrategy.ts --parameters ignition/parameters.holesky.json --network holesky"
+    "deploy-hyperstaking-sepolia": "npx hardhat ignition deploy ignition/modules/HyperStaking.ts --parameters ignition/parameters.sepolia.json --network sepolia",
+    "deploy-lumia-diamond-beam": "npx hardhat ignition deploy ignition/modules/LumiaDiamond.ts --parameters ignition/parameters.lumia-beam.json --network lumia-beam",
+    "deploy-dinero-strategy-sepolia": "npx hardhat ignition deploy ignition/modules/DineroStrategy.ts --parameters ignition/parameters.sepolia.json --network sepolia",
+    "deploy-superform-strategy-sepolia": "npx hardhat ignition deploy ignition/modules/SuperformStrategy.ts --parameters ignition/parameters.sepolia.json --network sepolia",
+    "deploy-test-strategy-sepolia": "npx hardhat ignition deploy ignition/modules/test/MockReserveStrategy.ts --parameters ignition/parameters.sepolia.json --network sepolia"
   },
   "repository": {
     "type": "git",

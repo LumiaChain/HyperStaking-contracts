@@ -1,0 +1,45 @@
+{
+  "DineroStrategyModule": {
+    "diamond": "0xFeA618E29263A0501533fd438FD33618139F6E7b",
+    "pirexEth": "",
+    "pxEth": "",
+    "upxEth": "",
+    "autoPxEth": ""
+  },
+  "SuperformStrategyModule": {
+    "diamond": "0xFeA618E29263A0501533fd438FD33618139F6E7b",
+    "superVault": "",
+    "stakeToken": ""
+  },
+  "SwapSuperStrategyModule": {
+    "diamond": "0xFeA618E29263A0501533fd438FD33618139F6E7b",
+    "superVault": "",
+    "stakeToken": ""
+  },
+  "HyperStakingModule": {
+    "lockboxMailbox": "0xfFAEF09B3cd11D9b20d1a19bECca54EEC2884766",
+    "lockboxDestination": 2030232745
+  },
+  "LumiaDiamondModule": {
+    "lumiaMailbox": "0x89f31C905De03410DAa0CF948eaDC280A8CE9817"
+  },
+  "ReserveStrategyModule" : {
+    "diamond": "0xFeA618E29263A0501533fd438FD33618139F6E7b",
+    "stake": "0x0000000000000000000000000000000000000000",
+    "asset": "0xCE6babAFd498E0f225D0C3cABD18cbC5210D8D94"
+  },
+  "TestERC20Module" : {
+    "name": "TestEthYield",
+    "symbol": "tETHy",
+    "decimals": "18"
+  },
+  "TrustedRelayerIsmModule": {
+    "mailbox": "0xfFAEF09B3cd11D9b20d1a19bECca54EEC2884766",
+    "trustedRelayer": "0x7071a60eec11e1305e3faeebd025d2c64a6ebc80"
+  },
+  "General": {
+    "diamond": "0xFeA618E29263A0501533fd438FD33618139F6E7b",
+    "testEthYieldToken": "0xCE6babAFd498E0f225D0C3cABD18cbC5210D8D94",
+    "testReserveStrategy": "0xBba6eF00EBE301508b987334f3a68f05C023Dc7B"
+  }
+}
