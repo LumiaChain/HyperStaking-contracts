@@ -25,7 +25,7 @@ async function getMockedGauntlet(testUSDC?: Contract) {
   // --------------------
 
   const {
-    aeraProvisioner, aeraPriceAndFeeCalculator, aeraMultiDepositorVault,
+    oracleRegistry, aeraProvisioner, aeraPriceAndFeeCalculator, aeraMultiDepositorVault,
   } = await ignition.deploy(GauntletMockModule, {
     parameters: {
       GauntletMockModule: {
@@ -66,7 +66,7 @@ async function getMockedGauntlet(testUSDC?: Contract) {
   } as TokenDetailsStruct);
 
   return {
-    owner, feeRecipient, alice, testUSDC, aeraProvisioner, aeraPriceAndFeeCalculator, aeraMultiDepositorVault,
+    owner, feeRecipient, alice, testUSDC, oracleRegistry, aeraProvisioner, aeraPriceAndFeeCalculator, aeraMultiDepositorVault,
   };
 }
 
@@ -928,6 +928,82 @@ describe("Aera", function () {
       } as AeraConfigStruct);
       const newCfg = await gauntletStrategy.aeraConfig();
       expect(newCfg.slippageBps).to.equal(543);
+    });
+
+    it("setStakeToken: only strategyManager; validates Aera flags; updates stakeCurrency", async function () {
+      const { signers, gauntletStrategy, testUSDC, aeraMock } =
+        await loadFixture(deployHyperStaking);
+
+      const { alice, strategyManager } = signers;
+      const { aeraProvisioner } = aeraMock;
+
+      const oldToken = await testUSDC.getAddress();
+
+      // deploy a second token
+      const testUSDT = await shared.deployTestERC20("Test Tether", "tUSDT", 6);
+      await testUSDT.mint(alice.address, parseUnits("1000000", 6));
+      const newToken = await testUSDT.getAddress();
+
+      // non-manager cannot update
+      await expect(
+        gauntletStrategy.connect(alice).setStakeToken(newToken),
+      ).to.be.revertedWithCustomError(gauntletStrategy, "NotStrategyManager");
+
+      // zero address rejected
+      await expect(
+        gauntletStrategy.connect(strategyManager).setStakeToken(ZeroAddress),
+      ).to.be.revertedWithCustomError(gauntletStrategy, "ZeroAddress");
+
+      // same token as current rejected
+      await expect(
+        gauntletStrategy.connect(strategyManager).setStakeToken(oldToken),
+      ).to.be.revertedWithCustomError(gauntletStrategy, "StakeTokenAlreadySet");
+
+      // token not enabled in Aera => should revert
+      await expect(
+        gauntletStrategy.connect(strategyManager).setStakeToken(newToken),
+      ).to.be.revertedWithCustomError(gauntletStrategy, "AeraDepositDisabled");
+
+      const mockOracle = await ethers.deployContract("MockOracle7726");
+      await aeraMock.oracleRegistry.connect(aeraMock.owner).addOracle(testUSDC, testUSDT, mockOracle);
+      await aeraMock.oracleRegistry.connect(aeraMock.owner).addOracle(testUSDT, testUSDC, mockOracle);
+
+      // enable async deposit but NOT async redeem => should revert
+      await aeraProvisioner.connect(aeraMock.owner).setTokenDetails(newToken, {
+        asyncDepositEnabled: true,
+        asyncRedeemEnabled: false,
+        syncDepositEnabled: false,
+        depositMultiplier: 10_000,
+        redeemMultiplier: 10_000,
+      });
+
+      await expect(
+        gauntletStrategy.connect(strategyManager).setStakeToken(newToken),
+      ).to.be.revertedWithCustomError(gauntletStrategy, "AeraRedeemDisabled");
+
+      // enable both async deposit & redeem => should succeed
+      await aeraProvisioner.connect(aeraMock.owner).setTokenDetails(newToken, {
+        asyncDepositEnabled: true,
+        asyncRedeemEnabled: true,
+        syncDepositEnabled: false,
+        depositMultiplier: 10_000,
+        redeemMultiplier: 10_000,
+      });
+
+      // succees and event check
+      await expect(gauntletStrategy.connect(strategyManager).setStakeToken(newToken))
+        .to.emit(gauntletStrategy, "StakeTokenUpdated")
+        .withArgs(oldToken, newToken);
+
+      const stakeCurrency = await gauntletStrategy.stakeCurrency();
+      expect(stakeCurrency.token).to.equal(testUSDT);
+
+      // removing token in Aera makes it non-usable again
+      await aeraProvisioner.connect(aeraMock.owner).removeToken(testUSDC);
+
+      await expect(
+        gauntletStrategy.connect(strategyManager).setStakeToken(testUSDC),
+      ).to.be.revertedWithCustomError(gauntletStrategy, "AeraDepositDisabled");
     });
   });
 
