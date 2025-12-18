@@ -19,6 +19,10 @@ error UpdateFailed();
 // OZ ERC4626 zero-supply edge case
 error RewardDonationZeroSupply();
 
-// cross-chain error
+/// ------------ cross-chain errors
+
 error BadOriginDestination(uint32 originDestination);
 error DispatchUnderpaid();
+
+error HyperlaneReplay(bytes32 msgId);
+

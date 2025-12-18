@@ -68,6 +68,10 @@ contract TestHyperlaneMessages {
         return message.messageType();
     }
 
+    function nonce(bytes calldata message) external pure returns (uint64) {
+        return message.nonce();
+    }
+
     function strategy(bytes calldata message) external pure returns (address) {
         return message.strategy();
     }

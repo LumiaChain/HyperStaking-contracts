@@ -270,6 +270,7 @@ const errorsIface = new Interface([
   "error InsufficientValue()",
   "error TransferFailed()",
   "error RefundFailed()",
+  "error HyperlaneReplay(bytes32 msgId)",
 ]);
 export const errors = { interface: errorsIface };
 

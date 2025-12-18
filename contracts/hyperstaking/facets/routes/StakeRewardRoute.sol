@@ -41,6 +41,7 @@ contract StakeRewardRoute is IStakeRewardRoute, HyperStakingAcl {
         emit StakeRewardDispatched(
             address(box.mailbox),
             box.lumiaFactory,
+            data.nonce,
             data.strategy,
             data.stakeAdded
         );

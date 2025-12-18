@@ -19,6 +19,7 @@ import {
 import {
     HyperlaneMailboxMessages, StakeRedeemData
 } from "../../shared/libraries/HyperlaneMailboxMessages.sol";
+import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplayGuard.sol";
 
 import {ZeroAddress, ZeroAmount, RewardDonationZeroSupply } from "../../shared/Errors.sol";
 
@@ -134,6 +135,7 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
         uint256 assets = r.vaultShares.previewRedeem(shares);
 
         StakeRedeemData memory dispatchData = StakeRedeemData({
+            nonce: LibHyperlaneReplayGuard.previewNonce(),
             strategy: strategy,
             sender: to,
             redeemAmount: assets

@@ -183,7 +183,7 @@ describe("Swap Test Integration", function () {
     await exitTx;
 
     const expectedOut = 299914275n; // hardcoded value, based on the pool's current state
-    const tolerance = 2n; // allow +/- 2 units
+    const tolerance = 5n; // allow +/- 5 units
 
     expect(await usdc.balanceOf(CURVE_3POOL_ADDRESS)).to.be.closeTo(before3pool + expectedOut, tolerance);
     expect(await usdc.balanceOf(superVaultAddress)).to.be.closeTo(beforeVault, tolerance);

@@ -15,6 +15,7 @@ interface IStakeRewardRoute {
     event StakeRewardDispatched(
         address indexed mailbox,
         address lumiaFactory,
+        uint64 nonce,
         address indexed strategy,
         uint256 stake
     );

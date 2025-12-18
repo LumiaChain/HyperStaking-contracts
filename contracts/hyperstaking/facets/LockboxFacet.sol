@@ -25,6 +25,7 @@ import {
     PendingMailbox,
     PendingLumiaFactory
 } from "../libraries/LibHyperStaking.sol";
+import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplayGuard.sol";
 
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
@@ -63,6 +64,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         uint256 stake
     ) external diamondInternal {
         StakeInfoData memory data = StakeInfoData({
+            nonce: LibHyperlaneReplayGuard.newNonce(),
             strategy: strategy,
             sender: user,
             stake: stake
@@ -81,6 +83,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         uint256 stakeAdded
     ) external diamondInternal {
         StakeRewardData memory data = StakeRewardData({
+            nonce: LibHyperlaneReplayGuard.newNonce(),
             strategy: strategy,
             stakeAdded: stakeAdded
         });
@@ -131,6 +134,9 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
             NotFromLumiaFactory(box.lastMessage.sender)
         );
         require(origin == box.destination, BadOriginDestination(origin));
+
+        // applayer replay protection, required because mailbox rotation resets Mailbox.delivered state
+        LibHyperlaneReplayGuard.requireNotProcessedData(origin, sender, data);
 
         // save lastMessage in the storage
         box.lastMessage = HyperlaneMessage({

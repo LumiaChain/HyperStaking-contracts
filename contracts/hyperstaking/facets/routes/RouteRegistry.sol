@@ -40,6 +40,7 @@ contract RouteRegistry is IRouteRegistry, HyperStakingAcl {
         emit RouteRegistryDispatched(
             address(box.mailbox),
             box.lumiaFactory,
+            data.nonce,
             data.strategy,
             data.name,
             data.symbol,

@@ -15,6 +15,7 @@ interface IStakeRedeemRoute {
     event StakeRedeemDispatched(
         address indexed mailbox,
         address recipient,
+        uint64 nonce,
         address indexed strategy,
         address indexed user,
         uint256 shares

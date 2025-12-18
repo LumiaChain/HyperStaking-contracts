@@ -24,6 +24,7 @@ import {
 } from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 
 import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
+import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplayGuard.sol";
 import {BadOriginDestination, DispatchUnderpaid} from "../../shared/Errors.sol";
 
 /**
@@ -54,6 +55,9 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
             NotFromHyperStaking(originLockbox)
         );
         require(origin == ifs.destinations[originLockbox], BadOriginDestination(origin));
+
+        // additional replay protection
+        LibHyperlaneReplayGuard.requireNotProcessedData(origin, sender, data);
 
         // save lastMessage in the storage
         ifs.lastMessage = LastMessage({
@@ -94,6 +98,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         uint256 dispatchFee
     ) external diamondInternal {
         StakeRedeemData memory data = StakeRedeemData({
+            nonce: LibHyperlaneReplayGuard.newNonce(),
             strategy: strategy,
             sender: user,
             redeemAmount: redeemAmount

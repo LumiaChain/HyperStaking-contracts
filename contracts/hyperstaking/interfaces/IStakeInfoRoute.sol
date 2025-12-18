@@ -15,6 +15,7 @@ interface IStakeInfoRoute {
     event StakeInfoDispatched(
         address indexed mailbox,
         address lumiaFactory,
+        uint64 nonce,
         address indexed strategy,
         address indexed user,
         uint256 stake

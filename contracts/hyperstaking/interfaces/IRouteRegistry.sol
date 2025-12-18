@@ -15,6 +15,7 @@ interface IRouteRegistry {
     event RouteRegistryDispatched(
         address indexed mailbox,
         address lumiaFactory,
+        uint64 nonce,
         address indexed strategy,
         string name,
         string symbol,

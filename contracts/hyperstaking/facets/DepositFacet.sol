@@ -21,6 +21,7 @@ import {
 } from "../libraries/LibHyperStaking.sol";
 
 import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
+import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplayGuard.sol";
 
 /**
  * @title DepositFacet
@@ -232,6 +233,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         uint256 stake
     ) public view returns (uint256) {
         StakeInfoData memory dispatchData = StakeInfoData({
+            nonce: LibHyperlaneReplayGuard.previewNonce(),
             strategy: strategy,
             sender: to, // actually to is used as the dispatch sender in lockbox
             stake: stake

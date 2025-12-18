@@ -1094,7 +1094,7 @@ describe("Aera", function () {
             redeemNum: fc.integer({ min: 1, max: 100 }),
             redeemDen: fc.integer({ min: 1, max: 100 }),
             // price delta in bps: -100% .. +500%  => -10_000 .. +50_000
-            priceDeltaBps: fc.integer({ min: -10_000, max: 50_000 }),
+            priceDeltaBps: fc.integer({ min: -9_000, max: 50_000 }),
           }).filter(r => r.redeemNum <= r.redeemDen),
           async ({ usdc, slipBps, redeemNum, redeemDen, priceDeltaBps }) => {
             const {

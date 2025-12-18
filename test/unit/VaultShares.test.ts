@@ -1,4 +1,5 @@
 import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { ethers } from "hardhat";
 import { expect } from "chai";
 import { parseEther, ZeroAddress } from "ethers";
 
@@ -9,7 +10,7 @@ import { deployHyperStakingBase } from "../setup";
 
 async function deployHyperStaking() {
   const {
-    signers, hyperStaking, lumiaDiamond, testERC20, invariantChecker, defaultWithdrawDelay,
+    signers, hyperStaking, lumiaDiamond, testERC20, invariantChecker, defaultWithdrawDelay, mailbox,
   } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Apply Strategies --------------------
@@ -47,7 +48,7 @@ async function deployHyperStaking() {
     signers, // signers
     hyperStaking, lumiaDiamond, // HyperStaking deployment
     defaultWithdrawDelay,
-    testERC20, reserveStrategy, principalToken, vaultShares, // test contracts
+    testERC20, reserveStrategy, principalToken, vaultShares, mailbox, // test contracts
     reserveAssetPrice, vaultSharesName, vaultSharesSymbol, // values
   };
   /* eslint-enable object-property-newline */
@@ -325,6 +326,7 @@ describe("VaultShares", function () {
 
       // interchain redeem
       const stakeRedeemData: StakeRedeemDataStruct = {
+        nonce: 1,
         strategy: reserveStrategy,
         sender: alice,
         redeemAmount: stakeAmount,
@@ -464,6 +466,7 @@ describe("VaultShares", function () {
 
       const redeemAmount = parseEther("0.1");
       const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem({
+        nonce: 1,
         strategy: reserveStrategy,
         sender: alice,
         redeemAmount,
@@ -495,5 +498,102 @@ describe("VaultShares", function () {
         }),
       ).to.be.revertedWithCustomError(shared.errors, "ZeroAddress");
     });
+  });
+
+  it("replay protection: should reject replayed StakeInfo and StakeRedeem after mailbox rotation", async function () {
+    const {
+      signers, hyperStaking, lumiaDiamond, mailbox, reserveStrategy, vaultShares,
+    } = await loadFixture(deployHyperStaking);
+
+    const { deposit, lockbox } = hyperStaking;
+    const { hyperlaneHandler, realAssets } = lumiaDiamond;
+    const { vaultManager, lumiaFactoryManager, alice } = signers;
+
+    // ---------- Helper: build Hyperlane message bytes ----------
+    const buildMessage = async (
+      originDomain: number,
+      destinationDomain: number,
+      senderAddr: string,
+      recipientAddr: string,
+      body: string,
+      mailboxNonce = 123,
+    ) => {
+      return ethers.solidityPacked(
+        ["uint8", "uint32", "uint32", "bytes32", "uint32", "bytes32", "bytes"],
+        [
+          33, // :contentReference[oaicite:3]{index=3}
+          mailboxNonce,
+          originDomain,
+          ethers.zeroPadValue(senderAddr, 32),
+          destinationDomain,
+          ethers.zeroPadValue(recipientAddr, 32),
+          body,
+        ],
+      );
+    };
+
+    // in the one-chain setup, origin == destination == mailbox.localDomain()
+    const domain = Number(await mailbox.localDomain());
+
+    // ============================================================
+    // 1) Deposit direction: replay StakeInfo into HyperlaneHandler
+    // ============================================================
+
+    const stakeAmount = parseEther("1");
+    await deposit.connect(alice).stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
+
+    const lastToLumia = await hyperlaneHandler.lastMessage();
+    expect(lastToLumia.sender).to.eq(await lockbox.getAddress());
+
+    const shares = await vaultShares.balanceOf(alice);
+    await realAssets.connect(alice).redeem(reserveStrategy, alice, alice, shares);
+
+    const lastToOrigin = (await lockbox.lockboxData()).lastMessage;
+    expect(lastToOrigin.sender).to.eq(await hyperlaneHandler.getAddress());
+
+    // rotate mailbox on Lumia side
+    const newMailbox = await ethers.deployContract("OneChainMailbox", [0n, domain]);
+    await newMailbox.waitForDeployment();
+
+    // update mailbox address in hyperlaneHandler
+    await hyperlaneHandler.connect(lumiaFactoryManager).setMailbox(newMailbox);
+
+    // now try to deliver the exact same payload again via the NEW mailbox
+    const replayStakeInfoMsg = await buildMessage(
+      domain,
+      domain,
+      await lockbox.getAddress(),           // sender bytes32 must be lockbox
+      await hyperlaneHandler.getAddress(),  // recipient is handler
+      lastToLumia.data,                     // exact same body (incl nonce)
+      777,
+    );
+
+    await expect(
+      newMailbox.process("0x", replayStakeInfoMsg),
+    ).to.be.revertedWithCustomError(shared.errors, "HyperlaneReplay");
+
+    // ============================================================
+    // 2) Redeem direction: replay StakeRedeem into LockboxFacet
+    // ============================================================
+
+    // lockbox uses propose/apply delay in your suite :contentReference[oaicite:4]{index=4}
+    const DELAY = 60 * 60 * 24;
+    await lockbox.connect(vaultManager).proposeMailbox(newMailbox);
+    await time.increase(DELAY + 1);
+    await lockbox.connect(vaultManager).applyMailbox();
+
+    // replay same StakeRedeem body into lockbox via NEW mailbox
+    const replayStakeRedeemMsg = await buildMessage(
+      domain,
+      domain,
+      await hyperlaneHandler.getAddress(), // sender bytes32 must be handler
+      await lockbox.getAddress(),          // recipient is lockbox
+      lastToOrigin.data,                   // exact same body (incl nonce)
+      888,
+    );
+
+    await expect(
+      newMailbox.process("0x", replayStakeRedeemMsg),
+    ).to.be.revertedWithCustomError(shared.errors, "HyperlaneReplay");
   });
 });

@@ -41,6 +41,7 @@ contract StakeInfoRoute is IStakeInfoRoute, HyperStakingAcl {
         emit StakeInfoDispatched(
             address(box.mailbox),
             box.lumiaFactory,
+            data.nonce,
             data.strategy,
             data.sender,
             data.stake

@@ -220,6 +220,7 @@ describe("Lockbox", function () {
 
       expect( // in a real scenario fee could depend on the token address, correct name and symbol
         await routeRegistry.quoteDispatchRouteRegistry({
+          nonce: 1,
           strategy: reserveStrategy,
           name: "vault3",
           symbol: "v3",
@@ -268,6 +269,7 @@ describe("Lockbox", function () {
       expect(sharesAfter).to.be.gt(0);
 
       const stakeRedeemData: StakeRedeemDataStruct = {
+        nonce: 2,
         strategy: reserveStrategy,
         sender: alice,
         redeemAmount: sharesAfter,
@@ -324,6 +326,7 @@ describe("Lockbox", function () {
         .to.be.revertedWithCustomError(shared.errors, "DispatchUnderpaid");
 
       const stakeRedeemData: StakeRedeemDataStruct = {
+        nonce: 3,
         strategy: reserveStrategy,
         sender: alice,
         redeemAmount: sharesAfter,
@@ -382,6 +385,7 @@ describe("Lockbox", function () {
       const shares = await vaultShares.balanceOf(alice);
 
       const stakeRedeemData: StakeRedeemDataStruct = {
+        nonce: 4,
         strategy: reserveStrategy,
         sender: alice,
         redeemAmount: shares,
@@ -433,6 +437,7 @@ describe("Lockbox", function () {
       const shares = await vaultShares.balanceOf(alice);
 
       const stakeRedeemData: StakeRedeemDataStruct = {
+        nonce: 1,
         strategy: reserveStrategy,
         sender: alice,
         redeemAmount: shares,
@@ -891,6 +896,7 @@ describe("Lockbox", function () {
       // RouteRegister
 
       const messageRR: RouteRegistryDataStruct = {
+        nonce: 1,
         strategy: ZeroAddress,
         name: "Test Token",
         symbol: "TT",
@@ -901,6 +907,7 @@ describe("Lockbox", function () {
       const bytesRR = await testWrapper.serializeRouteRegistry(messageRR);
 
       expect(await testWrapper.messageType(bytesRR)).to.equal(0);
+      expect(await testWrapper.nonce(bytesRR)).to.equal(1);
       expect(await testWrapper.strategy(bytesRR)).to.equal(messageRR.strategy);
       expect(decodeString(await testWrapper.name(bytesRR))).to.equal(messageRR.name);
       expect(decodeString(await testWrapper.symbol(bytesRR))).to.equal(messageRR.symbol);
@@ -909,6 +916,7 @@ describe("Lockbox", function () {
       // StakeInfo
 
       const messageSI: StakeInfoDataStruct = {
+        nonce: 2,
         strategy: "0x7846C5d815300D27c4975C93Fdbe19b9D352F0d3",
         sender: "0xE5326B17594A697B27F9807832A0CF7CB025B4bb",
         stake: parseEther("4.04"),
@@ -917,6 +925,7 @@ describe("Lockbox", function () {
       const bytesSI = await testWrapper.serializeStakeInfo(messageSI);
 
       expect(await testWrapper.messageType(bytesSI)).to.equal(1);
+      expect(await testWrapper.nonce(bytesSI)).to.equal(2);
       expect(await testWrapper.strategy(bytesSI)).to.equal(messageSI.strategy);
       expect(await testWrapper.sender(bytesSI)).to.equal(messageSI.sender);
       expect(await testWrapper.stake(bytesSI)).to.equal(messageSI.stake);
@@ -924,6 +933,7 @@ describe("Lockbox", function () {
       // StakeReward
 
       const messageRI: StakeRewardDataStruct = {
+        nonce: 3,
         strategy: "0x7846C5d815300D27c4975C93Fdbe19b9D352F0d3",
         stakeAdded: parseEther("1.11"),
       };
@@ -931,12 +941,14 @@ describe("Lockbox", function () {
       const bytesRI = await testWrapper.serializeStakeReward(messageRI);
 
       expect(await testWrapper.messageType(bytesRI)).to.equal(2);
+      expect(await testWrapper.nonce(bytesRI)).to.equal(3);
       expect(await testWrapper.strategy(bytesRI)).to.equal(messageRI.strategy);
       expect(await testWrapper.stakeAdded(bytesRI)).to.equal(messageRI.stakeAdded);
 
       // StakeRedeem
 
       const messageSR: StakeRedeemDataStruct = {
+        nonce: 1,
         strategy: "0x337baDc64C441e6956B87D248E5Bc284828cfa84",
         sender: "0xcb37D723BE930Fca39F46F019d84E1B359d2170C",
         redeemAmount: parseEther("2"),
@@ -945,6 +957,7 @@ describe("Lockbox", function () {
       const bytesSR = await testWrapper.serializeStakeRedeem(messageSR);
 
       expect(await testWrapper.messageType(bytesSR)).to.equal(3);
+      expect(await testWrapper.nonce(bytesSR)).to.equal(1);
       expect(await testWrapper.strategy(bytesSR)).to.equal(messageSR.strategy);
       expect(await testWrapper.sender(bytesSR)).to.equal(messageSR.sender);
       expect(await testWrapper.redeemAmount(bytesSR)).to.equal(messageSR.redeemAmount);
@@ -1030,6 +1043,7 @@ describe("Lockbox", function () {
       expect(sharesAfter).to.eq(stakeAmount);
 
       const stakeRedeemData: StakeRedeemDataStruct = {
+        nonce: 1,
         strategy: reserveStrategy,
         sender: alice,
         redeemAmount: sharesAfter,

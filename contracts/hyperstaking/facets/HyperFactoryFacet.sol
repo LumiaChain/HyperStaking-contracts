@@ -19,6 +19,7 @@ import {
 } from "../libraries/LibHyperStaking.sol";
 
 import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
+import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplayGuard.sol";
 import {ZeroAddress} from "../../shared/Errors.sol";
 
 /**
@@ -108,6 +109,7 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         uint8 vaultDecimals = stakeCurrency.decimals();
 
         RouteRegistryData memory dispatchData = RouteRegistryData({
+            nonce: LibHyperlaneReplayGuard.previewNonce(),
             strategy: strategy,
             name: vaultTokenName,
             symbol: vaultTokenSymbol,
@@ -167,6 +169,7 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         uint256 dispatchFee
     ) internal {
         RouteRegistryData memory data = RouteRegistryData({
+            nonce: LibHyperlaneReplayGuard.newNonce(),
             strategy: strategy,
             name: name,
             symbol: symbol,

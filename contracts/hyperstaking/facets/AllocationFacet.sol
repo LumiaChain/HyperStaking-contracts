@@ -21,6 +21,7 @@ import {
 import {StakeRewardData} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 
 import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
+import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplayGuard.sol";
 import {ZeroStakeExit, ZeroAllocationExit, RewardDonationZeroSupply } from "../../shared/Errors.sol";
 
 /**
@@ -193,6 +194,7 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         uint256 stakeAdded = revenue - feeAmount;
 
         StakeRewardData memory data = StakeRewardData({
+            nonce: LibHyperlaneReplayGuard.previewNonce(),
             strategy: strategy,
             stakeAdded: stakeAdded
         });

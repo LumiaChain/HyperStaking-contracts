@@ -12,6 +12,7 @@ enum MessageType {
 }
 
 struct RouteRegistryData {
+    uint64 nonce;
     address strategy;
     string name;
     string symbol;
@@ -20,17 +21,20 @@ struct RouteRegistryData {
 }
 
 struct StakeInfoData {
+    uint64 nonce;
     address strategy;
     address sender;
     uint256 stake;
 }
 
 struct StakeRewardData {
+    uint64 nonce;
     address strategy;
     uint256 stakeAdded;
 }
 
 struct StakeRedeemData {
+    uint64 nonce;
     address strategy;
     address sender;
     uint256 redeemAmount;
@@ -92,6 +96,7 @@ library HyperlaneMailboxMessages {
 
         return abi.encodePacked(
             bytes8(uint64(MessageType.RouteRegistry)),   //  8-bytes: msg type
+            bytes8(data_.nonce),                         //  8-bytes: nonce
             TypeCasts.addressToBytes32(data_.strategy),  // 32-bytes: strategy address
             nameSize,                                    //   1-byte: token name size
             nameBytes,                                   // 64-bytes: token name
@@ -107,6 +112,7 @@ library HyperlaneMailboxMessages {
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
             bytes8(uint64(MessageType.StakeInfo)),       //  8-bytes: msg type
+            bytes8(data_.nonce),                         //  8-bytes: nonce
             TypeCasts.addressToBytes32(data_.strategy),  // 32-bytes: strategy address
             TypeCasts.addressToBytes32(data_.sender),    // 32-bytes: sender address
             data_.stake                                  // 32-bytes: stake amount
@@ -118,6 +124,7 @@ library HyperlaneMailboxMessages {
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
             bytes8(uint64(MessageType.StakeReward)),     //  8-bytes: msg type
+            bytes8(data_.nonce),                         //  8-bytes: nonce
             TypeCasts.addressToBytes32(data_.strategy),  // 32-bytes: strategy address
             data_.stakeAdded                             // 32-bytes: amount of stake added
         );
@@ -128,6 +135,7 @@ library HyperlaneMailboxMessages {
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
             bytes8(uint64(MessageType.StakeRedeem)),     //  8-bytes: msg type
+            bytes8(data_.nonce),                         //  8-bytes: nonce
             TypeCasts.addressToBytes32(data_.strategy),  // 32-bytes: strategy address
             TypeCasts.addressToBytes32(data_.sender),    // 32-bytes: sender address
             data_.redeemAmount                           // 32-bytes: amount of shares to reedeem
@@ -141,56 +149,61 @@ library HyperlaneMailboxMessages {
         return MessageType(uint64(bytes8(message[0:8])));
     }
 
-    /// [8:40]
+    /// [8:16]
+    function nonce(bytes calldata message) internal pure returns (uint64) {
+        return uint64(bytes8(message[8:16]));
+    }
+
+    /// [16:48]
     function strategy(bytes calldata message) internal pure returns (address) {
-        return TypeCasts.bytes32ToAddress(bytes32(message[8:40]));
+        return TypeCasts.bytes32ToAddress(bytes32(message[16:48]));
     }
 
     // ========= RouteRegistry ========= //
 
-    /// [40:41][41:105]
+    /// [48:49][49:113]
     function name(bytes calldata message) internal pure returns (string calldata) {
-        uint8 size = uint8(bytes1(message[40:41]));
-        return string(bytes(message[41:41 + size]));
+        uint8 size = uint8(bytes1(message[48:49]));
+        return string(bytes(message[49:49 + size]));
     }
 
-    /// [105:106][106:138]
+    /// [113:114][114:146]
     function symbol(bytes calldata message) internal pure returns (string calldata) {
-        uint8 size = uint8(bytes1(message[105:106]));
-        return string(bytes(message[106:106 + size]));
+        uint8 size = uint8(bytes1(message[113:114]));
+        return string(bytes(message[114:114 + size]));
     }
 
-    /// [138:139]
+    /// [146:147]
     function decimals(bytes calldata message) internal pure returns (uint8) {
-        return uint8(bytes1(message[138:139]));
+        return uint8(bytes1(message[146:147]));
     }
 
-    /// [139:]
+    /// [147:]
     function routeRegistryMetadata(bytes calldata message) internal pure returns (bytes calldata) {
-        return message[139:];
+        return message[147:];
     }
 
     // ========= StakeInfo & StakeRedeem  ========= //
 
     function sender(bytes calldata message) internal pure returns (address) {
-        return TypeCasts.bytes32ToAddress(bytes32(message[40:72]));
+        return TypeCasts.bytes32ToAddress(bytes32(message[48:80]));
     }
 
     // ========= StakeInfo ========= //
 
     function stake(bytes calldata message) internal pure returns (uint256) {
-        return uint256(bytes32(message[72:104]));
+        return uint256(bytes32(message[80:112]));
     }
 
     // ========= StakeReward ========= //
 
     function stakeAdded(bytes calldata message) internal pure returns (uint256) {
-        return uint256(bytes32(message[40:72]));
+        return uint256(bytes32(message[48:80]));
     }
 
     // ========= StakeRedeem  ========= //
 
     function redeemAmount(bytes calldata message) internal pure returns (uint256) {
-        return uint256(bytes32(message[72:104]));
+        return uint256(bytes32(message[80:112]));
     }
 }
