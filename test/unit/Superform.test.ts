@@ -395,7 +395,7 @@ describe("Superform", function () {
       const amount = parseUnits("2000", 6);
 
       await testUSDC.connect(alice).approve(deposit, amount);
-      await expect(deposit.connect(alice).stakeDeposit(superformStrategy, alice, amount))
+      await expect(deposit.connect(alice).deposit(superformStrategy, alice, amount, 0))
         .to.changeTokenBalances(testUSDC,
           [alice, erc4626Vault], [-amount, amount]);
 
@@ -451,7 +451,7 @@ describe("Superform", function () {
       const amount = parseUnits("100", 6);
 
       await testUSDC.connect(alice).approve(deposit, amount);
-      await deposit.connect(alice).stakeDeposit(superformStrategy, alice, amount);
+      await deposit.connect(alice).deposit(superformStrategy, alice, amount, 0);
 
       // lpToken on the Lumia chain side
       const rwaBalance = await vaultShares.balanceOf(alice);
@@ -490,7 +490,7 @@ describe("Superform", function () {
 
       // stake again, so report can proceed
       await testUSDC.connect(alice).approve(deposit, amount);
-      await deposit.connect(alice).stakeDeposit(superformStrategy, alice, amount);
+      await deposit.connect(alice).deposit(superformStrategy, alice, amount, 0);
 
       const reportTx = allocation.connect(vaultManager).report(superformStrategy);
 
@@ -520,7 +520,7 @@ describe("Superform", function () {
       const amount = parseUnits("50", 6);
 
       await testUSDC.approve(deposit, amount);
-      await deposit.stakeDeposit(superformStrategy, alice, amount);
+      await deposit.deposit(superformStrategy, alice, amount, 0);
 
       // increase the revenue
       const additionlAssets = parseUnits("100", 6);

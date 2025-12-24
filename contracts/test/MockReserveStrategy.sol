@@ -109,7 +109,7 @@ contract MockReserveStrategy is AbstractStrategy {
         // fetch stake
         stake.transferFrom(DIAMOND, address(this), stakeAmount_);
 
-        readyAt = 0; // claimable immediately
+        readyAt = previewAllocationReadyAt(stakeAmount_);
         _storeAllocationRequest(
             requestId_,
             user_,
@@ -151,7 +151,7 @@ contract MockReserveStrategy is AbstractStrategy {
             MissingCollateral()
         );
 
-        readyAt = 0; // claimable immediately
+        readyAt = previewExitReadyAt(assetAllocation_);
         _storeExitRequest(
             requestId_,
             user_,
@@ -193,6 +193,16 @@ contract MockReserveStrategy is AbstractStrategy {
     /// @inheritdoc IStrategy
     function stakeCurrency() external view returns(Currency memory) {
         return stake;
+    }
+
+    /// @inheritdoc IStrategy
+    function previewAllocationReadyAt(uint256) public pure returns (uint64 readyAt) {
+        readyAt = 0; // claimable immediately -> sync deposit flow
+    }
+
+    /// @inheritdoc IStrategy
+    function previewExitReadyAt(uint256) public pure returns (uint64 readyAt) {
+        readyAt = 0; // claimable immediately -> sync redeem flow
     }
 
     // ========= Admin ========= //

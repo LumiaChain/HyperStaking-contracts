@@ -16,7 +16,9 @@ interface IAllocation {
         address indexed strategy,
         address indexed user,
         uint256 stake,
-        uint256 allocation
+        uint256 allocation,
+        uint256 requestId,
+        uint64 readyAt
     );
 
     event Leave(
@@ -57,7 +59,8 @@ interface IAllocation {
     //                                          Errors                                            //
     //============================================================================================//
 
-    error AsyncAllocationNotSupported();
+    error NotSyncFlow();
+    error NotAsyncFlow();
 
     error StrategyDoesNotExist(address strategy);
 
@@ -73,12 +76,22 @@ interface IAllocation {
     //============================================================================================//
 
     /**
-     * @notice Join for a specified strategy by staking a certain amount
-     * @param strategy The strategy for which the user is joining
-     * @param user The address of the user
-     * @param stake The stake amount
+     * @notice Join using sync flow (request + claim in one tx)
      */
-    function join(address strategy, address user, uint256 stake) external payable;
+    function joinSync(
+        address strategy,
+        address user,
+        uint256 stake
+    ) external payable returns (uint256 allocation);
+
+    /**
+     * @notice Join using async flow (only create request)
+     */
+    function joinAsync(
+        address strategy,
+        address user,
+        uint256 stake
+    ) external payable returns (uint256 requestId);
 
     /**
      * @notice Leave for a specified strategy and asset amount

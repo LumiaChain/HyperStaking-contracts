@@ -141,7 +141,7 @@ contract GauntletStrategy is AbstractStrategy {
         require(user_ != address(0), ZeroUser());
         require(amount_ != 0, ZeroAmount());
 
-        readyAt = 0; // claimable immediately, thanks to wrapper token
+        readyAt = previewAllocationReadyAt(amount_);
         _storeAllocationRequest(
             requestId_,
             user_,
@@ -211,7 +211,7 @@ contract GauntletStrategy is AbstractStrategy {
         require(shares_ != 0, ZeroAmount());
 
         uint256 deadline = _aeraDeadline();
-        readyAt = uint64(deadline);
+        readyAt = uint64(deadline); // use aera deadline for readyAt
 
         _storeExitRequest(
             requestId_,
@@ -313,6 +313,20 @@ contract GauntletStrategy is AbstractStrategy {
     /// @inheritdoc IStrategy
     function revenueAsset() public view virtual returns(address) {
         return address(LUMIA_GTUSDA);
+    }
+
+    /// @inheritdoc IStrategy
+    function previewAllocationReadyAt(uint256) public pure returns (uint64 readyAt) {
+        // TODO: when wrapper token is removed, return non-zero readyAt here
+        readyAt = 0; // claimable immediately, thanks to wrapper token
+    }
+
+    /// @inheritdoc IStrategy
+    function previewExitReadyAt(uint256) public view returns (uint64 readyAt) {
+        // uses deadlineOffset, but not adjust for hash collision
+        // may differ from _aeraDeadline
+        uint256 deadline = block.timestamp + aeraConfig.deadlineOffset;
+        readyAt = uint64(deadline);
     }
 
     //============================================================================================//

@@ -114,7 +114,7 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     ) public payable virtual onlyLumiaDiamond returns (uint64 readyAt) {
         require(amount_ > 0, ZeroAmount());
 
-        readyAt = 0; // claimable immediately
+        readyAt = previewAllocationReadyAt(amount_);
         _storeAllocationRequest(
             requestId_,
             user_,
@@ -167,7 +167,7 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     ) public virtual onlyLumiaDiamond returns (uint64 readyAt) {
         require(shares_ > 0, ZeroAmount());
 
-        readyAt = 0; // claimable immediately
+        readyAt = previewExitReadyAt(shares_);
         _storeExitRequest(
             requestId_,
             user_,
@@ -222,6 +222,16 @@ contract SuperformStrategy is AbstractStrategy, IERC1155Receiver {
     /// @inheritdoc IStrategy
     function revenueAsset() public view virtual returns(address) {
         return superformIntegration.aERC20Token(SUPERFORM_ID);
+    }
+
+    /// @inheritdoc IStrategy
+    function previewAllocationReadyAt(uint256) public pure returns (uint64 readyAt) {
+        readyAt = 0; // claimable immediately -> sync deposit flow
+    }
+
+    /// @inheritdoc IStrategy
+    function previewExitReadyAt(uint256) public pure returns (uint64 readyAt) {
+        readyAt = 0; // claimable immediately -> sync redeem flow
     }
 
     /// @inheritdoc IERC1155Receiver

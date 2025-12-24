@@ -112,25 +112,25 @@ describe("Staking", function () {
       await expect(deposit.connect(bob).pauseDeposit()).to.be.reverted;
       await expect(deposit.connect(stakingManager).pauseDeposit()).to.not.be.reverted;
 
-      await expect(deposit.stakeDeposit(reserveStrategy1, bob, 100, { value: 100 }))
+      await expect(deposit.deposit(reserveStrategy1, bob, 100, 0, { value: 100 }))
         .to.be.reverted;
 
       // unpause
       await expect(deposit.connect(bob).unpauseDeposit()).to.be.reverted;
       await expect(deposit.connect(stakingManager).unpauseDeposit()).to.not.be.reverted;
 
-      await deposit.stakeDeposit(reserveStrategy1, bob, 100, { value: 100 });
+      await deposit.deposit(reserveStrategy1, bob, 100, 0, { value: 100 });
 
       // by individual strategy
       await expect(hyperFactory.setStrategyEnabled(reserveStrategy1, false)).to.be.reverted;
       await hyperFactory.connect(vaultManager).setStrategyEnabled(reserveStrategy1, false); // OK
 
-      await expect(deposit.stakeDeposit(reserveStrategy1, bob, 100, { value: 100 }))
+      await expect(deposit.deposit(reserveStrategy1, bob, 100, 0, { value: 100 }))
         .to.be.reverted;
 
       await hyperFactory.connect(vaultManager).setStrategyEnabled(reserveStrategy1, true); // enable
 
-      await deposit.stakeDeposit(reserveStrategy1, bob, 100, { value: 100 }); // OK
+      await deposit.deposit(reserveStrategy1, bob, 100, 0, { value: 100 }); // OK
     });
 
     it("it should be possible to get and set withdrawDelay", async function () {
@@ -185,27 +185,31 @@ describe("Staking", function () {
       const { deposit, allocation } = hyperStaking;
       const { owner, alice } = signers;
 
-      await expect(deposit.stakeDeposit(reserveStrategy1, owner, 0))
+      await expect(deposit.deposit(reserveStrategy1, owner, 0, 0))
         .to.be.revertedWithCustomError(deposit, "ZeroStake");
 
       const stakeAmount = parseEther("5");
-      await expect(deposit.stakeDeposit(reserveStrategy1, owner, stakeAmount, { value: stakeAmount }))
+      await expect(deposit.deposit(
+        reserveStrategy1, owner, stakeAmount, 0, { value: stakeAmount },
+      ))
         .to.changeEtherBalances(
           [owner, reserveStrategy1],
           [-stakeAmount, stakeAmount],
         );
 
       // event
-      await expect(deposit.stakeDeposit(reserveStrategy1, owner, stakeAmount, { value: stakeAmount }))
-        .to.emit(deposit, "StakeDeposit")
-        .withArgs(owner, owner, reserveStrategy1, stakeAmount);
+      await expect(deposit.deposit(
+        reserveStrategy1, owner, stakeAmount, 0, { value: stakeAmount },
+      ))
+        .to.emit(deposit, "Deposit")
+        .withArgs(owner, owner, reserveStrategy1, stakeAmount, 0);
 
       const stakeAmountForAlice = parseEther("11");
-      await expect(deposit.connect(alice).stakeDeposit(
-        reserveStrategy1, alice, stakeAmountForAlice, { value: stakeAmountForAlice }),
+      await expect(deposit.connect(alice).deposit(
+        reserveStrategy1, alice, stakeAmountForAlice, 0, { value: stakeAmountForAlice }),
       )
-        .to.emit(deposit, "StakeDeposit")
-        .withArgs(alice, alice, reserveStrategy1, stakeAmountForAlice);
+        .to.emit(deposit, "Deposit")
+        .withArgs(alice, alice, reserveStrategy1, stakeAmountForAlice, 0);
 
       // Allocation
       const vaultInfo = await allocation.stakeInfo(reserveStrategy1);
@@ -224,7 +228,7 @@ describe("Staking", function () {
       const stakeAmount = parseEther("6.4");
       const withdrawAmount = parseEther("0.8");
 
-      await deposit.stakeDeposit(reserveStrategy1, owner, stakeAmount, { value: stakeAmount });
+      await deposit.deposit(reserveStrategy1, owner, stakeAmount, 0, { value: stakeAmount });
 
       let blockTime = await shared.getCurrentBlockTimestamp();
 
@@ -321,7 +325,7 @@ describe("Staking", function () {
       const withdrawAmount = parseEther("1.4");
 
       await testERC20.approve(deposit, stakeAmount);
-      await deposit.stakeDeposit(reserveStrategy2, owner, stakeAmount);
+      await deposit.deposit(reserveStrategy2, owner, stakeAmount, 0);
 
       let expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await realAssets.redeem(reserveStrategy2, owner, owner, withdrawAmount);
@@ -389,7 +393,7 @@ describe("Staking", function () {
         const amount = parseEther("10");
 
         await testERC20.connect(alice).approve(deposit, amount);
-        await deposit.connect(alice).stakeDeposit(reserveStrategy2, alice, amount);
+        await deposit.connect(alice).deposit(reserveStrategy2, alice, amount, 0);
 
         // lpToken on the Lumia chain side
         const rwaBalance = await lumiaTokens2.vaultShares.balanceOf(alice);
@@ -428,7 +432,7 @@ describe("Staking", function () {
 
         // stake again, so report can proceed
         await testERC20.connect(alice).approve(deposit, amount);
-        await deposit.connect(alice).stakeDeposit(reserveStrategy2, alice, amount);
+        await deposit.connect(alice).deposit(reserveStrategy2, alice, amount, 0);
 
         const reportTx = allocation.connect(vaultManager).report(reserveStrategy2);
 
@@ -461,7 +465,7 @@ describe("Staking", function () {
 
         const stakeAmount = parseEther("50");
 
-        await deposit.stakeDeposit(reserveStrategy1, alice, stakeAmount, { value: stakeAmount });
+        await deposit.deposit(reserveStrategy1, alice, stakeAmount, 0, { value: stakeAmount });
 
         // simulate yield generation, increase asset price
         const assetPrice = await reserveStrategy1.assetPrice();
@@ -515,7 +519,7 @@ describe("Staking", function () {
         const stakeAmount = parseEther("10");
         const revenueAsset = await shared.getRevenueAsset(reserveStrategy1);
 
-        await deposit.stakeDeposit(reserveStrategy1, alice, stakeAmount, { value: stakeAmount });
+        await deposit.deposit(reserveStrategy1, alice, stakeAmount, 0, { value: stakeAmount });
 
         // simulate yield generation, increase asset price
         let assetPrice = await reserveStrategy1.assetPrice();
@@ -609,7 +613,7 @@ describe("Staking", function () {
         const stakeAmount = parseEther("1");
         const value = parseEther("0.99");
 
-        await expect(deposit.stakeDeposit(reserveStrategy1, owner, stakeAmount, { value }))
+        await expect(deposit.deposit(reserveStrategy1, owner, stakeAmount, 0, { value }))
           .to.be.revertedWithCustomError(shared.errors, "InsufficientValue");
       });
 
@@ -626,7 +630,7 @@ describe("Staking", function () {
 
         const stakeAmount = parseEther("1");
 
-        await deposit.stakeDeposit(reserveStrategy1, owner, stakeAmount, { value: stakeAmount });
+        await deposit.deposit(reserveStrategy1, owner, stakeAmount, 0, { value: stakeAmount });
 
         const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
         await realAssets.redeem(reserveStrategy1, owner, owner, stakeAmount);
@@ -649,10 +653,11 @@ describe("Staking", function () {
 
         const beforeBalance = await ethers.provider.getBalance(alice);
 
-        const tx = await deposit.connect(alice).stakeDeposit(
+        const tx = await deposit.connect(alice).deposit(
           reserveStrategy1,
           alice,
           stakeAmount,
+          0,
           { value: totalValue },
         );
         const receipt = await tx.wait();

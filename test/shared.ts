@@ -1,6 +1,18 @@
 import { expect } from "chai";
+import { time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { ignition, ethers, network } from "hardhat";
-import { Contract, Interface, ZeroAddress, ZeroBytes32, parseEther, parseUnits, Addressable, TransactionResponse, Log } from "ethers";
+import {
+  Contract,
+  Signer,
+  Interface,
+  ZeroAddress,
+  ZeroBytes32,
+  parseEther,
+  parseUnits,
+  Addressable,
+  TransactionResponse,
+  Log,
+} from "ethers";
 import SuperformMockModule from "../ignition/modules/test/SuperformMock";
 import CurveMockModule from "../ignition/modules/test/CurveMock";
 
@@ -12,6 +24,7 @@ import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interf
 import { IERC20 } from "../typechain-types";
 
 import { SingleDirectSingleVaultStateReqStruct } from "../typechain-types/contracts/external/superform/core/BaseRouter";
+import { ClaimStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IDeposit";
 
 // full - because there are two differnet vesions of IERC20 used in the project
 export const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";
@@ -319,4 +332,21 @@ export async function getEventArg(tx: TransactionResponse, eventName: string, co
     return parsedEvent.args[0];
   }
   return null;
+}
+
+export async function claimAtDeadline(
+  deposit: Contract,
+  alice: Signer,
+  requestId: number,
+) {
+  const pendingClaim: ClaimStruct[] = await deposit.pendingWithdraws([requestId]);
+  const deadline = pendingClaim[0].unlockTime;
+
+  const now = await getCurrentBlockTimestamp();
+  if (now < Number(deadline)) {
+    await time.setNextBlockTimestamp(Number(deadline));
+  }
+
+  const claimTx = await deposit.connect(alice).claimWithdraws([requestId], alice);
+  return { claimTx };
 }

@@ -14,11 +14,28 @@ interface IDeposit {
     //                                          Events                                            //
     //============================================================================================//
 
-    event StakeDeposit(
+    event DepositRequest(
         address from,
         address indexed to,
         address indexed strategy,
-        uint256 stake
+        uint256 stake,
+        uint256 requestId
+    );
+
+    event DepositRefund(
+        address from,
+        address indexed to,
+        address indexed strategy,
+        uint256 stake,
+        uint256 requestId
+    );
+
+    event Deposit(
+        address from,
+        address indexed to,
+        address indexed strategy,
+        uint256 stake,
+        uint256 requestId
     );
 
     event WithdrawClaimed(
@@ -59,6 +76,9 @@ interface IDeposit {
     /// @notice Thrown when attempting to stake zero amount
     error ZeroStake();
 
+    /// @notice Thrown when request is not ready to claim
+    error RequestNotClaimable();
+
     /// @notice Thrown when attempting to stake to disabled strategy
     error StrategyDisabled(address strategy);
 
@@ -90,16 +110,38 @@ interface IDeposit {
     /* ========== Deposit  ========== */
 
     /**
-     * @notice Deposits a specified stake amount into chosen strategy
-     * @param strategy The address of the strategy selected by the user
-     * @param to The address receiving the staked token allocation (typically the user's address)
-     * @param stake The amount of the token to stake
+     * @notice Create an async deposit request
+     * @dev For async strategies only, stake is moved now, allocation is claimed later
      */
-    function stakeDeposit(
+    function requestDeposit(
         address strategy,
         address to,
         uint256 stake
-    ) external payable;
+    ) external payable returns (uint256 requestId);
+
+    /**
+     * @notice Refund stake for a failed or canceled async request
+     */
+    function refundDeposit(
+        address strategy,
+        address to,
+        uint256 requestId
+    ) external returns (uint256 stake);
+
+    /**
+     * @notice Deposit (sync) or claim a previous async deposit request
+     * @dev If `requestId` is 0, does a sync deposit. If non-zero, claims that request
+     * @param strategy The address of the strategy selected by the user
+     * @param to The address receiving the staked token allocation (typically the user's address)
+     * @param stake The amount of the token to stake
+     * @param requestId Async deposit request id to claim (0 for sync deposit)
+     */
+    function deposit(
+        address strategy,
+        address to,
+        uint256 stake,
+        uint256 requestId
+    ) external payable returns (uint256 allocation);
 
     /* ========== Stake Withdraw  ========== */
 
@@ -171,7 +213,7 @@ interface IDeposit {
     /* ========== */
 
     /// @notice Helper to easily quote the dispatch fee for stakeDeposit
-    function quoteStakeDeposit(
+    function quoteDepositDispatch(
         address strategy,
         address to,
         uint256 stake

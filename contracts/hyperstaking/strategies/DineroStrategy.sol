@@ -54,7 +54,7 @@ contract DineroStrategy is AbstractStrategy, PirexIntegration {
     ) external payable onlyLumiaDiamond returns (uint64 readyAt) {
         require(amount_ == msg.value, BadAllocationValue());
 
-        readyAt = 0; // claimable immediately
+        readyAt = previewAllocationReadyAt(amount_);
         _storeAllocationRequest(
             requestId_,
             user_,
@@ -89,7 +89,7 @@ contract DineroStrategy is AbstractStrategy, PirexIntegration {
     ) external onlyLumiaDiamond returns (uint64 readyAt) {
         IERC20(AUTO_PX_ETH).safeTransferFrom(DIAMOND, address(this), shares_);
 
-        readyAt = 0; // claimable immediately
+        readyAt = previewExitReadyAt(shares_);
         _storeExitRequest(
             requestId_,
             user_,
@@ -128,6 +128,16 @@ contract DineroStrategy is AbstractStrategy, PirexIntegration {
     /// @inheritdoc IStrategy
     function revenueAsset() external view returns(address) {
         return AUTO_PX_ETH;
+    }
+
+    /// @inheritdoc IStrategy
+    function previewAllocationReadyAt(uint256) public pure returns (uint64 readyAt) {
+        readyAt = 0; // claimable immediately -> sync deposit flow
+    }
+
+    /// @inheritdoc IStrategy
+    function previewExitReadyAt(uint256) public pure returns (uint64 readyAt) {
+        readyAt = 0; // claimable immediately -> sync redeem flow
     }
 
     //============================================================================================//

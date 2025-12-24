@@ -9,7 +9,6 @@ import { AeraConfigStruct } from "../../typechain-types/contracts/hyperstaking/s
 import GauntletMockModule from "../../ignition/modules/test/GauntletMock";
 import GauntletStrategyModule from "../../ignition/modules/GauntletStrategy";
 import { LumiaVaultShares } from "../../typechain-types";
-import { ClaimStruct } from "../../typechain-types/contracts/hyperstaking/interfaces/IDeposit";
 import { deployHyperStakingBase } from "../setup";
 
 async function getMockedGauntlet(testUSDC?: Contract) {
@@ -353,7 +352,7 @@ describe("Aera", function () {
       const reqId = 1;
       const readyAt = 0;
 
-      const tx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+      const tx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount, 0);
 
       await expect(tx)
         .to.emit(gauntletStrategy, "AllocationRequested")
@@ -397,7 +396,7 @@ describe("Aera", function () {
       // alice first
       const aliceReqId = 1;
       await expect(
-        deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, aliceStake),
+        deposit.connect(alice).deposit(gauntletStrategy, alice, aliceStake, 0),
       )
         .to.emit(gauntletStrategy, "AllocationRequested")
         .withArgs(aliceReqId, alice, aliceStake, 0)
@@ -407,7 +406,7 @@ describe("Aera", function () {
       // bob next
       const bobReqId = 2;
       await expect(
-        deposit.connect(bob).stakeDeposit(gauntletStrategy, bob, bobStake),
+        deposit.connect(bob).deposit(gauntletStrategy, bob, bobStake, 0),
       )
         .to.emit(gauntletStrategy, "AllocationRequested")
         .withArgs(bobReqId, bob, bobStake, 0)
@@ -469,7 +468,7 @@ describe("Aera", function () {
       expect(expectedAlloc - precisionError).to.be.eq(rawUnits - (rawUnits * 300n) / 10_000n);
 
       // --- Stake & settle deposit ---
-      const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount, 0);
       await shared.solveGauntletDepositRequest(
         stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
       );
@@ -544,7 +543,7 @@ describe("Aera", function () {
 
       const expectedAllocation = await gauntletStrategy.previewAllocation(stakeAmount);
 
-      const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount, 0);
 
       await expect(stakeTx)
         .to.emit(gauntletStrategy, "AllocationRequested").withArgs(1, alice, stakeAmount, 0)
@@ -636,7 +635,7 @@ describe("Aera", function () {
       const stakeAmount = parseUnits("1500", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
 
-      const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount, 0);
 
       await shared.solveGauntletDepositRequest(
         stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
@@ -708,7 +707,7 @@ describe("Aera", function () {
 
       // stake again, so report can proceed
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
-      const stakeTx2 = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+      const stakeTx2 = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount, 0);
 
       await shared.solveGauntletDepositRequest(
         stakeTx2, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 3,
@@ -743,7 +742,7 @@ describe("Aera", function () {
       const stakeAmount = parseUnits("3000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
 
-      const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount, 0);
 
       await shared.solveGauntletDepositRequest(
         stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
@@ -1046,23 +1045,6 @@ describe("Aera", function () {
       return { tx, amount, minOut };
     }
 
-    async function claimAtDeadline(
-      deposit: Contract,
-      alice: Signer,
-      requestId: number,
-    ) {
-      const pendingClaim: ClaimStruct[] = await deposit.pendingWithdraws([requestId]);
-      const deadline = pendingClaim[0].unlockTime;
-
-      const now = await shared.getCurrentBlockTimestamp();
-      if (now < Number(deadline)) {
-        await time.setNextBlockTimestamp(Number(deadline));
-      }
-
-      const claimTx = await deposit.connect(alice).claimWithdraws([requestId], alice);
-      return { claimTx };
-    }
-
     function bpsMul(amount: bigint, bps: number) {
       return (amount * BigInt(10_000 - bps)) / 10_000n;
     }
@@ -1137,7 +1119,7 @@ describe("Aera", function () {
 
             const expectedAlloc = await gauntletStrategy.previewAllocation(stakeAmount);
 
-            const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+            const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount, 0);
 
             // settle deposit (requestId = 1)
             await shared.solveGauntletDepositRequest(
@@ -1187,7 +1169,7 @@ describe("Aera", function () {
             );
 
             const lastId = await shared.getLastClaimId(deposit, gauntletStrategy, alice);
-            const { claimTx } = await claimAtDeadline(deposit, alice, Number(lastId));
+            const { claimTx } = await shared.claimAtDeadline(deposit, alice, Number(lastId));
 
             await expect(claimTx)
               .to.emit(gauntletStrategy, "ExitClaimed")
@@ -1268,10 +1250,11 @@ describe("Aera", function () {
       // stake 10_000 USDC
       const stakeAmount = parseUnits("10000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
-      const stakeTx = await deposit.connect(alice).stakeDeposit(
+      const stakeTx = await deposit.connect(alice).deposit(
         gauntletStrategy,
         alice,
         stakeAmount,
+        0,
       );
 
       await shared.solveGauntletDepositRequest(
@@ -1306,12 +1289,12 @@ describe("Aera", function () {
       );
 
       // claim second first, then first (order should not change totals)
-      const { claimTx: claim2 } = await claimAtDeadline(deposit, alice, 3);
+      const { claimTx: claim2 } = await shared.claimAtDeadline(deposit, alice, 3);
       await expect(claim2)
         .to.emit(gauntletStrategy, "ExitClaimed")
         .withArgs(3, alice, r2.minOut);
 
-      const { claimTx: claim1 } = await claimAtDeadline(deposit, alice, 2);
+      const { claimTx: claim1 } = await shared.claimAtDeadline(deposit, alice, 2);
       await expect(claim1)
         .to.emit(gauntletStrategy, "ExitClaimed")
         .withArgs(2, alice, r1.minOut);
@@ -1356,10 +1339,11 @@ describe("Aera", function () {
 
       const stakeAmount = parseUnits("9000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
-      const stakeTx = await deposit.connect(alice).stakeDeposit(
+      const stakeTx = await deposit.connect(alice).deposit(
         gauntletStrategy,
         alice,
         stakeAmount,
+        0,
       );
 
       await shared.solveGauntletDepositRequest(
@@ -1389,9 +1373,9 @@ describe("Aera", function () {
       expect(midSI.pendingExitStake - beforeSI.pendingExitStake).to.equal(stakeAmount);
       expect(midSI.pendingExitStake).to.be.lte(midSI.totalStake);
 
-      await claimAtDeadline(deposit, alice, 2);
-      await claimAtDeadline(deposit, alice, 3);
-      await claimAtDeadline(deposit, alice, 4);
+      await shared.claimAtDeadline(deposit, alice, 2);
+      await shared.claimAtDeadline(deposit, alice, 3);
+      await shared.claimAtDeadline(deposit, alice, 4);
 
       const afterSI = await allocation.stakeInfo(gauntletStrategy);
       expect(afterSI.pendingExitStake).to.equal(0);
@@ -1438,10 +1422,11 @@ describe("Aera", function () {
 
       const stakeAmount = parseUnits("5000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
-      const stakeTx = await deposit.connect(alice).stakeDeposit(
+      const stakeTx = await deposit.connect(alice).deposit(
         gauntletStrategy,
         alice,
         stakeAmount,
+        0,
       );
 
       await shared.solveGauntletDepositRequest(
@@ -1462,8 +1447,8 @@ describe("Aera", function () {
         r2.tx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, r2.minOut, 3,
       );
 
-      await claimAtDeadline(deposit, alice, 2);
-      await claimAtDeadline(deposit, alice, 3);
+      await shared.claimAtDeadline(deposit, alice, 2);
+      await shared.claimAtDeadline(deposit, alice, 3);
 
       // Upper bound: never more tokens than redeemed shares
       expect(r1.minOut).to.be.lte(r1.amount);
@@ -1506,7 +1491,7 @@ describe("Aera", function () {
       const stakeAmount = parseUnits("5000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
 
-      const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount, 0);
 
       await shared.solveGauntletDepositRequest(
         stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1, // allocation requestId
@@ -1566,7 +1551,7 @@ describe("Aera", function () {
         alice,
       );
 
-      await claimAtDeadline(deposit, alice, Number(firstClaimId));
+      await shared.claimAtDeadline(deposit, alice, Number(firstClaimId));
 
       // --- second redeem: remaining ~1% ---
       const redeemTx2 = await realAssets.connect(alice)
@@ -1590,7 +1575,7 @@ describe("Aera", function () {
         gauntletStrategy,
         alice,
       );
-      await claimAtDeadline(deposit, alice, Number(secondClaimId));
+      await shared.claimAtDeadline(deposit, alice, Number(secondClaimId));
 
       // --- invariants: user economics & stake accounting ---
 
@@ -1633,7 +1618,7 @@ describe("Aera", function () {
       const stakeAmount = parseUnits("5000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
 
-      const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount, 0);
 
       await shared.solveGauntletDepositRequest(
         stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1, // allocation requestId
@@ -1684,7 +1669,7 @@ describe("Aera", function () {
       await shared.solveGauntletRedeemRequest(
         reportTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, minOut1, feeReqId,
       );
-      const { claimTx: feeClaimTx } = await claimAtDeadline(deposit, bob, Number(feeReqId));
+      const { claimTx: feeClaimTx } = await shared.claimAtDeadline(deposit, bob, Number(feeReqId));
 
       await expect(feeClaimTx)
         .to.emit(deposit, "FeeWithdrawClaimed")
@@ -1715,7 +1700,7 @@ describe("Aera", function () {
       );
 
       // claim on HyperStaking side
-      const { claimTx } = await claimAtDeadline(deposit, alice, Number(userReqId));
+      const { claimTx } = await shared.claimAtDeadline(deposit, alice, Number(userReqId));
 
       await expect(claimTx)
         .to.emit(gauntletStrategy, "ExitClaimed")
@@ -1754,7 +1739,7 @@ describe("Aera", function () {
       // --- stake & settle ---
       const stakeAmount = parseUnits("1000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
-      const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount, 0);
 
       await shared.solveGauntletDepositRequest(
         stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
@@ -1820,7 +1805,7 @@ describe("Aera", function () {
       // --- stake & settle ---
       const stakeAmount = parseUnits("1000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
-      const stakeTx = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount, 0);
       await shared.solveGauntletDepositRequest(
         stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
       );

@@ -40,22 +40,74 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
     /* ========== Deposit ========== */
 
-    /// @notice Stake deposit function
     /// @inheritdoc IDeposit
-    function stakeDeposit(
+    function requestDeposit(
         address strategy,
         address to,
         uint256 stake
-    ) external payable nonReentrant whenNotPaused {
+    ) external payable nonReentrant whenNotPaused returns (uint256 requestId) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
 
-        _checkDeposit(vault, strategy, stake);
+        _basicChecks(vault, strategy, stake);
+
+        v.stakeInfo[strategy].totalStake += stake;
+
+        // true - bridge info to Lumia chain to mint coresponding rwa asset
+        requestId = IAllocation(address(this)).joinAsync(strategy, to, stake);
+
+        emit DepositRequest(msg.sender, to, strategy, stake, requestId);
+    }
+
+    /// @inheritdoc IDeposit
+    function refundDeposit(
+        address strategy,
+        address to,
+        uint256 requestId
+    ) external nonReentrant whenNotPaused returns (uint256 stake) {
+
+        // TODO
+        // strategy should validate requestId and return refunded stake amount
+        stake = 0;
+
+        emit DepositRefund(msg.sender, to, strategy, stake, requestId);
+    }
+
+    /// TODO Consider separating to claimDeposit and sync/deposit
+    /// @inheritdoc IDeposit
+    function deposit(
+        address strategy,
+        address to,
+        uint256 stake,
+        uint256 requestId
+    ) external payable nonReentrant whenNotPaused returns (uint256 allocation) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+
+        // TODO make less sense for async claim
+        _basicChecks(vault, strategy, stake);
+
+        // ---> async request ready path
+        if (requestId != 0) {
+            // TODO internal sync and async deposit functions
+
+            // claim async request when it is ready
+            (,,,, bool claimable,) = IStrategy(strategy).requestInfo(requestId);
+            require(claimable, RequestNotClaimable());
+
+            // TODO
+            allocation = 0;
+
+            emit Deposit(msg.sender, to, strategy, stake, requestId);
+            return allocation;
+        }
+
+        // ---> sync deposit path
 
         v.stakeInfo[strategy].totalStake += stake;
 
         // quote message fee for forwarding message across chains
-        uint256 dispatchFee = quoteStakeDeposit(strategy, to, stake);
+        uint256 dispatchFee = quoteDepositDispatch(strategy, to, stake);
         if (vault.stakeCurrency.isNativeCoin()) {
             vault.stakeCurrency.transferFrom(
                 msg.sender,
@@ -73,13 +125,13 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             );
         }
 
-        // true - bridge info to Lumia chain to mint coresponding rwa asset
-        IAllocation(address(this)).join(strategy, to, stake);
+        // bridge stake info to Lumia chain which mints coresponding rwa asset
+        allocation = IAllocation(address(this)).joinSync(strategy, to, stake);
 
-        emit StakeDeposit(msg.sender, to, strategy, stake);
+        emit Deposit(msg.sender, to, strategy, stake, requestId);
     }
 
-    /* ========== Stake Withdraw ========== */
+    /* ========== Withdraw ========== */
 
     /// @inheritdoc IDeposit
     function claimWithdraws(uint256[] calldata requestIds, address to) external {
@@ -227,7 +279,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     }
 
     /// @inheritdoc IDeposit
-    function quoteStakeDeposit(
+    function quoteDepositDispatch(
         address strategy,
         address to,
         uint256 stake
@@ -246,7 +298,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     //============================================================================================//
 
     /// @notice helper check function for deposits
-    function _checkDeposit(
+    function _basicChecks(
         VaultInfo storage vault,
         address strategy,
         uint256 stake

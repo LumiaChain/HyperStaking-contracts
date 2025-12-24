@@ -40,17 +40,43 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
     //============================================================================================//
 
     /// @inheritdoc IAllocation
-    function join(
+    function joinSync(
         address strategy,
         address user,
         uint256 stake
-    ) external payable diamondInternal {
-        uint256 allocation = _allocate(strategy, user, stake);
+    ) external payable diamondInternal returns (uint256 allocation) {
+        (uint256 requestId, uint64 readyAt) = _requestAllocation(strategy, user, stake);
+        require(readyAt == 0, NotSyncFlow());
+
+        // make an array
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = requestId;
+
+        // sync flow: request and claim in the same tx
+        allocation = _claimAllocation(strategy, ids);
 
         // bridge stakeInfo message to the Lumia diamond
         ILockbox(address(this)).bridgeStakeInfo(strategy, user, stake);
 
-        emit Join(strategy, user, stake, allocation);
+        emit Join(strategy, user, stake, allocation, requestId, readyAt);
+    }
+
+    /// @inheritdoc IAllocation
+    function joinAsync(
+        address strategy,
+        address user,
+        uint256 stake
+    ) external payable diamondInternal returns (uint256 requestId) {
+
+        uint64 readyAt;
+        (requestId, readyAt) = _requestAllocation(strategy, user, stake);
+
+        require(readyAt != 0, NotAsyncFlow());
+
+        // async flow: only create request, allocation will be claimed later
+        uint256 allocation = 0;
+
+        emit Join(strategy, user, stake, allocation, requestId, readyAt);
     }
 
     /// @inheritdoc IAllocation
@@ -258,14 +284,16 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         emit Leave(strategy, user, stake, allocation);
     }
 
-    /// @notice Function responsible for allocation in the strategy
-    function _allocate(address strategy, address user, uint256 stake) internal returns (uint256 allocation) {
+    /// @dev Creates an allocation request in the strategy and returns requestId and readyAt
+    function _requestAllocation(
+        address strategy,
+        address user,
+        uint256 stake
+    ) internal returns (uint256 requestId, uint64 readyAt) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
-        StakeInfo storage si = v.stakeInfo[strategy];
 
-        uint64 readyAt;
-        uint256 requestId = LibHyperStaking.newRequestId();
+        requestId = LibHyperStaking.newRequestId();
 
         // IntegrationFacet handles movements (no msg.value, no allowance)
         if (IStrategy(strategy).isIntegratedStakeStrategy()) {
@@ -278,12 +306,17 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
                 readyAt = IStrategy(strategy).requestAllocation(requestId, stake, user);
             }
         }
+    }
 
-        require(readyAt == 0, AsyncAllocationNotSupported());
+    /// @dev Claims allocation for given request ids and updates totalAllocation
+    function _claimAllocation(
+        address strategy,
+        uint256[] memory requestIds
+    ) internal returns (uint256 allocation) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        StakeInfo storage si = v.stakeInfo[strategy];
 
-        uint256[] memory ids = new uint256[](1);
-        ids[0] = requestId;
-        allocation = IStrategy(strategy).claimAllocation(ids, address(this));
+        allocation = IStrategy(strategy).claimAllocation(requestIds, address(this));
 
         // save information
         si.totalAllocation += allocation;

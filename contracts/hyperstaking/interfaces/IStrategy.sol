@@ -125,6 +125,14 @@ interface IStrategy {
     /// @return The address of the revenue-accumulating asset (allocation asset)
     function revenueAsset() external view returns (address);
 
+    /// @notice Preview when a new allocation would become claimable
+    /// @dev Returns a timestamp (seconds). Returns 0 for synchronous deposit strategies.
+    function previewAllocationReadyAt(uint256 stakeAmount_) external view returns (uint64 readyAt);
+
+    /// @notice Preview when a new exit would become claimable
+    /// @dev Returns a timestamp (seconds). Returns 0 for synchronous redeem strategies.
+    function previewExitReadyAt(uint256 shares_) external view returns (uint64 readyAt);
+
     /// @dev Preview the asset allocation for a given stake amount
     function previewAllocation(uint256 stakeAmount_) external view returns (uint256 allocation);
 
