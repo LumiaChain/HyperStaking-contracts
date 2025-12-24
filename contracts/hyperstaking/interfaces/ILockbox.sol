@@ -16,7 +16,7 @@ interface ILockbox {
         uint32 indexed origin,
         bytes32 indexed sender,
         uint256 value,
-        string message
+        bytes message
     );
 
     event DestinationUpdated(uint32 indexed oldDestination, uint32 indexed newDestination);

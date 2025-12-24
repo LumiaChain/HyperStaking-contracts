@@ -91,6 +91,28 @@ contract HyperFactoryFacet is IHyperFactory, HyperStakingAcl, ReentrancyGuardUpg
         }
     }
 
+    /// @inheritdoc IHyperFactory
+    function updateVaultStakeCurrency(
+        address strategy,
+        Currency calldata newCurrency
+    ) external {
+        require(msg.sender == strategy, OnlyStrategyCaller(msg.sender, strategy));
+
+        VaultInfo storage vault = LibHyperStaking.diamondStorage().vaultInfo[strategy];
+
+        require(address(vault.strategy) != address(0), VaultDoesNotExist(strategy));
+        require(vault.enabled, VaultDisabled(strategy));
+
+        address oldToken = vault.stakeCurrency.token;
+        address newToken = newCurrency.token;
+
+        if (oldToken == newToken) return;
+
+        vault.stakeCurrency = newCurrency;
+
+        emit VaultStakeCurrencyUpdated(strategy, oldToken, newToken);
+    }
+
     // ========= View ========= //
 
     /// @inheritdoc IHyperFactory

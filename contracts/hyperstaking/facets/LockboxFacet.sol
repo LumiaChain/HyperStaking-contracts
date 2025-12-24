@@ -110,7 +110,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
             token: address(0)
         });
 
-        // required native fee vaule from msg.sender into this (diamond)
+        // required native fee value from msg.sender into this (diamond)
         nativeCurrency.transferFrom(
             from,
             address(this),
@@ -131,7 +131,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         // checks
         require(
             senderAddress == address(box.lumiaFactory),
-            NotFromLumiaFactory(box.lastMessage.sender)
+            NotFromLumiaFactory(senderAddress)
         );
         require(origin == box.destination, BadOriginDestination(origin));
 
@@ -145,7 +145,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         });
 
         // emit event before route
-        emit ReceivedMessage(origin, sender, msg.value, string(data));
+        emit ReceivedMessage(origin, sender, msg.value, data);
 
         // parse message type (HyperlaneMailboxMessages)
         MessageType msgType = data.messageType();

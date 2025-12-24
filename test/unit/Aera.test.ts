@@ -931,11 +931,12 @@ describe("Aera", function () {
     });
 
     it("setStakeToken: only strategyManager; validates Aera flags; updates stakeCurrency", async function () {
-      const { signers, gauntletStrategy, testUSDC, aeraMock } =
+      const { signers, hyperStaking, gauntletStrategy, testUSDC, aeraMock } =
         await loadFixture(deployHyperStaking);
 
       const { alice, strategyManager } = signers;
       const { aeraProvisioner } = aeraMock;
+      const { hyperFactory } = hyperStaking;
 
       const oldToken = await testUSDC.getAddress();
 
@@ -943,6 +944,15 @@ describe("Aera", function () {
       const testUSDT = await shared.deployTestERC20("Test Tether", "tUSDT", 6);
       await testUSDT.mint(alice.address, parseUnits("1000000", 6));
       const newToken = await testUSDT.getAddress();
+
+      // non-strategy caller cannot update
+      await expect(
+        hyperFactory.connect(alice).updateVaultStakeCurrency(
+          gauntletStrategy,
+          { token: newToken },
+        ))
+        .to.be.revertedWithCustomError(hyperFactory, "OnlyStrategyCaller")
+        .withArgs(alice, gauntletStrategy);
 
       // non-manager cannot update
       await expect(
@@ -1004,6 +1014,10 @@ describe("Aera", function () {
       await expect(
         gauntletStrategy.connect(strategyManager).setStakeToken(testUSDC),
       ).to.be.revertedWithCustomError(gauntletStrategy, "AeraDepositDisabled");
+
+      // verify HyperFactoryFacet vaultInfo stake currency was updated too
+      const vInfo = await hyperFactory.vaultInfo(gauntletStrategy);
+      expect(vInfo.stakeCurrency.token).to.equal(newToken);
     });
   });
 

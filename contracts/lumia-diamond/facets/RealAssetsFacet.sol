@@ -100,9 +100,13 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
 
         RouteInfo storage r = ifs.routes[strategy];
 
+        uint256 assetsPreview = r.vaultShares.previewRedeem(shares);
+        require(assetsPreview > 0, ZeroAmount());
+
         // redeem shares from `from` into this contract using the explicit `caller`
         // when caller != from an allowance from `from` to `caller` is required to burn the shares
         uint256 assets = r.vaultShares.diamondRedeem(shares, msg.sender, address(this), from);
+        require(assets > 0, ZeroAmount());
 
         // burn assets, so they can be unlocked on the origin chain
         LumiaPrincipal(address(r.assetToken)).burnFrom(address(r.vaultShares), assets);

@@ -17,7 +17,7 @@ interface IHyperlaneHandler {
         uint32 indexed origin,
         bytes32 indexed sender,
         uint256 value,
-        string message
+        bytes message
     );
 
     event MailboxUpdated(address oldMailbox, address newMailbox);

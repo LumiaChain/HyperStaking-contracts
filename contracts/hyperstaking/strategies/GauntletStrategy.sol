@@ -4,6 +4,7 @@ pragma solidity =0.8.27;
 // solhint-disable var-name-mixedcase
 
 import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
+import {IHyperFactory} from "../interfaces/IHyperFactory.sol";
 import {AbstractStrategy} from "./AbstractStrategy.sol";
 import {LumiaGtUSDa} from "./tokens/LumiaGtUSDa.sol";
 
@@ -283,6 +284,11 @@ contract GauntletStrategy is AbstractStrategy {
 
         address oldStakeToken = address(STAKE_TOKEN);
         STAKE_TOKEN = IERC20(newStakeToken_);
+
+        IHyperFactory(DIAMOND).updateVaultStakeCurrency(
+            address(this),
+            Currency({ token: newStakeToken_ })
+        );
 
         emit StakeTokenUpdated(oldStakeToken, newStakeToken_);
     }

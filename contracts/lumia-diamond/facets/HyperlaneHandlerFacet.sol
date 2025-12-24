@@ -66,7 +66,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         });
 
         // emit event before route
-        emit ReceivedMessage(origin, sender, msg.value, string(data));
+        emit ReceivedMessage(origin, sender, msg.value, data);
 
         // parse message type (HyperlaneMailboxMessages)
         MessageType msgType = data.messageType();
@@ -121,7 +121,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
             token: address(0)
         });
 
-        // required native fee vaule from msg.sender into this (diamond)
+        // required native fee value from msg.sender into this (diamond)
         nativeCurrency.transferFrom(
             from,
             address(this),
