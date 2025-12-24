@@ -66,7 +66,7 @@ const GauntletMockModule = buildModule("GauntletMockModule", (m) => {
   m.call(aeraMultiDepositorVault, "setProvisioner", [aeraProvisioner], { after: [createVault] });
   m.call(aeraPriceAndFeeCalculator, "setVaultAccountant", [aeraMultiDepositorVault, owner], { after: [createVault] });
 
-  return { aeraProvisioner, aeraPriceAndFeeCalculator, aeraMultiDepositorVault };
+  return { oracleRegistry, aeraProvisioner, aeraPriceAndFeeCalculator, aeraMultiDepositorVault };
 });
 
 export default GauntletMockModule;

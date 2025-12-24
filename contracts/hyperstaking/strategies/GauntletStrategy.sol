@@ -4,15 +4,17 @@ pragma solidity =0.8.27;
 // solhint-disable var-name-mixedcase
 
 import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
+import {IHyperFactory} from "../interfaces/IHyperFactory.sol";
 import {AbstractStrategy} from "./AbstractStrategy.sol";
 import {LumiaGtUSDa} from "./tokens/LumiaGtUSDa.sol";
-import {Currency} from "../libraries/CurrencyHandler.sol";
 
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {Provisioner} from "../../external/aera/Provisioner.sol";
 import {RequestType} from "../../external/aera/Types.sol";
 import {IPriceAndFeeCalculator} from "../../external/aera/interfaces/IPriceAndFeeCalculator.sol";
+
+import {Currency} from "../../shared/libraries/CurrencyHandler.sol";
 
 // @notice Config for Aera Provisioner deposit/redeem calls
 struct AeraConfig {
@@ -70,6 +72,8 @@ contract GauntletStrategy is AbstractStrategy {
     event AeraAsyncDepositHash(bytes32 requestHash);
     event AeraAsyncRedeemHash(bytes32 requestHash);
 
+    event StakeTokenUpdated(address oldStakeToken, address newStakeToken);
+
     //============================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
@@ -84,6 +88,8 @@ contract GauntletStrategy is AbstractStrategy {
 
     error SlippageTooHigh();
     error InvalidConfig();
+
+    error StakeTokenAlreadySet();
 
     //============================================================================================//
     //                                        Initialize                                          //
@@ -116,12 +122,8 @@ contract GauntletStrategy is AbstractStrategy {
             slippageBps: 100 /// 1%
         });
 
-        ( // check if area impl have async operations enabled
-            bool asyncDepositEnabled, bool asyncRedeemEnabled, , ,
-        ) = AERA_PROVISIONER.tokensDetails(STAKE_TOKEN);
-
-        require(asyncDepositEnabled, AeraDepositDisabled());
-        require(asyncRedeemEnabled, AeraRedeemDisabled());
+        // check if Area impl have async operations enabled
+        _verifyStakeToken(stakeToken_);
     }
 
     //============================================================================================//
@@ -270,14 +272,35 @@ contract GauntletStrategy is AbstractStrategy {
         }
     }
 
+    /// @notice Update the stake token used by this strategy
+    /// @dev Emergency-only: needed when Aera removes a previously supported token
+    /// @param newStakeToken_ The new stake token address
+    function setStakeToken(address newStakeToken_) external onlyStrategyManager {
+        require(newStakeToken_ != address(0), ZeroAddress());
+        require(newStakeToken_ != address(STAKE_TOKEN), StakeTokenAlreadySet());
+
+        // checks if Aera supports token
+        _verifyStakeToken(newStakeToken_);
+
+        address oldStakeToken = address(STAKE_TOKEN);
+        STAKE_TOKEN = IERC20(newStakeToken_);
+
+        IHyperFactory(DIAMOND).updateVaultStakeCurrency(
+            address(this),
+            Currency({ token: newStakeToken_ })
+        );
+
+        emit StakeTokenUpdated(oldStakeToken, newStakeToken_);
+    }
+
     // ========= View ========= //
 
     /// @notice Update Aera integration config
-    /// @param newConfig New config, with slippageBps in basis points (10_000 = 100%)
-    function setAeraConfig(AeraConfig calldata newConfig) external onlyStrategyManager {
-        if (newConfig.slippageBps > 10_000) revert InvalidConfig();
-        aeraConfig = newConfig;
-        emit AeraConfigUpdated(newConfig);
+    /// @param newConfig_ New config, with slippageBps in basis points (10_000 = 100%)
+    function setAeraConfig(AeraConfig calldata newConfig_) external onlyStrategyManager {
+        if (newConfig_.slippageBps > 10_000) revert InvalidConfig();
+        aeraConfig = newConfig_;
+        emit AeraConfigUpdated(newConfig_);
     }
 
     /// @inheritdoc IStrategy
@@ -354,6 +377,18 @@ contract GauntletStrategy is AbstractStrategy {
     function _previewExitRaw(uint256 allocation_) internal view override returns (uint256) {
         uint256 expected = AERA_PRICE.convertUnitsToToken(AERA_VAULT, STAKE_TOKEN, allocation_);
         return (expected * (10_000 - aeraConfig.slippageBps)) / 10_000;
+    }
+
+    /// @dev Verify the token is supported by Aera with async operations enabled
+    function _verifyStakeToken(address stakeToken_) internal view {
+        (
+            bool asyncDepositEnabled,
+            bool asyncRedeemEnabled,
+            , ,
+        ) = AERA_PROVISIONER.tokensDetails(IERC20(stakeToken_));
+
+        require(asyncDepositEnabled, AeraDepositDisabled());
+        require(asyncRedeemEnabled, AeraRedeemDisabled());
     }
 
     /// @dev Returns execution deadline by adding the configured offset to the current block time

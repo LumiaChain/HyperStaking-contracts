@@ -8,7 +8,7 @@ import {
     StakeRewardData,
     StakeRedeemData,
     HyperlaneMailboxMessages
-} from "../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
+} from "../shared/libraries/HyperlaneMailboxMessages.sol";
 
 /// @notice Test wrapper for HyperlaneMailboxMessages library
 contract TestHyperlaneMessages {
@@ -66,6 +66,10 @@ contract TestHyperlaneMessages {
 
     function messageType(bytes calldata message) external pure returns (MessageType) {
         return message.messageType();
+    }
+
+    function nonce(bytes calldata message) external pure returns (uint64) {
+        return message.nonce();
     }
 
     function strategy(bytes calldata message) external pure returns (address) {

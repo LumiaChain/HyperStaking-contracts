@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {VaultInfo} from "../libraries/LibHyperStaking.sol";
+import {Currency} from "../../shared/libraries/CurrencyHandler.sol";
 
 /**
  * @title IHyperFactory
@@ -23,6 +24,12 @@ interface IHyperFactory {
 
     event VaultEnabledSet(address indexed strategy, bool enabled);
 
+    event VaultStakeCurrencyUpdated(
+        address indexed strategy,
+        address indexed oldStakeCurrency,
+        address indexed newStakeCurrency
+    );
+
     //============================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
@@ -30,8 +37,14 @@ interface IHyperFactory {
     /// @notice Thrown when attempting to create a vault using the same strategy
     error VaultAlreadyExist();
 
-    /// @notice Thrown when attempting to enable non existing vault
+    /// @notice Thrown when attempting to use non existing vault
     error VaultDoesNotExist(address strategy);
+
+    /// @notice Thrown when the caller is not the strategy itself
+    error OnlyStrategyCaller(address caller, address strategy);
+
+    /// @notice Thrown when attempting to update disabled vault
+    error VaultDisabled(address strategy);
 
     //============================================================================================//
     //                                          Mutable                                           //
@@ -60,6 +73,18 @@ interface IHyperFactory {
      */
     function setStrategyEnabled(address strategy, bool enabled) external;
 
+    /**
+     * @notice Updates the stored stake currency for an already-registered strategy vault
+     * @dev Callable only by the strategy itself (msg.sender == strategy)
+     *      Reverts if the strategy vault does not exist or is disabled
+     * @param strategy The strategy address (must be msg.sender)
+     * @param newCurrency The new stake currency as reported by the strategy
+     */
+    function updateVaultStakeCurrency(
+        address strategy,
+        Currency calldata newCurrency
+    ) external;
+
     //============================================================================================//
     //                                           View                                             //
     //============================================================================================//
@@ -70,4 +95,11 @@ interface IHyperFactory {
      * @return A VaultInfo struct containing details about the vault
      */
     function vaultInfo(address strategy) external view returns (VaultInfo memory);
+
+    /// @notice Helper to easily quote the dispatch fee for addStrategy
+    function quoteAddStrategy(
+        address strategy,
+        string memory vaultTokenName,
+        string memory vaultTokenSymbol
+    ) external view returns (uint256);
 }
