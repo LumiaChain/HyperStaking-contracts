@@ -235,7 +235,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         StakeInfoData memory dispatchData = StakeInfoData({
             nonce: LibHyperlaneReplayGuard.previewNonce(),
             strategy: strategy,
-            sender: to, // actually to is used as the dispatch sender in lockbox
+            user: to, // actually to is used as the dispatch user in lockbox
             stake: stake
         });
         return IStakeInfoRoute(address(this)).quoteDispatchStakeInfo(dispatchData);

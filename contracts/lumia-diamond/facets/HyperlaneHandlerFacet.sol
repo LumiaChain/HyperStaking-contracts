@@ -100,7 +100,7 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         StakeRedeemData memory data = StakeRedeemData({
             nonce: LibHyperlaneReplayGuard.newNonce(),
             strategy: strategy,
-            sender: user,
+            user: user,
             redeemAmount: redeemAmount
         });
         IStakeRedeemRoute(address(this)).stakeRedeemDispatch{value: dispatchFee}(data);

@@ -328,7 +328,7 @@ describe("VaultShares", function () {
       const stakeRedeemData: StakeRedeemDataStruct = {
         nonce: 1,
         strategy: reserveStrategy,
-        sender: alice,
+        user: alice,
         redeemAmount: stakeAmount,
       };
       const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem(stakeRedeemData);
@@ -468,7 +468,7 @@ describe("VaultShares", function () {
       const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem({
         nonce: 1,
         strategy: reserveStrategy,
-        sender: alice,
+        user: alice,
         redeemAmount,
       });
 

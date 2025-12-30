@@ -271,7 +271,7 @@ describe("Lockbox", function () {
       const stakeRedeemData: StakeRedeemDataStruct = {
         nonce: 2,
         strategy: reserveStrategy,
-        sender: alice,
+        user: alice,
         redeemAmount: sharesAfter,
       };
       const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem(stakeRedeemData);
@@ -328,7 +328,7 @@ describe("Lockbox", function () {
       const stakeRedeemData: StakeRedeemDataStruct = {
         nonce: 3,
         strategy: reserveStrategy,
-        sender: alice,
+        user: alice,
         redeemAmount: sharesAfter,
       };
       const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem(stakeRedeemData);
@@ -387,7 +387,7 @@ describe("Lockbox", function () {
       const stakeRedeemData: StakeRedeemDataStruct = {
         nonce: 4,
         strategy: reserveStrategy,
-        sender: alice,
+        user: alice,
         redeemAmount: shares,
       };
       const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem(stakeRedeemData);
@@ -439,7 +439,7 @@ describe("Lockbox", function () {
       const stakeRedeemData: StakeRedeemDataStruct = {
         nonce: 1,
         strategy: reserveStrategy,
-        sender: alice,
+        user: alice,
         redeemAmount: shares,
       };
       const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem(stakeRedeemData);
@@ -918,7 +918,7 @@ describe("Lockbox", function () {
       const messageSI: StakeInfoDataStruct = {
         nonce: 2,
         strategy: "0x7846C5d815300D27c4975C93Fdbe19b9D352F0d3",
-        sender: "0xE5326B17594A697B27F9807832A0CF7CB025B4bb",
+        user: "0xE5326B17594A697B27F9807832A0CF7CB025B4bb",
         stake: parseEther("4.04"),
       };
 
@@ -927,7 +927,7 @@ describe("Lockbox", function () {
       expect(await testWrapper.messageType(bytesSI)).to.equal(1);
       expect(await testWrapper.nonce(bytesSI)).to.equal(2);
       expect(await testWrapper.strategy(bytesSI)).to.equal(messageSI.strategy);
-      expect(await testWrapper.sender(bytesSI)).to.equal(messageSI.sender);
+      expect(await testWrapper.user(bytesSI)).to.equal(messageSI.user);
       expect(await testWrapper.stake(bytesSI)).to.equal(messageSI.stake);
 
       // StakeReward
@@ -950,7 +950,7 @@ describe("Lockbox", function () {
       const messageSR: StakeRedeemDataStruct = {
         nonce: 1,
         strategy: "0x337baDc64C441e6956B87D248E5Bc284828cfa84",
-        sender: "0xcb37D723BE930Fca39F46F019d84E1B359d2170C",
+        user: "0xcb37D723BE930Fca39F46F019d84E1B359d2170C",
         redeemAmount: parseEther("2"),
       };
 
@@ -959,7 +959,7 @@ describe("Lockbox", function () {
       expect(await testWrapper.messageType(bytesSR)).to.equal(3);
       expect(await testWrapper.nonce(bytesSR)).to.equal(1);
       expect(await testWrapper.strategy(bytesSR)).to.equal(messageSR.strategy);
-      expect(await testWrapper.sender(bytesSR)).to.equal(messageSR.sender);
+      expect(await testWrapper.user(bytesSR)).to.equal(messageSR.user);
       expect(await testWrapper.redeemAmount(bytesSR)).to.equal(messageSR.redeemAmount);
     });
 
@@ -1036,7 +1036,7 @@ describe("Lockbox", function () {
       // check StakeInfo message data
       expect(await testWrapper.messageType(lastMessage.data)).to.eq(1);
       expect(await testWrapper.strategy(lastMessage.data)).to.eq(reserveStrategy);
-      expect(await testWrapper.sender(lastMessage.data)).to.eq(alice);
+      expect(await testWrapper.user(lastMessage.data)).to.eq(alice);
       expect(await testWrapper.stake(lastMessage.data)).to.eq(stakeAmount);
 
       const sharesAfter = await vaultShares.balanceOf(alice);
@@ -1045,7 +1045,7 @@ describe("Lockbox", function () {
       const stakeRedeemData: StakeRedeemDataStruct = {
         nonce: 1,
         strategy: reserveStrategy,
-        sender: alice,
+        user: alice,
         redeemAmount: sharesAfter,
       };
       const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem(stakeRedeemData);
@@ -1060,7 +1060,7 @@ describe("Lockbox", function () {
       // check StakeRedeem message data
       expect(await testWrapper.messageType(lockboxData.lastMessage.data)).to.eq(3);
       expect(await testWrapper.strategy(lockboxData.lastMessage.data)).to.eq(reserveStrategy);
-      expect(await testWrapper.sender(lockboxData.lastMessage.data)).to.eq(alice);
+      expect(await testWrapper.user(lockboxData.lastMessage.data)).to.eq(alice);
       expect(await testWrapper.redeemAmount(lockboxData.lastMessage.data)).to.eq(sharesAfter);
     });
   });

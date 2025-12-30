@@ -42,7 +42,7 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
         bytes calldata data
     ) external diamondInternal nonReentrant {
         address strategy = data.strategy();
-        address sender = data.sender();
+        address user = data.user();
         uint256 stake = data.stake();
 
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
@@ -53,11 +53,11 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
         // mint principal first
         LumiaPrincipal(address(r.assetToken)).mint(address(this), stake);
 
-        // deposit principal to vault and send shares to sender
+        // deposit principal to vault and send shares to the user
         r.assetToken.safeIncreaseAllowance(address(r.vaultShares), stake);
-        uint256 shares = r.vaultShares.deposit(stake, sender);
+        uint256 shares = r.vaultShares.deposit(stake, user);
 
-        emit RwaMint(strategy, sender, stake, shares);
+        emit RwaMint(strategy, user, stake, shares);
     }
 
     /// @inheritdoc IRealAssets
@@ -141,7 +141,7 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
         StakeRedeemData memory dispatchData = StakeRedeemData({
             nonce: LibHyperlaneReplayGuard.previewNonce(),
             strategy: strategy,
-            sender: to,
+            user: to,
             redeemAmount: assets
         });
         return IStakeRedeemRoute(address(this)).quoteDispatchStakeRedeem(dispatchData);

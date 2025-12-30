@@ -66,7 +66,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         StakeInfoData memory data = StakeInfoData({
             nonce: LibHyperlaneReplayGuard.newNonce(),
             strategy: strategy,
-            sender: user,
+            user: user,
             stake: stake
         });
 
@@ -299,7 +299,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     /// @dev On failure, the action is stored for re-execution
     function _handleStakeRedeem(bytes calldata data) internal {
         address strategy = data.strategy();
-        address user = data.sender(); // sender -> actual hyperstaking user
+        address user = data.user(); // actual hyperstaking user
         uint256 stake = data.redeemAmount(); // amount -> amount of rwa asset / stake
 
         // solhint-disable-next-line no-empty-blocks

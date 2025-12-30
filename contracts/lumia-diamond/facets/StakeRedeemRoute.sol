@@ -46,7 +46,7 @@ contract StakeRedeemRoute is IStakeRedeemRoute, LumiaDiamondAcl {
             r.originLockbox,
             data.nonce,
             data.strategy,
-            data.sender,
+            data.user,
             data.redeemAmount
         );
     }

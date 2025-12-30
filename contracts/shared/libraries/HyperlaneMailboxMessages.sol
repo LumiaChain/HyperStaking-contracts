@@ -23,7 +23,7 @@ struct RouteRegistryData {
 struct StakeInfoData {
     uint64 nonce;
     address strategy;
-    address sender;
+    address user;
     uint256 stake;
 }
 
@@ -36,7 +36,7 @@ struct StakeRewardData {
 struct StakeRedeemData {
     uint64 nonce;
     address strategy;
-    address sender;
+    address user;
     uint256 redeemAmount;
 }
 
@@ -114,7 +114,7 @@ library HyperlaneMailboxMessages {
             bytes8(uint64(MessageType.StakeInfo)),       //  8-bytes: msg type
             bytes8(data_.nonce),                         //  8-bytes: nonce
             TypeCasts.addressToBytes32(data_.strategy),  // 32-bytes: strategy address
-            TypeCasts.addressToBytes32(data_.sender),    // 32-bytes: sender address
+            TypeCasts.addressToBytes32(data_.user),      // 32-bytes: user address
             data_.stake                                  // 32-bytes: stake amount
         );
     }
@@ -137,7 +137,7 @@ library HyperlaneMailboxMessages {
             bytes8(uint64(MessageType.StakeRedeem)),     //  8-bytes: msg type
             bytes8(data_.nonce),                         //  8-bytes: nonce
             TypeCasts.addressToBytes32(data_.strategy),  // 32-bytes: strategy address
-            TypeCasts.addressToBytes32(data_.sender),    // 32-bytes: sender address
+            TypeCasts.addressToBytes32(data_.user),      // 32-bytes: user address
             data_.redeemAmount                           // 32-bytes: amount of shares to reedeem
         );
     }
@@ -185,7 +185,7 @@ library HyperlaneMailboxMessages {
 
     // ========= StakeInfo & StakeRedeem  ========= //
 
-    function sender(bytes calldata message) internal pure returns (address) {
+    function user(bytes calldata message) internal pure returns (address) {
         return TypeCasts.bytes32ToAddress(bytes32(message[48:80]));
     }
 

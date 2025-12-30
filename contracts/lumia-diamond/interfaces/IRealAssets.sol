@@ -12,7 +12,7 @@ interface IRealAssets {
 
     event RwaMint(
         address indexed strategy,
-        address sender,
+        address user,
         uint256 stake,
         uint256 shares
     );

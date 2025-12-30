@@ -96,8 +96,8 @@ contract TestHyperlaneMessages {
 
     // ========= StakeInfo & StakeRedeem  ========= //
 
-    function sender(bytes calldata message) external pure returns (address) {
-        return message.sender();
+    function user(bytes calldata message) external pure returns (address) {
+        return message.user();
     }
 
     // ========= StakeInfo ========= //
