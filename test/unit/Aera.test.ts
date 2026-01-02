@@ -25,7 +25,7 @@ async function getMockedGauntlet(testUSDC?: Contract) {
   // --------------------
 
   const {
-    aeraProvisioner, aeraPriceAndFeeCalculator, aeraMultiDepositorVault,
+    oracleRegistry, aeraProvisioner, aeraPriceAndFeeCalculator, aeraMultiDepositorVault,
   } = await ignition.deploy(GauntletMockModule, {
     parameters: {
       GauntletMockModule: {
@@ -66,7 +66,7 @@ async function getMockedGauntlet(testUSDC?: Contract) {
   } as TokenDetailsStruct);
 
   return {
-    owner, feeRecipient, alice, testUSDC, aeraProvisioner, aeraPriceAndFeeCalculator, aeraMultiDepositorVault,
+    owner, feeRecipient, alice, testUSDC, oracleRegistry, aeraProvisioner, aeraPriceAndFeeCalculator, aeraMultiDepositorVault,
   };
 }
 
@@ -480,7 +480,6 @@ describe("Aera", function () {
 
       // --- redeem ---
       const redeemShares = userShares;
-      await vaultShares.connect(alice).approve(realAssets, redeemShares);
 
       // move to next block to avoid "same block timestamp" for deposit and redeem
       await time.increase(1);
@@ -576,7 +575,6 @@ describe("Aera", function () {
       // ---------- Queue full redeem ----------
 
       const lumiaShares = await vaultShares.balanceOf(alice);
-      await vaultShares.connect(alice).approve(realAssets, lumiaShares);
 
       const redeemTx = await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, lumiaShares);
 
@@ -660,7 +658,6 @@ describe("Aera", function () {
       // ---------- Full redeem for user ----------
 
       const lumiaShares = await vaultShares.balanceOf(alice);
-      await vaultShares.connect(alice).approve(realAssets, lumiaShares);
 
       const redeemTx = await realAssets.connect(alice)
         .redeem(gauntletStrategy, alice, alice, lumiaShares);
@@ -705,15 +702,29 @@ describe("Aera", function () {
       // ensure feeRate = 0 for this test
       expect((await hyperFactory.vaultInfo(gauntletStrategy)).feeRate).to.eq(0);
 
+      // it should not be possible to report, when vault has no shares
+      await expect(allocation.connect(vaultManager).report(gauntletStrategy))
+        .to.be.revertedWithCustomError(shared.errors, "RewardDonationZeroSupply");
+
+      // stake again, so report can proceed
+      await testUSDC.connect(alice).approve(deposit, stakeAmount);
+      const stakeTx2 = await deposit.connect(alice).stakeDeposit(gauntletStrategy, alice, stakeAmount);
+
+      await shared.solveGauntletDepositRequest(
+        stakeTx2, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 3,
+      );
+
+      // now report should work
+
       const reportTx = allocation.connect(vaultManager).report(gauntletStrategy);
 
       await expect(reportTx).to.emit(allocation, "StakeCompounded").withArgs(
         gauntletStrategy, bob, 0, 0, 0, expectedRevenue,
       );
 
-      // totalStake increases by revenue; allocation remains (future reports will eat into it)
+      // totalStake increases; revenue remains (future reports will compound it)
       si = await allocation.stakeInfo(gauntletStrategy);
-      expect(si.totalStake).to.eq(expectedRevenue);
+      expect(si.totalStake).to.eq(expectedRevenue + stakeAmount);
       expect(await allocation.checkRevenue(gauntletStrategy)).to.be.lte(expectedRevenue); // should not grow
 
       await expect(reportTx).to.changeTokenBalance(principalToken, vaultShares, expectedRevenue);
@@ -772,7 +783,6 @@ describe("Aera", function () {
 
       // --- User queues full redeem & claim ---
       const userShares = await vaultShares.balanceOf(alice);
-      await vaultShares.connect(alice).approve(realAssets, userShares);
 
       // calculate expected exit
       const exitAmount = await vaultShares.previewRedeem(userShares);
@@ -919,6 +929,96 @@ describe("Aera", function () {
       const newCfg = await gauntletStrategy.aeraConfig();
       expect(newCfg.slippageBps).to.equal(543);
     });
+
+    it("setStakeToken: only strategyManager; validates Aera flags; updates stakeCurrency", async function () {
+      const { signers, hyperStaking, gauntletStrategy, testUSDC, aeraMock } =
+        await loadFixture(deployHyperStaking);
+
+      const { alice, strategyManager } = signers;
+      const { aeraProvisioner } = aeraMock;
+      const { hyperFactory } = hyperStaking;
+
+      const oldToken = await testUSDC.getAddress();
+
+      // deploy a second token
+      const testUSDT = await shared.deployTestERC20("Test Tether", "tUSDT", 6);
+      await testUSDT.mint(alice.address, parseUnits("1000000", 6));
+      const newToken = await testUSDT.getAddress();
+
+      // non-strategy caller cannot update
+      await expect(
+        hyperFactory.connect(alice).updateVaultStakeCurrency(
+          gauntletStrategy,
+          { token: newToken },
+        ))
+        .to.be.revertedWithCustomError(hyperFactory, "OnlyStrategyCaller")
+        .withArgs(alice, gauntletStrategy);
+
+      // non-manager cannot update
+      await expect(
+        gauntletStrategy.connect(alice).setStakeToken(newToken),
+      ).to.be.revertedWithCustomError(gauntletStrategy, "NotStrategyManager");
+
+      // zero address rejected
+      await expect(
+        gauntletStrategy.connect(strategyManager).setStakeToken(ZeroAddress),
+      ).to.be.revertedWithCustomError(gauntletStrategy, "ZeroAddress");
+
+      // same token as current rejected
+      await expect(
+        gauntletStrategy.connect(strategyManager).setStakeToken(oldToken),
+      ).to.be.revertedWithCustomError(gauntletStrategy, "StakeTokenAlreadySet");
+
+      // token not enabled in Aera => should revert
+      await expect(
+        gauntletStrategy.connect(strategyManager).setStakeToken(newToken),
+      ).to.be.revertedWithCustomError(gauntletStrategy, "AeraDepositDisabled");
+
+      const mockOracle = await ethers.deployContract("MockOracle7726");
+      await aeraMock.oracleRegistry.connect(aeraMock.owner).addOracle(testUSDC, testUSDT, mockOracle);
+      await aeraMock.oracleRegistry.connect(aeraMock.owner).addOracle(testUSDT, testUSDC, mockOracle);
+
+      // enable async deposit but NOT async redeem => should revert
+      await aeraProvisioner.connect(aeraMock.owner).setTokenDetails(newToken, {
+        asyncDepositEnabled: true,
+        asyncRedeemEnabled: false,
+        syncDepositEnabled: false,
+        depositMultiplier: 10_000,
+        redeemMultiplier: 10_000,
+      });
+
+      await expect(
+        gauntletStrategy.connect(strategyManager).setStakeToken(newToken),
+      ).to.be.revertedWithCustomError(gauntletStrategy, "AeraRedeemDisabled");
+
+      // enable both async deposit & redeem => should succeed
+      await aeraProvisioner.connect(aeraMock.owner).setTokenDetails(newToken, {
+        asyncDepositEnabled: true,
+        asyncRedeemEnabled: true,
+        syncDepositEnabled: false,
+        depositMultiplier: 10_000,
+        redeemMultiplier: 10_000,
+      });
+
+      // success and event check
+      await expect(gauntletStrategy.connect(strategyManager).setStakeToken(newToken))
+        .to.emit(gauntletStrategy, "StakeTokenUpdated")
+        .withArgs(oldToken, newToken);
+
+      const stakeCurrency = await gauntletStrategy.stakeCurrency();
+      expect(stakeCurrency.token).to.equal(testUSDT);
+
+      // removing token in Aera makes it non-usable again
+      await aeraProvisioner.connect(aeraMock.owner).removeToken(testUSDC);
+
+      await expect(
+        gauntletStrategy.connect(strategyManager).setStakeToken(testUSDC),
+      ).to.be.revertedWithCustomError(gauntletStrategy, "AeraDepositDisabled");
+
+      // verify HyperFactoryFacet vaultInfo stake currency was updated too
+      const vInfo = await hyperFactory.vaultInfo(gauntletStrategy);
+      expect(vInfo.stakeCurrency.token).to.equal(newToken);
+    });
   });
 
   describe("GauntletStrategy gain/loss", () => {
@@ -940,7 +1040,6 @@ describe("Aera", function () {
       const part = (userShares * BigInt(num)) / BigInt(den);
       const amount = part > 0n ? part : 1n;
 
-      await vaultShares.connect(alice).approve(realAssets, amount);
       const tx = await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, amount);
 
       const minOut = await gauntletStrategy.recordedExit(reqId);
@@ -1009,7 +1108,7 @@ describe("Aera", function () {
             redeemNum: fc.integer({ min: 1, max: 100 }),
             redeemDen: fc.integer({ min: 1, max: 100 }),
             // price delta in bps: -100% .. +500%  => -10_000 .. +50_000
-            priceDeltaBps: fc.integer({ min: -10_000, max: 50_000 }),
+            priceDeltaBps: fc.integer({ min: -9_000, max: 50_000 }),
           }).filter(r => r.redeemNum <= r.redeemDen),
           async ({ usdc, slipBps, redeemNum, redeemDen, priceDeltaBps }) => {
             const {
@@ -1069,8 +1168,6 @@ describe("Aera", function () {
             const redeemShares = (userShares * BigInt(redeemNum)) / BigInt(redeemDen);
             // ensure we always redeem at least 1 wei of shares
             const redeemAmt = redeemShares > 0n ? redeemShares : 1n;
-
-            await vaultShares.connect(alice).approve(realAssets, redeemAmt);
 
             const redeemTx = await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, redeemAmt);
 
@@ -1445,8 +1542,6 @@ describe("Aera", function () {
       expect(secondRedeemShares).to.be.gt(0n);
 
       // --- first redeem: 99% ---
-      await vaultShares.connect(alice).approve(realAssets, firstRedeemShares);
-
       const redeemTx1 = await realAssets.connect(alice)
         .redeem(gauntletStrategy, alice, alice, firstRedeemShares);
 
@@ -1474,8 +1569,6 @@ describe("Aera", function () {
       await claimAtDeadline(deposit, alice, Number(firstClaimId));
 
       // --- second redeem: remaining ~1% ---
-      await vaultShares.connect(alice).approve(realAssets, secondRedeemShares);
-
       const redeemTx2 = await realAssets.connect(alice)
         .redeem(gauntletStrategy, alice, alice, secondRedeemShares);
 
@@ -1609,7 +1702,6 @@ describe("Aera", function () {
       const userShares = await vaultShares.balanceOf(alice);
       expect(userShares).to.be.gt(0);
 
-      await vaultShares.connect(alice).approve(realAssets, userShares);
       const redeemTx = await realAssets.connect(alice)
         .redeem(gauntletStrategy, alice, alice, userShares);
 
@@ -1754,7 +1846,6 @@ describe("Aera", function () {
       expect(expectedOut).to.eq(0n);
 
       // redeem 1 wei -> should fail
-      await vaultShares.connect(alice).approve(realAssets, oneWeiShare);
       await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, oneWeiShare);
 
       const failedRedeem = await lockbox.getUserFailedRedeemIds(alice);

@@ -1,4 +1,5 @@
 import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { ethers } from "hardhat";
 import { expect } from "chai";
 import { parseEther, ZeroAddress } from "ethers";
 
@@ -9,7 +10,7 @@ import { deployHyperStakingBase } from "../setup";
 
 async function deployHyperStaking() {
   const {
-    signers, hyperStaking, lumiaDiamond, testERC20, invariantChecker, defaultWithdrawDelay,
+    signers, hyperStaking, lumiaDiamond, testERC20, invariantChecker, defaultWithdrawDelay, mailbox,
   } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Apply Strategies --------------------
@@ -47,7 +48,7 @@ async function deployHyperStaking() {
     signers, // signers
     hyperStaking, lumiaDiamond, // HyperStaking deployment
     defaultWithdrawDelay,
-    testERC20, reserveStrategy, principalToken, vaultShares, // test contracts
+    testERC20, reserveStrategy, principalToken, vaultShares, mailbox, // test contracts
     reserveAssetPrice, vaultSharesName, vaultSharesSymbol, // values
   };
   /* eslint-enable object-property-newline */
@@ -211,6 +212,61 @@ describe("VaultShares", function () {
       expect(await vaultShares.totalAssets()).to.be.eq(totalStake);
     });
 
+    it("reverts report when vault totalSupply is zero", async function () {
+      const {
+        hyperStaking, lumiaDiamond, reserveStrategy, signers, vaultShares, defaultWithdrawDelay,
+      } = await loadFixture(deployHyperStaking);
+
+      const { deposit, allocation } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
+      const { alice, strategyManager, vaultManager } = signers;
+
+      const initialDeposit = parseEther("10");
+
+      // deposits native into the strategy
+      await expect(deposit.connect(alice).stakeDeposit(reserveStrategy, alice, initialDeposit, {
+        value: initialDeposit,
+      }))
+        .to.emit(deposit, "StakeDeposit");
+
+      // double the asset price (2 -> 4)
+      const assetPrice = await reserveStrategy.assetPrice();
+      await reserveStrategy.connect(strategyManager).setAssetPrice(assetPrice * 2n);
+
+      // Alice redeems all shares on Lumia side, then claims withdrawal
+      const aliceShares = await vaultShares.balanceOf(alice);
+      expect(aliceShares).to.equal(initialDeposit);
+
+      const expectedUnlockAlice = (await shared.getCurrentBlockTimestamp()) + defaultWithdrawDelay;
+
+      await expect(realAssets.connect(alice).redeem(reserveStrategy, alice, alice, aliceShares))
+        .to.emit(realAssets, "RwaRedeem");
+
+      const lastClaimIdAlice = await shared.getLastClaimId(
+        deposit,
+        reserveStrategy,
+        alice,
+      );
+
+      await time.setNextBlockTimestamp(expectedUnlockAlice);
+      await deposit.connect(alice).claimWithdraws([lastClaimIdAlice], alice);
+
+      // vault has zero shares
+      expect(await vaultShares.totalSupply()).to.equal(0);
+
+      // there is still some revenue to report from the strategy
+      const expectedRevenue = await allocation.checkRevenue(reserveStrategy);
+      expect(expectedRevenue).to.be.gt(0);
+
+      await allocation.connect(vaultManager).setFeeRecipient(reserveStrategy, vaultManager);
+
+      // report now must revert with custom error, because vault totalSupply == 0
+      // covers ERC4626 edge-case, donation to empty shares vault
+      await expect(
+        allocation.connect(vaultManager).report(reserveStrategy),
+      ).to.be.revertedWithCustomError(shared.errors, "RewardDonationZeroSupply");
+    });
+
     it("shares should be minted equally regardless of the deposit order", async function () {
       const {
         signers, hyperStaking, reserveStrategy, vaultShares,
@@ -269,16 +325,14 @@ describe("VaultShares", function () {
         .to.be.revertedWithCustomError(vaultShares, "OwnableUnauthorizedAccount");
 
       // interchain redeem
-      await vaultShares.connect(alice).approve(realAssets, stakeAmount);
-
       const stakeRedeemData: StakeRedeemDataStruct = {
+        nonce: 1,
         strategy: reserveStrategy,
-        sender: alice,
+        user: alice,
         redeemAmount: stakeAmount,
       };
       const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem(stakeRedeemData);
 
-      await vaultShares.connect(alice).approve(realAssets, stakeAmount);
       await realAssets.connect(alice).redeem(
         reserveStrategy, alice, alice, stakeAmount, { value: dispatchFee },
       );
@@ -292,7 +346,6 @@ describe("VaultShares", function () {
       await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
       // alice withdraw for bob
-      await vaultShares.connect(alice).approve(realAssets, stakeAmount);
       const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
 
       await expect(realAssets.connect(alice).redeem(
@@ -314,9 +367,94 @@ describe("VaultShares", function () {
       expect(await testERC20.balanceOf(lockbox)).to.be.eq(0);
     });
 
-    it("redeem: zero values validation - reverts", async function () {
+    it("redeem flow: owner, receiver and third-party approvals", async function () {
       const {
         signers, hyperStaking, lumiaDiamond, reserveStrategy, vaultShares,
+      } = await loadFixture(deployHyperStaking);
+
+      const { deposit } = hyperStaking;
+      const { realAssets } = lumiaDiamond;
+      const { alice, bob } = signers;
+
+      const stakeAmount = parseEther("3");
+      await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, {
+        value: stakeAmount,
+      });
+
+      const oneShare = stakeAmount / 3n;
+
+      // sanity check: no allowance set
+      expect(await vaultShares.allowance(alice, realAssets)).to.eq(0);
+      expect(await vaultShares.allowance(realAssets, vaultShares)).to.eq(0);
+
+      // --- owner redeem: no approval, self receiver ---
+
+      await expect(
+        realAssets.connect(alice).redeem(
+          reserveStrategy,
+          alice, // from
+          alice, // to
+          oneShare,
+        ),
+      ).to.not.be.reverted;
+
+      expect(await vaultShares.balanceOf(alice)).to.eq(stakeAmount - oneShare);
+
+      // --- owner redeem: no approval, different receiver "to" ---
+
+      await expect(
+        realAssets.connect(alice).redeem(
+          reserveStrategy,
+          alice, // from
+          bob,   // to
+          oneShare,
+        ),
+      ).to.not.be.reverted;
+
+      expect(await vaultShares.balanceOf(alice)).to.eq(stakeAmount - 2n * oneShare);
+
+      // shares are burned, not transferred to bob
+      expect(await vaultShares.balanceOf(bob)).to.eq(0);
+
+      // --- third party redeem: requires approval from owner ---
+
+      const remainingShares = await vaultShares.balanceOf(alice);
+      expect(remainingShares).to.eq(oneShare);
+
+      // no approval: bob cannot redeem alice shares
+      await expect(
+        realAssets.connect(bob).redeem(
+          reserveStrategy,
+          alice, // from
+          bob,   // to
+          remainingShares,
+        ),
+      ).to.be.reverted;
+
+      // after approval: bob can redeem on behalf of alice
+      await vaultShares.connect(alice).approve(bob, remainingShares);
+
+      await expect(
+        realAssets.connect(bob).redeem(
+          reserveStrategy,
+          alice, // from
+          bob,   // to
+          remainingShares,
+        ),
+      ).to.not.be.reverted;
+
+      expect(await vaultShares.balanceOf(alice)).to.eq(0);
+      expect(await vaultShares.balanceOf(bob)).to.eq(0);
+
+      expect(await vaultShares.allowance(alice, bob)).to.eq(0);
+      expect(await vaultShares.allowance(alice, realAssets)).to.eq(0);
+      expect(await vaultShares.allowance(bob, realAssets)).to.eq(0);
+      expect(await vaultShares.allowance(realAssets, vaultShares)).to.eq(0);
+    });
+
+    it("redeem: zero values validation - reverts", async function () {
+      const {
+        signers, hyperStaking, lumiaDiamond, reserveStrategy,
       } = await loadFixture(deployHyperStaking);
 
       const { deposit } = hyperStaking;
@@ -328,12 +466,11 @@ describe("VaultShares", function () {
 
       const redeemAmount = parseEther("0.1");
       const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem({
+        nonce: 1,
         strategy: reserveStrategy,
-        sender: alice,
+        user: alice,
         redeemAmount,
       });
-
-      await vaultShares.connect(alice).approve(realAssets, redeemAmount);
 
       // zero amount
       await expect(
@@ -361,5 +498,102 @@ describe("VaultShares", function () {
         }),
       ).to.be.revertedWithCustomError(shared.errors, "ZeroAddress");
     });
+  });
+
+  it("replay protection: should reject replayed StakeInfo and StakeRedeem after mailbox rotation", async function () {
+    const {
+      signers, hyperStaking, lumiaDiamond, mailbox, reserveStrategy, vaultShares,
+    } = await loadFixture(deployHyperStaking);
+
+    const { deposit, lockbox } = hyperStaking;
+    const { hyperlaneHandler, realAssets } = lumiaDiamond;
+    const { vaultManager, lumiaFactoryManager, alice } = signers;
+
+    // ---------- Helper: build Hyperlane message bytes ----------
+    const buildMessage = async (
+      originDomain: number,
+      destinationDomain: number,
+      senderAddr: string,
+      recipientAddr: string,
+      body: string,
+      mailboxNonce = 123,
+    ) => {
+      return ethers.solidityPacked(
+        ["uint8", "uint32", "uint32", "bytes32", "uint32", "bytes32", "bytes"],
+        [
+          33,
+          mailboxNonce,
+          originDomain,
+          ethers.zeroPadValue(senderAddr, 32),
+          destinationDomain,
+          ethers.zeroPadValue(recipientAddr, 32),
+          body,
+        ],
+      );
+    };
+
+    // in the one-chain setup, origin == destination == mailbox.localDomain()
+    const domain = Number(await mailbox.localDomain());
+
+    // ============================================================
+    // 1) Deposit direction: replay StakeInfo into HyperlaneHandler
+    // ============================================================
+
+    const stakeAmount = parseEther("1");
+    await deposit.connect(alice).stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
+
+    const lastToLumia = await hyperlaneHandler.lastMessage();
+    expect(lastToLumia.sender).to.eq(await lockbox.getAddress());
+
+    const shares = await vaultShares.balanceOf(alice);
+    await realAssets.connect(alice).redeem(reserveStrategy, alice, alice, shares);
+
+    const lastToOrigin = (await lockbox.lockboxData()).lastMessage;
+    expect(lastToOrigin.sender).to.eq(await hyperlaneHandler.getAddress());
+
+    // rotate mailbox on Lumia side
+    const newMailbox = await ethers.deployContract("OneChainMailbox", [0n, domain]);
+    await newMailbox.waitForDeployment();
+
+    // update mailbox address in hyperlaneHandler
+    await hyperlaneHandler.connect(lumiaFactoryManager).setMailbox(newMailbox);
+
+    // now try to deliver the exact same payload again via the NEW mailbox
+    const replayStakeInfoMsg = await buildMessage(
+      domain,
+      domain,
+      await lockbox.getAddress(),           // sender bytes32 must be lockbox
+      await hyperlaneHandler.getAddress(),  // recipient is handler
+      lastToLumia.data,                     // exact same body (incl nonce)
+      777,
+    );
+
+    await expect(
+      newMailbox.process("0x", replayStakeInfoMsg),
+    ).to.be.revertedWithCustomError(shared.errors, "HyperlaneReplay");
+
+    // ============================================================
+    // 2) Redeem direction: replay StakeRedeem into LockboxFacet
+    // ============================================================
+
+    // lockbox uses propose/apply delay in your suite
+    const DELAY = 60 * 60 * 24;
+    await lockbox.connect(vaultManager).proposeMailbox(newMailbox);
+    await time.increase(DELAY + 1);
+    await lockbox.connect(vaultManager).applyMailbox();
+
+    // replay same StakeRedeem body into lockbox via NEW mailbox
+    const replayStakeRedeemMsg = await buildMessage(
+      domain,
+      domain,
+      await hyperlaneHandler.getAddress(), // sender bytes32 must be handler
+      await lockbox.getAddress(),          // recipient is lockbox
+      lastToOrigin.data,                   // exact same body (incl nonce)
+      888,
+    );
+
+    await expect(
+      newMailbox.process("0x", replayStakeRedeemMsg),
+    ).to.be.revertedWithCustomError(shared.errors, "HyperlaneReplay");
   });
 });

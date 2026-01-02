@@ -8,7 +8,7 @@ import {
     StakeRewardData,
     StakeRedeemData,
     HyperlaneMailboxMessages
-} from "../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
+} from "../shared/libraries/HyperlaneMailboxMessages.sol";
 
 /// @notice Test wrapper for HyperlaneMailboxMessages library
 contract TestHyperlaneMessages {
@@ -68,6 +68,10 @@ contract TestHyperlaneMessages {
         return message.messageType();
     }
 
+    function nonce(bytes calldata message) external pure returns (uint64) {
+        return message.nonce();
+    }
+
     function strategy(bytes calldata message) external pure returns (address) {
         return message.strategy();
     }
@@ -92,8 +96,8 @@ contract TestHyperlaneMessages {
 
     // ========= StakeInfo & StakeRedeem  ========= //
 
-    function sender(bytes calldata message) external pure returns (address) {
-        return message.sender();
+    function user(bytes calldata message) external pure returns (address) {
+        return message.user();
     }
 
     // ========= StakeInfo ========= //

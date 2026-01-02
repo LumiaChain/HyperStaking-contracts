@@ -90,7 +90,7 @@ describe("Test Gauntlet Strategy", function () {
     const { gauntletStrategy, usdc, lumiaGtUSDA, signers } = await loadFixture(getAeraIntegration);
     const { owner } = signers;
 
-    // --- stake via strategy → emits deposit hash & escrows USDC on Provisioner ---
+    // --- stake via strategy -> emits deposit hash & escrows USDC on Provisioner ---
     const amount = parseUnits("250", 6);
     await usdc.connect(owner).approve(gauntletStrategy, amount);
 
@@ -105,7 +105,7 @@ describe("Test Gauntlet Strategy", function () {
     await ethers.provider.send("evm_increaseTime", [Number(cfg.deadlineOffset)]);
     await ethers.provider.send("evm_mine", []);
 
-    // --- claim allocation → mints wrapper to owner ---
+    // --- claim allocation -> mints wrapper to owner ---
     await gauntletStrategy.connect(owner).claimAllocation([allocReqId], owner);
 
     const shares = await lumiaGtUSDA.balanceOf(owner);

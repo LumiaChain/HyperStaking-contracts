@@ -80,9 +80,6 @@ library LibInterchainFactory {
 
     // -------------------- Storage Access
 
-    /// @notice Checks whether rwaAsset is valid
-    /// @dev reverts if rwaAsset dont some aingv roperties
-
     function diamondStorage() internal pure returns (InterchainFactoryStorage storage s) {
         bytes32 position = INTERCHAIN_FACTORY_STORAGE_POSITION;
         assembly {

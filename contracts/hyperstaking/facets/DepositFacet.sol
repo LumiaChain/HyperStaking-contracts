@@ -4,6 +4,8 @@ pragma solidity =0.8.27;
 import {IDeposit} from "../interfaces/IDeposit.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 import {IAllocation} from "../interfaces/IAllocation.sol";
+import {IStakeInfoRoute} from "../interfaces/IStakeInfoRoute.sol";
+import {ILockbox} from "../interfaces/ILockbox.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
 
 import {
@@ -13,10 +15,13 @@ import {
     PausableUpgradeable
 } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
-import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
+import {StakeInfoData} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 import {
     HyperStakingStorage, LibHyperStaking, VaultInfo, Claim
 } from "../libraries/LibHyperStaking.sol";
+
+import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
+import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplayGuard.sol";
 
 /**
  * @title DepositFacet
@@ -37,12 +42,11 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
     /// @notice Stake deposit function
     /// @inheritdoc IDeposit
-    function stakeDeposit(address strategy, address to, uint256 stake)
-        external
-        payable
-        nonReentrant
-        whenNotPaused
-    {
+    function stakeDeposit(
+        address strategy,
+        address to,
+        uint256 stake
+    ) external payable nonReentrant whenNotPaused {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
 
@@ -50,11 +54,24 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
         v.stakeInfo[strategy].totalStake += stake;
 
-        vault.stakeCurrency.transferFrom(
-            msg.sender,
-            address(this),
-            stake
-        );
+        // quote message fee for forwarding message across chains
+        uint256 dispatchFee = quoteStakeDeposit(strategy, to, stake);
+        if (vault.stakeCurrency.isNativeCoin()) {
+            vault.stakeCurrency.transferFrom(
+                msg.sender,
+                address(this),
+                stake + dispatchFee // include fee to stake amount
+            );
+        } else { // fetch native and tokens separately
+            ILockbox(address(this)).collectDispatchFee{value: msg.value}(msg.sender, dispatchFee);
+
+            // stake
+            vault.stakeCurrency.transferFrom(
+                msg.sender,
+                address(this),
+                stake
+            );
+        }
 
         // true - bridge info to Lumia chain to mint coresponding rwa asset
         IAllocation(address(this)).join(strategy, to, stake);
@@ -207,6 +224,21 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         for (uint256 i; i < limit; ++i) {
             ids[i] = arr[len - 1 - i];
         }
+    }
+
+    /// @inheritdoc IDeposit
+    function quoteStakeDeposit(
+        address strategy,
+        address to,
+        uint256 stake
+    ) public view returns (uint256) {
+        StakeInfoData memory dispatchData = StakeInfoData({
+            nonce: LibHyperlaneReplayGuard.previewNonce(),
+            strategy: strategy,
+            user: to, // actually to is used as the dispatch user in lockbox
+            stake: stake
+        });
+        return IStakeInfoRoute(address(this)).quoteDispatchStakeInfo(dispatchData);
     }
 
     //============================================================================================//

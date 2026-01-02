@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.27;
 
-import {RouteRegistryData} from "../libraries/HyperlaneMailboxMessages.sol";
+import {RouteRegistryData} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 
 /**
  * @title IRouteRegistry
@@ -15,6 +15,7 @@ interface IRouteRegistry {
     event RouteRegistryDispatched(
         address indexed mailbox,
         address lumiaFactory,
+        uint64 nonce,
         address indexed strategy,
         string name,
         string symbol,

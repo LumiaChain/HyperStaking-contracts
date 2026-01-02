@@ -6,11 +6,12 @@ pragma solidity =0.8.27;
 // solhint-disable no-empty-blocks
 
 import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
-import {Currency, CurrencyHandler} from "../libraries/CurrencyHandler.sol";
 import {IHyperStakingRoles} from "../interfaces/IHyperStakingRoles.sol";
 
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
+import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
 
 /**
  * @title AbstractStrategy

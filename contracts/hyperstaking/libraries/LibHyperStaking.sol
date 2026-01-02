@@ -3,11 +3,12 @@ pragma solidity =0.8.27;
 
 // solhint-disable var-name-mixedcase
 
-import {Currency} from "../libraries/CurrencyHandler.sol";
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+
+import {Currency} from "../../shared/libraries/CurrencyHandler.sol";
 
 //================================================================================================//
 //                                            Types                                               //

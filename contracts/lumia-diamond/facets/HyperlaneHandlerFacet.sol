@@ -3,6 +3,7 @@ pragma solidity =0.8.27;
 
 import {IHyperlaneHandler} from "../interfaces/IHyperlaneHandler.sol";
 import {IRealAssets} from "../interfaces/IRealAssets.sol";
+import {IStakeRedeemRoute} from "../interfaces/IStakeRedeemRoute.sol";
 import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
 import {LumiaPrincipal} from "../tokens/LumiaPrincipal.sol";
 import {LumiaVaultShares} from "../tokens/LumiaVaultShares.sol";
@@ -19,10 +20,12 @@ import {
 } from "../libraries/LibInterchainFactory.sol";
 
 import {
-    MessageType, HyperlaneMailboxMessages
-} from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
+    MessageType, HyperlaneMailboxMessages, StakeRedeemData
+} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 
-import {BadOriginDestination } from "../../shared/Errors.sol";
+import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
+import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplayGuard.sol";
+import {BadOriginDestination, DispatchUnderpaid} from "../../shared/Errors.sol";
 
 /**
  * @title HyperlaneHandlerFacet
@@ -30,6 +33,7 @@ import {BadOriginDestination } from "../../shared/Errors.sol";
  */
 contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
     using EnumerableSet for EnumerableSet.AddressSet;
+    using CurrencyHandler for Currency;
     using HyperlaneMailboxMessages for bytes;
 
     //============================================================================================//
@@ -42,27 +46,27 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         bytes32 sender,
         bytes calldata data
     ) external payable onlyMailbox {
-        emit ReceivedMessage(origin, sender, msg.value, string(data));
-
-        // parse sender, store lastMsg
+        // parse sender
         address originLockbox = TypeCasts.bytes32ToAddress(sender);
-        LastMessage memory lastMsg = LastMessage({
+        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
+
+        // checks
+        require(ifs.authorizedOrigins.contains(originLockbox),
+            NotFromHyperStaking(originLockbox)
+        );
+        require(origin == ifs.destinations[originLockbox], BadOriginDestination(origin));
+
+        // additional replay protection
+        LibHyperlaneReplayGuard.requireNotProcessedData(origin, sender, data);
+
+        // save lastMessage in the storage
+        ifs.lastMessage = LastMessage({
             sender: originLockbox,
             data: data
         });
 
-        // save in the storage
-        InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
-        ifs.lastMessage = lastMsg;
-
-        // ---
-
-        require(
-            ifs.authorizedOrigins.contains(originLockbox),
-            NotFromHyperStaking(originLockbox)
-        );
-
-        require(origin == ifs.destinations[originLockbox], BadOriginDestination(origin));
+        // emit event before route
+        emit ReceivedMessage(origin, sender, msg.value, data);
 
         // parse message type (HyperlaneMailboxMessages)
         MessageType msgType = data.messageType();
@@ -84,6 +88,45 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         }
 
         revert UnsupportedMessage();
+    }
+
+    /// @inheritdoc IHyperlaneHandler
+    function bridgeStakeRedeem(
+        address strategy,
+        address user,
+        uint256 redeemAmount,
+        uint256 dispatchFee
+    ) external diamondInternal {
+        StakeRedeemData memory data = StakeRedeemData({
+            nonce: LibHyperlaneReplayGuard.newNonce(),
+            strategy: strategy,
+            user: user,
+            redeemAmount: redeemAmount
+        });
+        IStakeRedeemRoute(address(this)).stakeRedeemDispatch{value: dispatchFee}(data);
+    }
+
+    /// @inheritdoc IHyperlaneHandler
+    function collectDispatchFee(
+        address from,
+        uint256 dispatchFee
+    ) external payable diamondInternal {
+        if (dispatchFee == 0) return;
+
+        if (msg.value < dispatchFee) {
+            revert DispatchUnderpaid();
+        }
+
+        Currency memory nativeCurrency = Currency({
+            token: address(0)
+        });
+
+        // required native fee value from msg.sender into this (diamond)
+        nativeCurrency.transferFrom(
+            from,
+            address(this),
+            dispatchFee
+        );
     }
 
     // ========= Restricted ========= //

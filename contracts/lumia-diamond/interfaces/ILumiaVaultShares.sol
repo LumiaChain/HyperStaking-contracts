@@ -5,21 +5,22 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 /**
  * @title ILumiaVaultShares
- * @dev Extends the standard IERC4626 with spendAllowance functionality
+ * @dev Extends the standard IERC4626 with diamondRedeem functionality
  */
 interface ILumiaVaultShares is IERC4626 {
     /**
-     * @notice Allows the owner of the vault to spend allowance on behalf of a user
-     *         Useful for enabling external contracts (e.g., management contracts)
-     *         to redeem shares on behalf of users
-     * @dev Reverts if the allowance is insufficient
-     * @param owner The address that granted the allowance
-     * @param caller The address attempting to spend the allowance
-     * @param shares The number of shares to spend
+     * @notice Redeems shares using the diamond as the owner
+     * @dev Mirrors the standard ERC4626 redeem flow but takes `caller` explicitly
+     *      `caller` must be the original msg.sender from the diamond facet
+     *      Allowance is checked in _withdraw against `caller` when `caller != owner`
+     *
+     *      Function owned by a diamond facet that is a trusted component, must correctly pass
+     *      the original transaction initiator as the caller parameter
      */
-    function spendAllowance(
-        address owner,
+    function diamondRedeem(
+        uint256 shares,
         address caller,
-        uint256 shares
-    ) external;
+        address receiver,
+        address owner
+    ) external returns (uint256);
 }

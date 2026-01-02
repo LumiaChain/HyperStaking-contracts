@@ -4,11 +4,11 @@ pragma solidity =0.8.27;
 import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
 import {AbstractStrategy} from "./AbstractStrategy.sol";
 
-import {Currency} from "../libraries/CurrencyHandler.sol";
-
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {PirexIntegration} from "./integrations/PirexIntegration.sol";
+
+import {Currency} from "../../shared/libraries/CurrencyHandler.sol";
 
 /**
  * @title DineroStrategy

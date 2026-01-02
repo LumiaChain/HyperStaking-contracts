@@ -97,7 +97,7 @@ interface IAllocation {
      * @notice Harvests revenue for a specific strategy and compound it
      * @dev The possible amount to report is adjusted by bridgeSafetyMargin
      */
-    function report(address strategy) external;
+    function report(address strategy) external payable;
 
     /**
      * @notice Sets the bridge safety margin (with 18 dec precision) for a specific strategy
@@ -138,4 +138,7 @@ interface IAllocation {
      * @return The revenue amount (in stake currency)
      */
     function checkRevenue(address strategy) external view returns (uint256);
+
+    /// @notice Helper to easily quote the dispatch fee for report
+    function quoteReport(address strategy) external view returns (uint256);
 }

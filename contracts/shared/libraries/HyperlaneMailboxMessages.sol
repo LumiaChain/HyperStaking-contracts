@@ -1,0 +1,209 @@
+// SPDX-License-Identifier: MIT
+// inspired by Hyperlane: token/libs/TokenMessage.sol
+pragma solidity =0.8.27;
+
+import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
+
+enum MessageType {
+    RouteRegistry,
+    StakeInfo,
+    StakeReward,
+    StakeRedeem
+}
+
+struct RouteRegistryData {
+    uint64 nonce;
+    address strategy;
+    string name;
+    string symbol;
+    uint8 decimals;
+    bytes metadata;
+}
+
+struct StakeInfoData {
+    uint64 nonce;
+    address strategy;
+    address user;
+    uint256 stake;
+}
+
+struct StakeRewardData {
+    uint64 nonce;
+    address strategy;
+    uint256 stakeAdded;
+}
+
+struct StakeRedeemData {
+    uint64 nonce;
+    address strategy;
+    address user;
+    uint256 redeemAmount;
+}
+
+library HyperlaneMailboxMessages {
+    // ========= Helper ========= //
+
+    function stringToBytes32(
+        string memory source
+    ) internal pure returns (uint8 size, bytes32 result) {
+        bytes memory temp = bytes(source);
+        if (temp.length == 0) {
+            return (0, 0x0);
+        }
+
+        require(temp.length <= 32, "stringToBytes32: overflow"); // limitation
+
+        assembly {
+            // Load the size of temp
+            size := mload(temp)
+
+            // Load next 32 bytes and assign it to result
+            result := mload(add(source, 0x20))
+        }
+    }
+
+    function stringToBytes64(
+        string memory source
+    ) internal pure returns (uint8 size, bytes32[2] memory result) {
+        bytes memory temp = bytes(source);
+
+        require(temp.length <= 64, "stringToBytes64: overflow"); // limitation
+        if (temp.length == 0) {
+            return (0, result);
+        }
+
+        assembly {
+            // Load the size of temp
+            size := mload(temp)
+
+            // store the first 32 bytes from temp to result (don't store size)
+            mstore(result, mload(add(temp, 0x20)))
+
+            // store the next 32 bytes if size is greater than 32
+            if gt(size, 0x20) {
+                mstore(add(result, 0x20), mload(add(temp, 0x40)))
+            }
+        }
+    }
+
+    // ========= Serialize ========= //
+
+    function serializeRouteRegistry(
+        RouteRegistryData memory data_
+    ) internal pure returns (bytes memory) {
+        (uint8 nameSize, bytes32[2] memory nameBytes) = stringToBytes64(data_.name);
+        (uint8 symbolSize, bytes32 symbolBytes) = stringToBytes32(data_.symbol);
+
+        return abi.encodePacked(
+            bytes8(uint64(MessageType.RouteRegistry)),   //  8-bytes: msg type
+            bytes8(data_.nonce),                         //  8-bytes: nonce
+            TypeCasts.addressToBytes32(data_.strategy),  // 32-bytes: strategy address
+            nameSize,                                    //   1-byte: token name size
+            nameBytes,                                   // 64-bytes: token name
+            symbolSize,                                  //   1-byte: token symbol size
+            symbolBytes,                                 // 32-bytes: token symbol
+            bytes1(data_.decimals),                      //   1-byte: token decimals
+            data_.metadata                               // XX-bytes: additional metadata
+        );
+    }
+
+    function serializeStakeInfo(
+        StakeInfoData memory data_
+    ) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            bytes8(uint64(MessageType.StakeInfo)),       //  8-bytes: msg type
+            bytes8(data_.nonce),                         //  8-bytes: nonce
+            TypeCasts.addressToBytes32(data_.strategy),  // 32-bytes: strategy address
+            TypeCasts.addressToBytes32(data_.user),      // 32-bytes: user address
+            data_.stake                                  // 32-bytes: stake amount
+        );
+    }
+
+    function serializeStakeReward(
+        StakeRewardData memory data_
+    ) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            bytes8(uint64(MessageType.StakeReward)),     //  8-bytes: msg type
+            bytes8(data_.nonce),                         //  8-bytes: nonce
+            TypeCasts.addressToBytes32(data_.strategy),  // 32-bytes: strategy address
+            data_.stakeAdded                             // 32-bytes: amount of stake added
+        );
+    }
+
+    function serializeStakeRedeem(
+        StakeRedeemData memory data_
+    ) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            bytes8(uint64(MessageType.StakeRedeem)),     //  8-bytes: msg type
+            bytes8(data_.nonce),                         //  8-bytes: nonce
+            TypeCasts.addressToBytes32(data_.strategy),  // 32-bytes: strategy address
+            TypeCasts.addressToBytes32(data_.user),      // 32-bytes: user address
+            data_.redeemAmount                           // 32-bytes: amount of shares to reedeem
+        );
+    }
+
+    // ========= General ========= //
+
+    /// [0:8]
+    function messageType(bytes calldata message) internal pure returns (MessageType) {
+        return MessageType(uint64(bytes8(message[0:8])));
+    }
+
+    /// [8:16]
+    function nonce(bytes calldata message) internal pure returns (uint64) {
+        return uint64(bytes8(message[8:16]));
+    }
+
+    /// [16:48]
+    function strategy(bytes calldata message) internal pure returns (address) {
+        return TypeCasts.bytes32ToAddress(bytes32(message[16:48]));
+    }
+
+    // ========= RouteRegistry ========= //
+
+    /// [48:49][49:113]
+    function name(bytes calldata message) internal pure returns (string calldata) {
+        uint8 size = uint8(bytes1(message[48:49]));
+        return string(bytes(message[49:49 + size]));
+    }
+
+    /// [113:114][114:146]
+    function symbol(bytes calldata message) internal pure returns (string calldata) {
+        uint8 size = uint8(bytes1(message[113:114]));
+        return string(bytes(message[114:114 + size]));
+    }
+
+    /// [146:147]
+    function decimals(bytes calldata message) internal pure returns (uint8) {
+        return uint8(bytes1(message[146:147]));
+    }
+
+    /// [147:]
+    function routeRegistryMetadata(bytes calldata message) internal pure returns (bytes calldata) {
+        return message[147:];
+    }
+
+    // ========= StakeInfo & StakeRedeem  ========= //
+
+    function user(bytes calldata message) internal pure returns (address) {
+        return TypeCasts.bytes32ToAddress(bytes32(message[48:80]));
+    }
+
+    // ========= StakeInfo ========= //
+
+    function stake(bytes calldata message) internal pure returns (uint256) {
+        return uint256(bytes32(message[80:112]));
+    }
+
+    // ========= StakeReward ========= //
+
+    function stakeAdded(bytes calldata message) internal pure returns (uint256) {
+        return uint256(bytes32(message[48:80]));
+    }
+
+    // ========= StakeRedeem  ========= //
+
+    function redeemAmount(bytes calldata message) internal pure returns (uint256) {
+        return uint256(bytes32(message[80:112]));
+    }
+}

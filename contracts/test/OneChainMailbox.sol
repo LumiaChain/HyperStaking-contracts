@@ -59,7 +59,7 @@ contract OneChainMailbox is IMailbox, Ownable {
 
     // ============ Error ============
 
-    error DispatchUnderpaid();
+    error MailboxDispatchUnderpaid();
 
     // ============ Constructor ============
 
@@ -270,7 +270,7 @@ contract OneChainMailbox is IMailbox, Ownable {
         uint256 requiredValue = this.quoteDispatch(destinationDomain, recipientAddress, message);
         // if underpaying, throw error
         if (msg.value < requiredValue) {
-            revert DispatchUnderpaid();
+            revert MailboxDispatchUnderpaid();
         }
 
         // TEST - execute process in the same transaction

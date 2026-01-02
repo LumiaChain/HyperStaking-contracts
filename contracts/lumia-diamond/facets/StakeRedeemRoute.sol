@@ -8,7 +8,7 @@ import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
 import {
     HyperlaneMailboxMessages, StakeRedeemData
-} from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
+} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 
 import {
     LibInterchainFactory, InterchainFactoryStorage, RouteInfo
@@ -44,8 +44,9 @@ contract StakeRedeemRoute is IStakeRedeemRoute, LumiaDiamondAcl {
         emit StakeRedeemDispatched(
             address(ifs.mailbox),
             r.originLockbox,
+            data.nonce,
             data.strategy,
-            data.sender,
+            data.user,
             data.redeemAmount
         );
     }
