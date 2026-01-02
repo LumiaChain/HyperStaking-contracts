@@ -122,7 +122,7 @@ contract GauntletStrategy is AbstractStrategy {
             slippageBps: 100 /// 1%
         });
 
-        // check if Area impl have async operations enabled
+        // check if Aera impl have async operations enabled
         _verifyStakeToken(stakeToken_);
     }
 
@@ -149,7 +149,7 @@ contract GauntletStrategy is AbstractStrategy {
             readyAt
         );
 
-        // compute minimum allocation area guarantees
+        // compute minimum allocation aera guarantees
         uint256 minUnitsOut = _previewAllocationRaw(amount_);
 
         // save minUnitsOut for later claim settlement
@@ -404,7 +404,7 @@ contract GauntletStrategy is AbstractStrategy {
         _lastAeraDeadline = deadline;
     }
 
-    /// @notice Calculate the request hash in the same way as in the Area Provisioner contract
+    /// @notice Calculate the request hash in the same way as in the Aera Provisioner contract
     /// @dev Look at Provisioner _getRequestHashParams
     function _getRequestHashParams(
         IERC20 token,

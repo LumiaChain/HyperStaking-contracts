@@ -125,11 +125,12 @@ contract LumiaVaultShares is ERC4626, Ownable2Step {
     //                                     Internal Functions                                     //
     //============================================================================================//
 
-    /**
-     * @dev Overrides the standard withdraw/redeem workflow and replaces sending assets directly
-     *      to the receiver with approving the vault for further Lumia flow
-     *      The vault then performs the cross-chain logic and eventually releases the stake to the receiver
-     */
+     /**
+      * @dev Overrides the standard withdraw/redeem workflow and replaces sending assets directly
++     *      to the receiver with approving the receiver for further Lumia flow. The receiver contract
+      *      then performs the cross-chain logic and eventually releases the stake to the end user
++     *      NOTE: receiver should be a contract, not an EOA, assets are approved rather than transferred
+      */
     function _withdraw(
         address caller,
         address receiver,

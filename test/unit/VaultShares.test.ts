@@ -521,7 +521,7 @@ describe("VaultShares", function () {
       return ethers.solidityPacked(
         ["uint8", "uint32", "uint32", "bytes32", "uint32", "bytes32", "bytes"],
         [
-          33, // :contentReference[oaicite:3]{index=3}
+          33,
           mailboxNonce,
           originDomain,
           ethers.zeroPadValue(senderAddr, 32),
@@ -576,7 +576,7 @@ describe("VaultShares", function () {
     // 2) Redeem direction: replay StakeRedeem into LockboxFacet
     // ============================================================
 
-    // lockbox uses propose/apply delay in your suite :contentReference[oaicite:4]{index=4}
+    // lockbox uses propose/apply delay in your suite
     const DELAY = 60 * 60 * 24;
     await lockbox.connect(vaultManager).proposeMailbox(newMailbox);
     await time.increase(DELAY + 1);

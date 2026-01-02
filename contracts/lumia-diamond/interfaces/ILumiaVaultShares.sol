@@ -13,6 +13,9 @@ interface ILumiaVaultShares is IERC4626 {
      * @dev Mirrors the standard ERC4626 redeem flow but takes `caller` explicitly
      *      `caller` must be the original msg.sender from the diamond facet
      *      Allowance is checked in _withdraw against `caller` when `caller != owner`
+     *
+     *      Function owned by a diamond facet that is a trusted component, must correctly pass
+     *      the original transaction initiator as the caller parameter
      */
     function diamondRedeem(
         uint256 shares,

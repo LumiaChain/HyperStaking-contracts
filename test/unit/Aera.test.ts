@@ -1000,7 +1000,7 @@ describe("Aera", function () {
         redeemMultiplier: 10_000,
       });
 
-      // succees and event check
+      // success and event check
       await expect(gauntletStrategy.connect(strategyManager).setStakeToken(newToken))
         .to.emit(gauntletStrategy, "StakeTokenUpdated")
         .withArgs(oldToken, newToken);

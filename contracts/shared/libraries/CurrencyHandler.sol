@@ -26,7 +26,7 @@ struct Currency {
 library CurrencyHandler {
     using SafeERC20 for IERC20;
 
-    /* ========== Erorrs ========== */
+    /* ========== Errors ========== */
 
     error InsufficientBalance();
     error InsufficientValue();

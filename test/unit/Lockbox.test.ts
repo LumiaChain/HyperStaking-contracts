@@ -255,7 +255,7 @@ describe("Lockbox", function () {
 
       const stakeAmount = parseEther("3");
 
-      // quoteStakeDeposit should return the same fes as mailboxFee
+      // quoteStakeDeposit should return the same fee as mailboxFee
       const quote = await deposit.quoteStakeDeposit(
         reserveStrategy,
         alice,
