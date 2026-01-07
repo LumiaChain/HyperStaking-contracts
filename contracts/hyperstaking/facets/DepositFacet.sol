@@ -32,8 +32,6 @@ import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplay
 contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, PausableUpgradeable {
     using CurrencyHandler for Currency;
 
-    uint64 public constant MAX_WITHDRAW_DELAY = 30 days;
-
     //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
@@ -194,10 +192,6 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         uint256 requestId = LibHyperStaking.newRequestId();
         uint64 readyAt = IStrategy(strategy).requestExit(requestId, allocation, user);
 
-        if (readyAt == 0 && !feeWithdraw) {
-            readyAt = uint64(block.timestamp) + v.defaultWithdrawDelay;
-        }
-
         v.pendingClaims[requestId] = Claim({
             strategy: strategy,
             unlockTime: readyAt,
@@ -215,17 +209,6 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     /* ========== ACL ========== */
 
     /// @inheritdoc IDeposit
-    function setWithdrawDelay(uint64 newDelay) external onlyStakingManager {
-        require(newDelay < MAX_WITHDRAW_DELAY, WithdrawDelayTooHigh(newDelay));
-
-        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        uint64 previousDelay = v.defaultWithdrawDelay;
-        v.defaultWithdrawDelay = newDelay;
-
-        emit WithdrawDelaySet(msg.sender, previousDelay, newDelay);
-    }
-
-    /// @inheritdoc IDeposit
     function pauseDeposit() external onlyStakingManager whenNotPaused {
         _pause();
     }
@@ -238,13 +221,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     // ========= View ========= //
 
     /// @inheritdoc IDeposit
-    function withdrawDelay() external view returns (uint64) {
-        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        return v.defaultWithdrawDelay;
-    }
-
-    /// @inheritdoc IDeposit
-    function pendingWithdraws(
+    function pendingClaims(
         uint256[] calldata requestIds
     ) external view returns (Claim[] memory claims) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();

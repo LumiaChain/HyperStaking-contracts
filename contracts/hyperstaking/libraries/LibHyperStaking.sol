@@ -99,9 +99,6 @@ struct HyperStakingStorage {
     /// @notice Info about staking into the vaults
     mapping (address strategy => StakeInfo) stakeInfo;
 
-    /// @notice Global delay, in seconds, that must elapse after a claim is queued
-    uint64 defaultWithdrawDelay;
-
     /// @notice Next request ID for strategy operations
     uint256 nextRequestId;
 

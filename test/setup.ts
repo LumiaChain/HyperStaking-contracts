@@ -87,8 +87,6 @@ export async function deployHyperStakingBase() {
 
   // -------------------- Hyperstaking ---------------------
 
-  const defaultWithdrawDelay = 3 * 24 * 60 * 60; // 3 days
-
   const hyperStaking = await ignition.deploy(HyperStakingModule, {
     parameters: {
       HyperStakingModule: {
@@ -141,7 +139,6 @@ export async function deployHyperStakingBase() {
   return {
     signers, // signers
     hyperStaking, lumiaDiamond, // diamonds deployment
-    defaultWithdrawDelay, // deposit parameter
     testERC20, testWstETH, testUSDC, testUSDT, erc4626Vault, // test tokens
     mailbox, // hyperlane test mailbox
     invariantChecker, // invariant checker

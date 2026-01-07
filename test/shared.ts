@@ -12,6 +12,7 @@ import {
   Addressable,
   TransactionResponse,
   Log,
+  TransactionReceipt,
 } from "ethers";
 import SuperformMockModule from "../ignition/modules/test/SuperformMock";
 import CurveMockModule from "../ignition/modules/test/CurveMock";
@@ -334,19 +335,41 @@ export async function getEventArg(tx: TransactionResponse, eventName: string, co
   return null;
 }
 
-export async function claimAtDeadline(
+// Claims a pending withdraw exactly at its `unlockTime` by fast-forwarding the next block timestamp if needed
+// Returns an awaitable promise that mines the claim, and also exposes `promise.claimTx` for tests
+export function claimAtDeadline(
   deposit: Contract,
-  alice: Signer,
-  requestId: number,
-) {
-  const pendingClaim: ClaimStruct[] = await deposit.pendingWithdraws([requestId]);
-  const deadline = pendingClaim[0].unlockTime;
+  requestId: number | bigint,
+  from: Signer,
+  to?: Addressable,
+): Promise<TransactionReceipt> & { claimTx: Promise<TransactionResponse> } {
+  let resolveClaimTx;
+  const claimTxPromise = new Promise((resolve) => {
+    resolveClaimTx = resolve;
+  });
 
-  const now = await getCurrentBlockTimestamp();
-  if (now < Number(deadline)) {
-    await time.setNextBlockTimestamp(Number(deadline));
-  }
+  const run = (async () => {
+    const pendingClaim: ClaimStruct[] = await deposit.pendingClaims([requestId]);
+    const deadline = pendingClaim[0].unlockTime;
 
-  const claimTx = await deposit.connect(alice).claimWithdraws([requestId], alice);
-  return { claimTx };
+    const now = await getCurrentBlockTimestamp();
+    if (now < Number(deadline)) {
+      await time.setNextBlockTimestamp(Number(deadline));
+    }
+
+    if (!to) {
+      to = from;
+    }
+
+    const claimTx = deposit.connect(from).claimWithdraws([requestId], to);
+    resolveClaimTx!(claimTx);
+
+    const receipt = await (await claimTx).wait();
+    return receipt;
+  })();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (run as any).claimTx = claimTxPromise;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return run as any;
 }

@@ -35,6 +35,10 @@ contract MockReserveStrategy is AbstractStrategy {
     /// Price of the asset
     uint256 public assetReserve;
 
+    // configurable async deadline, 0 for sync
+    uint64 public allocationReadyAtOffset;
+    uint64 public exitReadyAtOffset;
+
     /// Storage gap for upgradeability. Must remain the last state variable
     uint256[50] private __gap;
 
@@ -76,6 +80,8 @@ contract MockReserveStrategy is AbstractStrategy {
         address indexed from,
         uint256 value
     );
+
+    event ReadyAtOffsetsSet(uint64 allocationOffset, uint64 exitOffset);
 
     //============================================================================================//
     //                                        Initialize                                          //
@@ -196,13 +202,19 @@ contract MockReserveStrategy is AbstractStrategy {
     }
 
     /// @inheritdoc IStrategy
-    function previewAllocationReadyAt(uint256) public pure returns (uint64 readyAt) {
-        readyAt = 0; // claimable immediately -> sync deposit flow
+    function previewAllocationReadyAt(uint256) public view returns (uint64 readyAt) {
+        if (allocationReadyAtOffset == 0) {
+            return 0; // sync flow
+        }
+        readyAt = uint64(block.timestamp) + allocationReadyAtOffset;
     }
 
     /// @inheritdoc IStrategy
-    function previewExitReadyAt(uint256) public pure returns (uint64 readyAt) {
-        readyAt = 0; // claimable immediately -> sync redeem flow
+    function previewExitReadyAt(uint256) public view returns (uint64 readyAt) {
+        if (exitReadyAtOffset == 0) {
+            return 0; // sync flow
+        }
+        readyAt = uint64(block.timestamp) + exitReadyAtOffset;
     }
 
     // ========= Admin ========= //
@@ -233,6 +245,16 @@ contract MockReserveStrategy is AbstractStrategy {
         assetPrice = assetPrice_;
 
         emit AssetPriceSet(msg.sender, revenueAsset, assetPrice_);
+    }
+
+    function setReadyAtOffsets(
+        uint64 allocationOffset_,
+        uint64 exitOffset_
+    ) external onlyStrategyManager {
+        allocationReadyAtOffset = allocationOffset_;
+        exitReadyAtOffset = exitOffset_;
+
+        emit ReadyAtOffsetsSet(allocationOffset_, exitOffset_);
     }
 
     //============================================================================================//

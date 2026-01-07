@@ -10,7 +10,7 @@ import { deployHyperStakingBase } from "../setup";
 
 async function deployHyperStaking() {
   const {
-    signers, hyperStaking, lumiaDiamond, testERC20, invariantChecker, defaultWithdrawDelay, mailbox,
+    signers, hyperStaking, lumiaDiamond, testERC20, invariantChecker, mailbox,
   } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Apply Strategies --------------------
@@ -47,7 +47,6 @@ async function deployHyperStaking() {
   return {
     signers, // signers
     hyperStaking, lumiaDiamond, // HyperStaking deployment
-    defaultWithdrawDelay,
     testERC20, reserveStrategy, principalToken, vaultShares, mailbox, // test contracts
     reserveAssetPrice, vaultSharesName, vaultSharesSymbol, // values
   };
@@ -214,7 +213,7 @@ describe("VaultShares", function () {
 
     it("reverts report when vault totalSupply is zero", async function () {
       const {
-        hyperStaking, lumiaDiamond, reserveStrategy, signers, vaultShares, defaultWithdrawDelay,
+        hyperStaking, lumiaDiamond, reserveStrategy, signers, vaultShares,
       } = await loadFixture(deployHyperStaking);
 
       const { deposit, allocation } = hyperStaking;
@@ -237,8 +236,6 @@ describe("VaultShares", function () {
       const aliceShares = await vaultShares.balanceOf(alice);
       expect(aliceShares).to.equal(initialDeposit);
 
-      const expectedUnlockAlice = (await shared.getCurrentBlockTimestamp()) + defaultWithdrawDelay;
-
       await expect(realAssets.connect(alice).redeem(reserveStrategy, alice, alice, aliceShares))
         .to.emit(realAssets, "RwaRedeem");
 
@@ -248,8 +245,7 @@ describe("VaultShares", function () {
         alice,
       );
 
-      await time.setNextBlockTimestamp(expectedUnlockAlice);
-      await deposit.connect(alice).claimWithdraws([lastClaimIdAlice], alice);
+      await shared.claimAtDeadline(deposit, lastClaimIdAlice, alice);
 
       // vault has zero shares
       expect(await vaultShares.totalSupply()).to.equal(0);
@@ -296,7 +292,7 @@ describe("VaultShares", function () {
 
     it("it should be possible to redeem and withdraw stake", async function () {
       const {
-        signers, hyperStaking, lumiaDiamond, testERC20, reserveStrategy, reserveAssetPrice, principalToken, vaultShares, defaultWithdrawDelay,
+        signers, hyperStaking, lumiaDiamond, testERC20, reserveStrategy, reserveAssetPrice, principalToken, vaultShares,
       } = await loadFixture(deployHyperStaking);
       const { deposit, lockbox } = hyperStaking;
       const { realAssets, stakeRedeemRoute } = lumiaDiamond;
@@ -346,8 +342,6 @@ describe("VaultShares", function () {
       await deposit.deposit(reserveStrategy, alice, stakeAmount, 0, { value: stakeAmount });
 
       // alice withdraw for bob
-      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
-
       await expect(realAssets.connect(alice).redeem(
         reserveStrategy, alice, bob, stakeAmount, { value: dispatchFee },
       )).to.changeTokenBalances(testERC20,
@@ -360,8 +354,8 @@ describe("VaultShares", function () {
       expect(await vaultShares.balanceOf(bob)).to.be.eq(0);
 
       const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy, bob);
-      await time.setNextBlockTimestamp(expectedUnlock);
-      await expect(deposit.connect(bob).claimWithdraws([lastClaimId], bob))
+      const { claimTx } = shared.claimAtDeadline(deposit, lastClaimId, bob);
+      await expect(claimTx)
         .to.changeEtherBalance(bob, stakeAmount);
 
       expect(await testERC20.balanceOf(lockbox)).to.be.eq(0);

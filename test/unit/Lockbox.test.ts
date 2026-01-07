@@ -14,7 +14,7 @@ import { deployHyperStakingBase } from "../setup";
 
 async function deployHyperStaking() {
   const {
-    signers, testERC20, testWstETH, hyperStaking, lumiaDiamond, mailbox, invariantChecker, defaultWithdrawDelay,
+    signers, testERC20, testWstETH, hyperStaking, lumiaDiamond, mailbox, invariantChecker,
   } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Apply Strategies --------------------
@@ -54,7 +54,6 @@ async function deployHyperStaking() {
   /* eslint-disable object-property-newline */
   return {
     hyperStaking, lumiaDiamond, // HyperStaking deployment
-    defaultWithdrawDelay,
     testERC20, testWstETH, reserveStrategy, principalToken, vaultShares, // test contracts
     reserveAssetPrice, mailboxFee, // values
     mailbox, // modules
@@ -302,7 +301,7 @@ describe("Lockbox", function () {
 
     it("redeem the should triger leave on the origin chain - non-zero mailbox fee", async function () {
       const {
-        signers, hyperStaking, lumiaDiamond, reserveStrategy, principalToken, vaultShares, testERC20, reserveAssetPrice, mailboxFee, defaultWithdrawDelay,
+        signers, hyperStaking, lumiaDiamond, reserveStrategy, principalToken, vaultShares, testERC20, reserveAssetPrice, mailboxFee,
       } = await loadFixture(deployHyperStaking);
       const { deposit, lockbox } = hyperStaking;
       const { realAssets, stakeRedeemRoute } = lumiaDiamond;
@@ -353,9 +352,8 @@ describe("Lockbox", function () {
       );
 
       const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy, alice);
-      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
-      await time.setNextBlockTimestamp(expectedUnlock);
-      await expect(deposit.connect(alice).claimWithdraws([lastClaimId], alice))
+      const { claimTx } = shared.claimAtDeadline(deposit, lastClaimId, alice);
+      await expect(claimTx)
         .to.changeEtherBalances(
           [alice, reserveStrategy],
           [stakeAmount, -stakeAmount],

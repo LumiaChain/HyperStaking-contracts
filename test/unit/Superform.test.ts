@@ -1,4 +1,4 @@
-import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import { ethers, ignition, network } from "hardhat";
 import { Interface, Signer, parseUnits, parseEther, ZeroAddress } from "ethers";
@@ -39,7 +39,7 @@ async function getMockedSuperform() {
 
 async function deployHyperStaking() {
   const {
-    signers, hyperStaking, lumiaDiamond, testUSDC, erc4626Vault, invariantChecker, defaultWithdrawDelay,
+    signers, hyperStaking, lumiaDiamond, testUSDC, erc4626Vault, invariantChecker,
   } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Superform --------------------
@@ -115,7 +115,6 @@ async function deployHyperStaking() {
   return {
     signers, // signers
     hyperStaking, lumiaDiamond, // diamonds deployment
-    defaultWithdrawDelay,
     testUSDC, erc4626Vault, superformStrategy, aerc20, principalToken, vaultShares, // test contracts
     superform, superVault, superformFactory, superPositions, superformRouter, superformId, // superform
     vaultTokenName, vaultTokenSymbol, // values
@@ -385,7 +384,7 @@ describe("Superform", function () {
 
     it("staking using superform strategy", async function () {
       const {
-        signers, hyperStaking, lumiaDiamond, superformStrategy, vaultShares, aerc20, testUSDC, erc4626Vault, defaultWithdrawDelay,
+        signers, hyperStaking, lumiaDiamond, superformStrategy, vaultShares, aerc20, testUSDC, erc4626Vault,
       } = await loadFixture(deployHyperStaking);
       const { deposit, allocation, hyperFactory, lockbox } = hyperStaking;
       const { hyperlaneHandler, realAssets } = lumiaDiamond;
@@ -417,14 +416,12 @@ describe("Superform", function () {
       expect(rwaBalance).to.be.eq(amount);
 
       const reqId = 2;
-      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await expect(realAssets.connect(alice).redeem(superformStrategy, alice, alice, rwaBalance))
         .to.emit(superformStrategy, "ExitRequested")
         .withArgs(reqId, alice, amount, 0);
 
       expect(await aerc20.allowance(deposit, superformStrategy)).to.eq(0);
-      await time.setNextBlockTimestamp(expectedUnlock);
-      const claimTx = deposit.connect(alice).claimWithdraws([reqId], alice);
+      const { claimTx } = shared.claimAtDeadline(deposit, reqId, alice);
 
       await expect(claimTx)
         .to.changeTokenBalance(aerc20, lockbox, -amount);
@@ -439,7 +436,7 @@ describe("Superform", function () {
 
     it("revenue from superform strategy", async function () {
       const {
-        signers, hyperStaking, lumiaDiamond, testUSDC, erc4626Vault, superVault, superformStrategy, superform, vaultShares, principalToken, defaultWithdrawDelay,
+        signers, hyperStaking, lumiaDiamond, testUSDC, erc4626Vault, superVault, superformStrategy, superform, vaultShares, principalToken,
       } = await loadFixture(deployHyperStaking);
       const { deposit, hyperFactory, allocation } = hyperStaking;
       const { realAssets } = lumiaDiamond;
@@ -462,12 +459,10 @@ describe("Superform", function () {
       await testUSDC.approve(tokenizedStrategy, currentVaultAssets); // double the assets
       await tokenizedStrategy.simulateYieldGeneration(erc4626Vault, currentVaultAssets);
 
-      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await realAssets.connect(alice).redeem(superformStrategy, alice, alice, rwaBalance);
 
       const lastClaimId = await shared.getLastClaimId(deposit, superformStrategy, alice);
-      await time.setNextBlockTimestamp(expectedUnlock);
-      await deposit.connect(alice).claimWithdraws([lastClaimId], alice);
+      await shared.claimAtDeadline(deposit, lastClaimId, alice);
 
       // Report revenue
 

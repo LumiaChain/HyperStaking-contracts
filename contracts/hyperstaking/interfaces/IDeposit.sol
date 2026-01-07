@@ -63,12 +63,6 @@ interface IDeposit {
         bool indexed feeWithdraw
     );
 
-    event WithdrawDelaySet(
-        address indexed stakingManager,
-        uint256 previousDelay,
-        uint256 newDelay
-    );
-
     //============================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
@@ -99,9 +93,6 @@ interface IDeposit {
 
     /// @notice Thrown when the sender is not the eligible address for the claim
     error NotEligible(uint256 id, address eligible, address sender);
-
-    /// @notice Thrown when trying to set too high withdraw delay
-    error WithdrawDelayTooHigh(uint64 newDelay);
 
     //============================================================================================//
     //                                          Mutable                                           //
@@ -174,13 +165,6 @@ interface IDeposit {
 
     /* ========== */
 
-    /**
-     * @notice Sets the global delay between queuing and withdrawing
-     * @dev Only callable by the Staking Manger role
-     * @param newDelay Delay in seconds (e.g. 2 days → 172_800)
-     */
-    function setWithdrawDelay(uint64 newDelay) external;
-
     /// @notice Pauses stake functionalities
     function pauseDeposit() external;
 
@@ -191,14 +175,8 @@ interface IDeposit {
     //                                           View                                             //
     //============================================================================================//
 
-    /// @notice public constant, but it is nice to make interface for Diamond
-    function MAX_WITHDRAW_DELAY() external view returns(uint64);
-
-    /// @notice Cool‑down in seconds that must elapse before a queued claim can be withdrawn
-    function withdrawDelay() external view returns (uint64);
-
     /// @notice Returns claims for given requestIds; chooses fee/user mapping by flag
-    function pendingWithdraws(uint256[] calldata requestIds)
+    function pendingClaims(uint256[] calldata requestIds)
         external
         view
         returns (Claim[] memory claims);

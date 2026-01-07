@@ -24,7 +24,7 @@ async function getMockedPirex() {
 
 async function deployHyperStaking() {
   const {
-    signers, testWstETH, hyperStaking, lumiaDiamond, invariantChecker, defaultWithdrawDelay,
+    signers, testWstETH, hyperStaking, lumiaDiamond, invariantChecker,
   } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Apply Strategies --------------------
@@ -77,7 +77,6 @@ async function deployHyperStaking() {
   /* eslint-disable object-property-newline */
   return {
     signers, // signers
-    defaultWithdrawDelay,
     hyperStaking, lumiaDiamond, // diamonds deployment
     pxEth, upxEth, pirexEth, autoPxEth, // pirex mock
     testWstETH, reserveStrategy, dineroStrategy, principalToken, vaultShares, // test contracts
@@ -411,7 +410,7 @@ describe("Strategy", function () {
 
     it("unstaking from to dinero strategy should exchange apxEth back to eth", async function () {
       const {
-        signers, hyperStaking, lumiaDiamond, autoPxEth, dineroStrategy, defaultWithdrawDelay,
+        signers, hyperStaking, lumiaDiamond, autoPxEth, dineroStrategy,
       } = await loadFixture(deployHyperStaking);
       const { deposit, hyperFactory, lockbox, allocation } = hyperStaking;
       const { realAssets } = lumiaDiamond;
@@ -436,7 +435,6 @@ describe("Strategy", function () {
       const reqId = 2; // 1 - deposit
       const readyAt = 0;
       await time.setNextBlockTimestamp(blockTime);
-      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await expect(realAssets.redeem(dineroStrategy, owner, owner, stakeAmount))
         .to.emit(dineroStrategy, "ExitRequested")
         .withArgs(reqId, owner, expectedAllocation, readyAt);
@@ -446,8 +444,7 @@ describe("Strategy", function () {
       expect((await hyperFactory.vaultInfo(dineroStrategy)).revenueAsset).to.equal(autoPxEth);
 
       const lastClaimId = await shared.getLastClaimId(deposit, dineroStrategy, owner);
-      await time.setNextBlockTimestamp(expectedUnlock);
-      await deposit.claimWithdraws([lastClaimId], owner);
+      await shared.claimAtDeadline(deposit, lastClaimId, owner);
 
       expect((await allocation.stakeInfo(dineroStrategy)).totalStake).to.equal(0);
       expect((await allocation.stakeInfo(dineroStrategy)).totalAllocation).to.equal(0);
