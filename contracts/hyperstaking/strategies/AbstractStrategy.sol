@@ -182,8 +182,8 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
             bool[] memory isExits,
             uint256[] memory amounts,
             uint64[] memory readyAts,
-            bool[] memory claimables,
-            bool[] memory claimedArr
+            bool[] memory claimedArr,
+            bool[] memory claimables
         )
     {
         uint256 n = ids_.length;
@@ -191,8 +191,8 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
         isExits = new bool[](n);
         amounts = new uint256[](n);
         readyAts = new uint64[](n);
-        claimables = new bool[](n);
         claimedArr = new bool[](n);
+        claimables = new bool[](n);
 
         for (uint256 i; i < n; ++i) {
             StrategyRequest memory r = _req[ids_[i]];

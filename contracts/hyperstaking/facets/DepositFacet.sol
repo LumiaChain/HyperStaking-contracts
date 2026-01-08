@@ -39,6 +39,44 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     /* ========== Deposit ========== */
 
     /// @inheritdoc IDeposit
+    function deposit(
+        address strategy,
+        address to,
+        uint256 stake
+    ) external payable nonReentrant whenNotPaused returns (uint256 requestId, uint256 allocation) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+
+        _basicChecks(vault, strategy, stake);
+
+        v.stakeInfo[strategy].totalStake += stake;
+
+        // quote the message fee for the cross-chain dispatch (to = dispatched user)
+        uint256 dispatchFee = quoteDepositDispatch(strategy, to, stake);
+        if (vault.stakeCurrency.isNativeCoin()) {
+            vault.stakeCurrency.transferFrom(
+                msg.sender,
+                address(this),
+                stake + dispatchFee // include fee to stake amount
+            );
+        } else { // fetch native and tokens separately
+            ILockbox(address(this)).collectDispatchFee{value: msg.value}(msg.sender, dispatchFee);
+
+            // stake
+            vault.stakeCurrency.transferFrom(
+                msg.sender,
+                address(this),
+                stake
+            );
+        }
+
+        // bridge stake info to Lumia chain which mints coresponding rwa asset
+        (requestId, allocation) = IAllocation(address(this)).joinSync(strategy, to, stake);
+
+        emit Deposit(msg.sender, to, strategy, stake, requestId);
+    }
+
+    /// @inheritdoc IDeposit
     function requestDeposit(
         address strategy,
         address to,
@@ -60,73 +98,66 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     /// @inheritdoc IDeposit
     function refundDeposit(
         address strategy,
-        address to,
-        uint256 requestId
+        uint256 requestId,
+        address to
     ) external nonReentrant whenNotPaused returns (uint256 stake) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
 
-        // TODO
+        // get async request info from strategy
+        (
+            ,
+            bool isExit,
+            ,
+            ,
+            ,
+        ) = IStrategy(strategy).requestInfo(requestId);
+        require(isExit, BadRequestType());
+
         // strategy should validate requestId and return refunded stake amount
-        stake = 0;
+        stake = IAllocation(address(this)).refundJoinAsync(strategy, requestId, to);
+
+        // TODO: hmm
+        _basicChecks(vault, strategy, stake);
 
         emit DepositRefund(msg.sender, to, strategy, stake, requestId);
     }
 
-    /// TODO Consider separating to claimDeposit and sync/deposit
     /// @inheritdoc IDeposit
-    function deposit(
+    function claimDeposit(
         address strategy,
-        address to,
-        uint256 stake,
         uint256 requestId
     ) external payable nonReentrant whenNotPaused returns (uint256 allocation) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
 
-        // TODO make less sense for async claim
+        // get async request info from strategy
+        (
+            address user,
+            bool isExit,
+            uint256 stake,
+            ,
+            ,
+            bool claimable
+        ) = IStrategy(strategy).requestInfo(requestId);
+        require(isExit, BadRequestType());
+        require(claimable, RequestNotClaimable());
+
         _basicChecks(vault, strategy, stake);
 
-        // ---> async request ready path
-        if (requestId != 0) {
-            // TODO internal sync and async deposit functions
+        // forward to allocation facet and execute the actual claim
+        allocation = IAllocation(address(this)).claimJoinAsync(
+            strategy,
+            requestId,
+            user,
+            stake
+        );
 
-            // claim async request when it is ready
-            (,,,, bool claimable,) = IStrategy(strategy).requestInfo(requestId);
-            require(claimable, RequestNotClaimable());
+        uint256 dispatchFee = quoteDepositDispatch(strategy, user, stake);
+        ILockbox(address(this)).collectDispatchFee{value: msg.value}(msg.sender, dispatchFee);
 
-            // TODO
-            allocation = 0;
-
-            emit Deposit(msg.sender, to, strategy, stake, requestId);
-            return allocation;
-        }
-
-        // ---> sync deposit path
-
-        v.stakeInfo[strategy].totalStake += stake;
-
-        // quote message fee for forwarding message across chains
-        uint256 dispatchFee = quoteDepositDispatch(strategy, to, stake);
-        if (vault.stakeCurrency.isNativeCoin()) {
-            vault.stakeCurrency.transferFrom(
-                msg.sender,
-                address(this),
-                stake + dispatchFee // include fee to stake amount
-            );
-        } else { // fetch native and tokens separately
-            ILockbox(address(this)).collectDispatchFee{value: msg.value}(msg.sender, dispatchFee);
-
-            // stake
-            vault.stakeCurrency.transferFrom(
-                msg.sender,
-                address(this),
-                stake
-            );
-        }
-
-        // bridge stake info to Lumia chain which mints coresponding rwa asset
-        allocation = IAllocation(address(this)).joinSync(strategy, to, stake);
-
-        emit Deposit(msg.sender, to, strategy, stake, requestId);
+        emit Deposit(msg.sender, user, strategy, stake, requestId);
+        return allocation;
     }
 
     /* ========== Withdraw ========== */
@@ -258,13 +289,13 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     /// @inheritdoc IDeposit
     function quoteDepositDispatch(
         address strategy,
-        address to,
+        address user,
         uint256 stake
     ) public view returns (uint256) {
         StakeInfoData memory dispatchData = StakeInfoData({
             nonce: LibHyperlaneReplayGuard.previewNonce(),
             strategy: strategy,
-            user: to, // actually to is used as the dispatch user in lockbox
+            user: user,
             stake: stake
         });
         return IStakeInfoRoute(address(this)).quoteDispatchStakeInfo(dispatchData);

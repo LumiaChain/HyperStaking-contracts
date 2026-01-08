@@ -145,7 +145,7 @@ describe("Strategy", function () {
       const readyAt = 0;
       const expectedAllocation = ownerAmount * parseEther("1") / reserveAssetPrice;
 
-      const depositTx = await deposit.deposit(reserveStrategy, owner, ownerAmount, 0, { value: ownerAmount });
+      const depositTx = await deposit.deposit(reserveStrategy, owner, ownerAmount, { value: ownerAmount });
 
       await expect(depositTx)
         .to.emit(reserveStrategy, "AllocationRequested")
@@ -161,7 +161,7 @@ describe("Strategy", function () {
       const reqId2 = 2;
       const expectedAllocation2 = aliceAmount * parseEther("1") / reserveAssetPrice;
 
-      const depositTx2 = deposit.deposit(reserveStrategy, alice, aliceAmount, 0, { value: aliceAmount });
+      const depositTx2 = deposit.deposit(reserveStrategy, alice, aliceAmount, { value: aliceAmount });
 
       await expect(depositTx2)
         .to.emit(reserveStrategy, "AllocationRequested")
@@ -194,7 +194,7 @@ describe("Strategy", function () {
 
       const stakeAmount = parseEther("5");
 
-      await deposit.connect(alice).deposit(reserveStrategy, alice, stakeAmount, 0, { value: stakeAmount });
+      await deposit.connect(alice).deposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
       const readyAt = 0;
       const id1 = 1; // allocation request
@@ -311,7 +311,7 @@ describe("Strategy", function () {
 
         const badStrategy = "0x36fD7e46150d3C0Be5741b0fc8b0b2af4a0D4Dc5";
 
-        await expect(deposit.deposit(badStrategy, owner, 1, 0, { value: 1 }))
+        await expect(deposit.deposit(badStrategy, owner, 1, { value: 1 }))
           .to.be.revertedWithCustomError(deposit, "VaultDoesNotExist")
           .withArgs(badStrategy);
       });
@@ -380,7 +380,7 @@ describe("Strategy", function () {
       // events
       const reqId = 1;
       const readyAt = 0;
-      const depositTx = await deposit.deposit(dineroStrategy, owner, stakeAmount, 0, { value: stakeAmount });
+      const depositTx = await deposit.deposit(dineroStrategy, owner, stakeAmount, { value: stakeAmount });
 
       await expect(depositTx)
         .to.emit(dineroStrategy, "AllocationRequested")
@@ -425,7 +425,7 @@ describe("Strategy", function () {
 
       await time.setNextBlockTimestamp(blockTime);
       const expectedAllocation = await dineroStrategy.previewAllocation(stakeAmount);
-      await deposit.deposit(dineroStrategy, owner, stakeAmount, 0, { value: stakeAmount });
+      await deposit.deposit(dineroStrategy, owner, stakeAmount, { value: stakeAmount });
 
       await time.setNextBlockTimestamp(blockTime);
 

@@ -70,6 +70,9 @@ interface IDeposit {
     /// @notice Thrown when attempting to stake zero amount
     error ZeroStake();
 
+    /// @notice Thrown when an unexpected request type is used
+    error BadRequestType();
+
     /// @notice Thrown when request is not ready to claim
     error RequestNotClaimable();
 
@@ -101,6 +104,19 @@ interface IDeposit {
     /* ========== Deposit  ========== */
 
     /**
+     * @notice Deposit (sync) or claim a previous async deposit request
+     * @dev If `requestId` is 0, does a sync deposit. If non-zero, claims that request
+     * @param strategy The address of the strategy selected by the user
+     * @param to The address receiving the staked token allocation (typically the user's address)
+     * @param stake The amount of the token to stake
+     */
+    function deposit(
+        address strategy,
+        address to,
+        uint256 stake
+    ) external payable returns (uint256 requestId, uint256 allocation);
+
+    /**
      * @notice Create an async deposit request
      * @dev For async strategies only, stake is moved now, allocation is claimed later
      */
@@ -115,22 +131,16 @@ interface IDeposit {
      */
     function refundDeposit(
         address strategy,
-        address to,
-        uint256 requestId
+        uint256 requestId,
+        address to
     ) external returns (uint256 stake);
 
     /**
-     * @notice Deposit (sync) or claim a previous async deposit request
-     * @dev If `requestId` is 0, does a sync deposit. If non-zero, claims that request
-     * @param strategy The address of the strategy selected by the user
-     * @param to The address receiving the staked token allocation (typically the user's address)
-     * @param stake The amount of the token to stake
-     * @param requestId Async deposit request id to claim (0 for sync deposit)
+     * @notice Claims a completed async deposit request
+     * @dev Reverts if the request is not claimable, already claimed, or has an unexpected type
      */
-    function deposit(
+    function claimDeposit(
         address strategy,
-        address to,
-        uint256 stake,
         uint256 requestId
     ) external payable returns (uint256 allocation);
 

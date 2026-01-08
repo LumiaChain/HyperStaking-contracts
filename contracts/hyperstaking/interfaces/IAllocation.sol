@@ -12,13 +12,25 @@ interface IAllocation {
     //                                          Events                                            //
     //============================================================================================//
 
+    /// used in both sync and async claim flows
     event Join(
         address indexed strategy,
         address indexed user,
         uint256 stake,
         uint256 allocation,
+        uint256 requestId
+    );
+
+    event JoinRequested(
+        address indexed strategy,
+        address indexed user,
+        uint256 stake,
         uint256 requestId,
         uint64 readyAt
+    );
+
+    event JoinRefunded(
+        // TODO
     );
 
     event Leave(
@@ -82,7 +94,7 @@ interface IAllocation {
         address strategy,
         address user,
         uint256 stake
-    ) external payable returns (uint256 allocation);
+    ) external payable returns (uint256 requestId, uint256 allocation);
 
     /**
      * @notice Join using async flow (only create request)
@@ -92,6 +104,28 @@ interface IAllocation {
         address user,
         uint256 stake
     ) external payable returns (uint256 requestId);
+
+    /**
+     * @notice Refunds a previously created async join request
+     * @dev Used when an async join request cannot be completed; returns stake back to `to`
+     * @return stake The amount of stake refunded
+     */
+    function refundJoinAsync(
+        address strategy,
+        uint256 requestId,
+        address to
+    ) external returns (uint256 stake);
+
+    /**
+     * @notice Claims a previously created async join request
+     * @return allocation The amount of strategy allocation credited to the user
+     */
+    function claimJoinAsync(
+        address strategy,
+        uint256 requestId,
+        address user,
+        uint256 stake
+    ) external returns (uint256 allocation);
 
     /**
      * @notice Leave for a specified strategy and asset amount

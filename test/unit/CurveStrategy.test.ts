@@ -646,7 +646,7 @@ describe("CurveStrategy", function () {
       const amount = parseUnits("2000", 6);
 
       await testUSDT.connect(alice).approve(deposit, amount);
-      const depositTx = deposit.connect(alice).deposit(swapSuperStrategy, alice, amount, 0);
+      const depositTx = deposit.connect(alice).deposit(swapSuperStrategy, alice, amount);
 
       await expect(depositTx).to.changeTokenBalances(testUSDT,
         [alice, curvePool], [-amount, amount]);
@@ -708,7 +708,7 @@ describe("CurveStrategy", function () {
       const amount = parseUnits("2000", 6);
 
       await testUSDT.connect(alice).approve(deposit, amount);
-      const depositTx = deposit.connect(alice).deposit(swapSuperStrategy, alice, amount, 0);
+      const depositTx = deposit.connect(alice).deposit(swapSuperStrategy, alice, amount);
 
       await expect(depositTx).to.changeTokenBalances(testUSDT,
         [alice, curvePool], [-amount, amount]);

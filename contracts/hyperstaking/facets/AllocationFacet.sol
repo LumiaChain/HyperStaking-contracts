@@ -44,8 +44,9 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         address strategy,
         address user,
         uint256 stake
-    ) external payable diamondInternal returns (uint256 allocation) {
-        (uint256 requestId, uint64 readyAt) = _requestAllocation(strategy, user, stake);
+    ) external payable diamondInternal returns (uint256 requestId, uint256 allocation) {
+        uint64 readyAt;
+        (requestId, readyAt) = _requestAllocation(strategy, user, stake);
         require(readyAt == 0, NotSyncFlow());
 
         // make an array
@@ -58,7 +59,7 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         // bridge stakeInfo message to the Lumia diamond
         ILockbox(address(this)).bridgeStakeInfo(strategy, user, stake);
 
-        emit Join(strategy, user, stake, allocation, requestId, readyAt);
+        emit Join(strategy, user, stake, allocation, requestId);
     }
 
     /// @inheritdoc IAllocation
@@ -67,16 +68,46 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
         address user,
         uint256 stake
     ) external payable diamondInternal returns (uint256 requestId) {
-
         uint64 readyAt;
         (requestId, readyAt) = _requestAllocation(strategy, user, stake);
 
         require(readyAt != 0, NotAsyncFlow());
 
         // async flow: only create request, allocation will be claimed later
-        uint256 allocation = 0;
 
-        emit Join(strategy, user, stake, allocation, requestId, readyAt);
+        emit JoinRequested(strategy, user, stake, requestId, readyAt);
+    }
+
+    /// @inheritdoc IAllocation
+    function refundJoinAsync(
+        address strategy,
+        uint256 requestId,
+        address to
+    ) external diamondInternal returns (uint256 stake) {
+        // TODO
+        stake = 0;
+
+        emit JoinRefunded();
+    }
+
+    /// @inheritdoc IAllocation
+    function claimJoinAsync(
+        address strategy,
+        uint256 requestId,
+        address user,
+        uint256 stake
+    ) external diamondInternal returns (uint256 allocation) {
+        // make an array
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = requestId;
+
+        // async flow: just claim
+        allocation = _claimAllocation(strategy, ids);
+
+        // bridge stakeInfo message to the Lumia diamond
+        ILockbox(address(this)).bridgeStakeInfo(strategy, user, stake);
+
+        emit Join(strategy, user, stake, allocation, requestId);
     }
 
     /// @inheritdoc IAllocation

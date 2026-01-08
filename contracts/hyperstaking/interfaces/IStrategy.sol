@@ -148,8 +148,8 @@ interface IStrategy {
             bool isExit,            // false = allocation, true = exit
             uint256 amount,         // stake for allocation, shares for exit
             uint64 readyAt,         // 0 => claimable immediately
-            bool claimable,
-            bool claimed
+            bool claimed,
+            bool claimable
         );
 
     /// @dev Batched requestInfo for multiple ids; arrays match ids_.length
@@ -161,7 +161,7 @@ interface IStrategy {
             bool[] memory isExits,
             uint256[] memory amounts,
             uint64[] memory readyAts,
-            bool[] memory claimables,
-            bool[] memory claimedArr
+            bool[] memory claimedArr,
+            bool[] memory claimables
         );
 }

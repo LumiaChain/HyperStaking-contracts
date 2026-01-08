@@ -186,10 +186,10 @@ describe("Lockbox", function () {
       const stakeAmount = parseEther("2");
 
       await expect(deposit.deposit(
-        reserveStrategy, alice, stakeAmount, 0, { value: stakeAmount + mailboxFee },
+        reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
       ))
         .to.emit(deposit, "Deposit")
-        .withArgs(owner, alice, reserveStrategy, stakeAmount, 0);
+        .withArgs(owner, alice, reserveStrategy, stakeAmount, /* reqId */ 1);
 
       const sharesAfter = await vaultShares.balanceOf(alice);
       expect(sharesAfter).to.be.gt(sharesBefore);
@@ -262,7 +262,7 @@ describe("Lockbox", function () {
       );
       expect(quote).to.equal(mailboxFee);
 
-      await deposit.deposit(reserveStrategy, alice, stakeAmount, 0, { value: stakeAmount + mailboxFee });
+      await deposit.deposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee });
 
       const sharesAfter = await vaultShares.balanceOf(alice);
       expect(sharesAfter).to.be.gt(0);
@@ -311,7 +311,7 @@ describe("Lockbox", function () {
       const expectedAllocation = stakeAmount * parseEther("1") / reserveAssetPrice;
 
       await expect(deposit.deposit(
-        reserveStrategy, alice, stakeAmount, 0, { value: stakeAmount + mailboxFee },
+        reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
       ))
         .to.emit(realAssets, "RwaMint")
         .withArgs(reserveStrategy, alice.address, stakeAmount, stakeAmount);
@@ -372,7 +372,7 @@ describe("Lockbox", function () {
 
       const stakeAmount = parseEther("2");
 
-      await deposit.deposit(reserveStrategy, alice, stakeAmount, 0, {
+      await deposit.deposit(reserveStrategy, alice, stakeAmount, {
         value: stakeAmount + mailboxFee,
       });
 
@@ -428,7 +428,7 @@ describe("Lockbox", function () {
       const stakeAmount = parseEther("2");
       const expectedAllocation = stakeAmount * parseEther("1") / reserveAssetPrice;
 
-      await deposit.deposit(reserveStrategy, alice, stakeAmount, 0, {
+      await deposit.deposit(reserveStrategy, alice, stakeAmount, {
         value: stakeAmount + mailboxFee,
       });
 
@@ -501,7 +501,7 @@ describe("Lockbox", function () {
       // --- stake so Alice has shares ---
       const stakeAmount = parseEther("10");
       await deposit.connect(alice).deposit(
-        reserveStrategy, alice, stakeAmount, 0, { value: stakeAmount },
+        reserveStrategy, alice, stakeAmount, { value: stakeAmount },
       );
 
       const userShares = await vaultShares.balanceOf(alice);
@@ -588,7 +588,6 @@ describe("Lockbox", function () {
           erc20Strategy,
           alice,
           stakeAmount,
-          0,
           { value: mailboxFee - 1n },
         ),
       ).to.be.revertedWithCustomError(shared.errors, "DispatchUnderpaid");
@@ -598,7 +597,6 @@ describe("Lockbox", function () {
         erc20Strategy,
         alice,
         stakeAmount,
-        0,
         { value: mailboxFee },
       );
 
@@ -718,7 +716,6 @@ describe("Lockbox", function () {
                 reserveStrategy,
                 alice,
                 stakeAmount,
-                0,
                 { value: stakeAmount + mailboxFeeWei - 1n },
               ),
             ).to.be.revertedWithCustomError(
@@ -731,13 +728,12 @@ describe("Lockbox", function () {
               reserveStrategy,
               alice,
               stakeAmount,
-              0,
               { value: stakeAmount + mailboxFeeWei },
             );
 
             await expect(stakeTx1)
               .to.emit(deposit, "Deposit")
-              .withArgs(alice, alice, reserveStrategy, stakeAmount, 0);
+              .withArgs(alice, alice, reserveStrategy, stakeAmount, /* reqId */ 1);
 
             const sharesAfterFirst = await vaultShares.balanceOf(alice);
             expect(sharesAfterFirst).to.equal(stakeAmount);
@@ -748,7 +744,6 @@ describe("Lockbox", function () {
                 reserveStrategy,
                 alice,
                 stakeAmount,
-                0,
                 { value: stakeAmount + mailboxFeeWei - 1n },
               ),
             ).to.be.revertedWithCustomError(
@@ -760,12 +755,11 @@ describe("Lockbox", function () {
               reserveStrategy,
               alice,
               stakeAmount,
-              0,
               { value: stakeAmount + mailboxFeeWei },
             );
             await expect(stakeTx2)
               .to.emit(deposit, "Deposit")
-              .withArgs(alice, alice, reserveStrategy, stakeAmount, 0);
+              .withArgs(alice, alice, reserveStrategy, stakeAmount, /* reqId */ 2);
 
             const totalShares = await vaultShares.balanceOf(alice);
             expect(totalShares).to.equal(stakeAmount * 2n);
@@ -979,7 +973,6 @@ describe("Lockbox", function () {
         reserveStrategy,
         alice.address,
         stakeAmount,
-        0,
         { value: stakeAmount + mailboxFee },
       );
 
@@ -1034,7 +1027,7 @@ describe("Lockbox", function () {
 
       const stakeAmount = parseEther("1.2");
       await deposit.deposit(
-        reserveStrategy, alice, stakeAmount, 0, { value: stakeAmount + mailboxFee },
+        reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
       );
 
       const lastMessage = await hyperlaneHandler.lastMessage();

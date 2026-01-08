@@ -185,10 +185,10 @@ describe("VaultShares", function () {
       const stakeAmount = parseEther("6");
 
       await expect(deposit.deposit(
-        reserveStrategy, alice, stakeAmount, 0, { value: stakeAmount },
+        reserveStrategy, alice, stakeAmount, { value: stakeAmount },
       ))
         .to.emit(deposit, "Deposit")
-        .withArgs(owner, alice, reserveStrategy, stakeAmount, 0);
+        .withArgs(owner, alice, reserveStrategy, stakeAmount, /* reqId */ 1);
 
       // both principalToken and shares should be minted in ration 1:1 to the stake at start
       expect(await vaultShares.totalSupply()).to.be.eq(stakeAmount);
@@ -223,7 +223,7 @@ describe("VaultShares", function () {
       const initialDeposit = parseEther("10");
 
       // deposits native into the strategy
-      await expect(deposit.connect(alice).deposit(reserveStrategy, alice, initialDeposit, 0, {
+      await expect(deposit.connect(alice).deposit(reserveStrategy, alice, initialDeposit, {
         value: initialDeposit,
       }))
         .to.emit(deposit, "Deposit");
@@ -272,9 +272,9 @@ describe("VaultShares", function () {
 
       const stakeAmount = parseEther("7");
 
-      await deposit.deposit(reserveStrategy, owner, stakeAmount, 0, { value: stakeAmount });
-      await deposit.deposit(reserveStrategy, bob, stakeAmount, 0, { value: stakeAmount });
-      await deposit.deposit(reserveStrategy, alice, stakeAmount, 0, { value: stakeAmount });
+      await deposit.deposit(reserveStrategy, owner, stakeAmount, { value: stakeAmount });
+      await deposit.deposit(reserveStrategy, bob, stakeAmount, { value: stakeAmount });
+      await deposit.deposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
       const aliceShares = await vaultShares.balanceOf(alice);
       const bobShares = await vaultShares.balanceOf(bob);
@@ -284,7 +284,7 @@ describe("VaultShares", function () {
       expect(aliceShares).to.be.eq(ownerShares);
 
       // 2x stake
-      await deposit.deposit(reserveStrategy, alice, stakeAmount, 0, { value: stakeAmount });
+      await deposit.deposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
       const aliceShares2 = await vaultShares.balanceOf(alice);
       expect(aliceShares2).to.be.eq(2n * bobShares);
@@ -301,7 +301,7 @@ describe("VaultShares", function () {
       expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
 
       const stakeAmount = parseEther("3");
-      await deposit.deposit(reserveStrategy, alice, stakeAmount, 0, { value: stakeAmount });
+      await deposit.deposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
       expect(await principalToken.totalSupply()).to.be.eq(stakeAmount); // 1:1 bridge mint
       expect(await principalToken.balanceOf(vaultShares)).to.be.eq(stakeAmount); // locked in vault
@@ -339,7 +339,7 @@ describe("VaultShares", function () {
       expect(await testERC20.balanceOf(lockbox)).to.be.eq(0);
 
       // -- scenario with approval redeem
-      await deposit.deposit(reserveStrategy, alice, stakeAmount, 0, { value: stakeAmount });
+      await deposit.deposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
       // alice withdraw for bob
       await expect(realAssets.connect(alice).redeem(
@@ -371,7 +371,7 @@ describe("VaultShares", function () {
       const { alice, bob } = signers;
 
       const stakeAmount = parseEther("3");
-      await deposit.deposit(reserveStrategy, alice, stakeAmount, 0, {
+      await deposit.deposit(reserveStrategy, alice, stakeAmount, {
         value: stakeAmount,
       });
 
@@ -456,7 +456,7 @@ describe("VaultShares", function () {
       const { alice } = signers;
 
       const stakeAmount = parseEther("1");
-      await deposit.deposit(reserveStrategy, alice, stakeAmount, 0, { value: stakeAmount });
+      await deposit.deposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
       const redeemAmount = parseEther("0.1");
       const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem({
@@ -534,7 +534,7 @@ describe("VaultShares", function () {
     // ============================================================
 
     const stakeAmount = parseEther("1");
-    await deposit.connect(alice).deposit(reserveStrategy, alice, stakeAmount, 0, { value: stakeAmount });
+    await deposit.connect(alice).deposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
     const lastToLumia = await hyperlaneHandler.lastMessage();
     expect(lastToLumia.sender).to.eq(await lockbox.getAddress());
