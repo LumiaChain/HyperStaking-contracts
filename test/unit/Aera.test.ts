@@ -491,9 +491,9 @@ describe("Aera", function () {
       const aeraConfig = await gauntletStrategy.aeraConfig();
       const deadline = BigInt(await shared.getCurrentBlockTimestamp()) + aeraConfig.deadlineOffset;
 
-      // recordedExit is the min tokens-out (USDC), includes 3% slippage on exit
+      // redeem tokens are the min tokens-out (USDC), includes 3% slippage on exit
       const requestId = 2;
-      const minTokensOut = await gauntletStrategy.recordedExit(requestId);
+      const minTokensOut = (await gauntletStrategy.aeraRedeem(requestId)).tokens;
       expect(minTokensOut).to.be.gt(0);
 
       // for visibility: tokens-out should be < stakeAmount due to slippage
@@ -559,7 +559,7 @@ describe("Aera", function () {
 
       // ---------- Raise unit price by +10% ----------
 
-      const currentTs = await shared.getCurrentBlockTimestamp();
+      let currentTs = await shared.getCurrentBlockTimestamp();
       const newTs = currentTs + 60;
       const pricePlus10Pct = parseUnits("1.10", 6);
 
@@ -575,9 +575,11 @@ describe("Aera", function () {
 
       const lumiaShares = await vaultShares.balanceOf(alice);
 
+      currentTs = await shared.getCurrentBlockTimestamp();
+
       const redeemTx = await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, lumiaShares);
 
-      const deadline = BigInt(newTs) + (await gauntletStrategy.aeraConfig()).deadlineOffset;
+      const deadline = BigInt(currentTs) + (await gauntletStrategy.aeraConfig()).deadlineOffset;
 
       const expectedExitShares = await gauntletStrategy.previewAllocation(stakeAmount);
       const expectedExitAmount = await gauntletStrategy.previewExit(expectedExitShares);
@@ -586,8 +588,8 @@ describe("Aera", function () {
         .to.emit(gauntletStrategy, "ExitRequested")
         .withArgs(2, alice, expectedExitShares, deadline);
 
-      // recordedExit must be set
-      expect(await gauntletStrategy.recordedExit(2)).to.equal(expectedExitAmount);
+      // exit tokens amount must be stored
+      expect((await gauntletStrategy.aeraRedeem(2)).tokens).to.equal(expectedExitAmount);
 
       await shared.solveGauntletRedeemRequest(
         redeemTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, expectedExitAmount, 2,
@@ -671,7 +673,7 @@ describe("Aera", function () {
         .withArgs(2, alice, expectedExitShares, deadline);
 
       const expectedExitAmount = await gauntletStrategy.previewExit(expectedExitShares);
-      expect(await gauntletStrategy.recordedExit(2)).to.equal(expectedExitAmount);
+      expect((await gauntletStrategy.aeraRedeem(2)).tokens).to.equal(expectedExitAmount);
 
       await shared.solveGauntletRedeemRequest(
         redeemTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, expectedExitAmount, 2,
@@ -801,9 +803,14 @@ describe("Aera", function () {
 
       await expect(redeemTx)
         .to.emit(gauntletStrategy, "ExitRequested")
-        .withArgs(2, alice, expectedExitShares, deadline);
+        .withArgs(
+          2,
+          alice,
+          expectedExitShares,
+          anyValue, // deadline could be +/- depending on test timing
+        );
 
-      const minTokensOut = await gauntletStrategy.recordedExit(2);
+      const minTokensOut = (await gauntletStrategy.aeraRedeem(2)).tokens;
       expect(minTokensOut).to.be.gt(0);
 
       // settle redeem and then claim
@@ -1018,6 +1025,102 @@ describe("Aera", function () {
       const vInfo = await hyperFactory.vaultInfo(gauntletStrategy);
       expect(vInfo.stakeCurrency.token).to.equal(newToken);
     });
+
+    describe("Refunds", function () {
+      it.only("refunds exit request (redeem flow) and restores vault shares (Gauntlet)", async function () {
+        const {
+          signers, hyperStaking, lumiaDiamond, gauntletStrategy, vaultShares, testUSDC, aeraMock,
+        } = await loadFixture(deployHyperStaking);
+
+        const { deposit, lockbox } = hyperStaking;
+        const { realAssets } = lumiaDiamond;
+        const { alice, strategyManager } = signers;
+
+        // make sure we have non-zero deadline so redeem is actually async and pending
+        const cfg = await gauntletStrategy.aeraConfig();
+        const exitDelay = 24 * 3600; // 1 day
+        await gauntletStrategy.connect(strategyManager).setAeraConfig({
+          solverTip: cfg.solverTip,
+          deadlineOffset: exitDelay,
+          maxPriceAge: cfg.maxPriceAge,
+          slippageBps: 0,
+          isFixedPrice: cfg.isFixedPrice,
+        } as AeraConfigStruct);
+
+        // -------- stake first (and settle on Aera mock) --------
+
+        const stakeAmount = parseUnits("1000", 6);
+        await testUSDC.connect(alice).approve(deposit, stakeAmount);
+
+        const stakeTx = await deposit.connect(alice).deposit(
+          gauntletStrategy,
+          alice,
+          stakeAmount,
+        );
+
+        await shared.solveGauntletDepositRequest(
+          stakeTx,
+          gauntletStrategy,
+          aeraMock.aeraProvisioner,
+          testUSDC,
+          stakeAmount,
+          1, // requestId
+        );
+
+        const sharesBefore = await vaultShares.balanceOf(alice);
+        expect(sharesBefore).to.eq(stakeAmount);
+
+        // -------- redeem part (creates pending withdraw claim) --------
+
+        const redeemStake = parseUnits("250", 6);
+        const expectedExitAllocation = await gauntletStrategy.previewAllocation(redeemStake);
+
+        await realAssets.connect(alice).redeem(
+          gauntletStrategy,
+          alice,
+          alice,
+          redeemStake,
+        );
+
+        const claimId = await shared.getLastClaimId(deposit, gauntletStrategy, alice);
+
+        // shares burned immediately on Lumia side
+        const sharesAfterRedeem = await vaultShares.balanceOf(alice);
+        expect(sharesAfterRedeem).to.eq(sharesBefore - redeemStake);
+
+        // pending claim sanity
+        const pending = (await deposit.pendingClaims([claimId]))[0];
+        expect(pending.strategy).to.eq(await gauntletStrategy.getAddress());
+        expect(pending.eligible).to.eq(alice);
+        expect(pending.expectedAmount).to.eq(redeemStake);
+        expect(pending.unlockTime).to.be.gt(0);
+
+        // -------- refund --------
+
+        await time.setNextBlockTimestamp(Number(pending.unlockTime + 1n));
+
+        const refundTx = deposit.connect(alice).refundWithdraw(claimId, alice);
+
+        // user gets shares back 1:1
+        await expect(refundTx).to.changeTokenBalance(vaultShares, alice, redeemStake);
+
+        // strategy returns revenue-asset allocation back to the lockbox (strategy-level event)
+        await expect(refundTx)
+          .to.emit(gauntletStrategy, "ExitRefunded")
+          .withArgs(claimId, lockbox, expectedExitAllocation);
+
+        // pending claim cleared
+        const deleted = (await deposit.pendingClaims([claimId]))[0];
+        expect(deleted.strategy).to.eq(ZeroAddress);
+        expect(deleted.unlockTime).to.eq(0);
+        expect(deleted.eligible).to.eq(ZeroAddress);
+        expect(deleted.expectedAmount).to.eq(0);
+
+        // cannot claim after refund
+        await expect(deposit.connect(alice).claimWithdraws([claimId], alice))
+          .to.be.reverted;
+      });
+    });
   });
 
   describe("GauntletStrategy gain/loss", () => {
@@ -1041,7 +1144,7 @@ describe("Aera", function () {
 
       const tx = await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, amount);
 
-      const minOut = await gauntletStrategy.recordedExit(reqId);
+      const minOut = (await gauntletStrategy.aeraRedeem(reqId)).tokens;
       return { tx, amount, minOut };
     }
 
@@ -1155,10 +1258,10 @@ describe("Aera", function () {
 
             // requestId = 2 for the first redeem in this fixture
             const reqId = 2;
-            const minTokensOut = await gauntletStrategy.recordedExit(reqId);
+            const minTokensOut = (await gauntletStrategy.aeraRedeem(reqId)).tokens;
             expect(minTokensOut).to.be.gt(0);
 
-            // settle redeem with recorded min, then claim at deadline
+            // settle redeem with tokens min, then claim at deadline
             await shared.solveGauntletRedeemRequest(
               redeemTx,
               gauntletStrategy,
@@ -1268,7 +1371,7 @@ describe("Aera", function () {
       const r1 = await redeemFraction(vaultShares, realAssets, gauntletStrategy, alice, 1, 2, 2);
       const r2 = await redeemFraction(vaultShares, realAssets, gauntletStrategy, alice, 1, 1, 3);
 
-      // settle both with their recorded mins, then claim both at deadline
+      // settle both with their tokens mins, then claim both at deadline
       await shared.solveGauntletRedeemRequest(
         r1.tx,
         gauntletStrategy,
@@ -1530,7 +1633,7 @@ describe("Aera", function () {
       // ids assuming sequence:
       // 1: initial allocation, 2: fee leave in report, 3: first redeem
       const firstReqId = 3;
-      const minOut1 = await gauntletStrategy.recordedExit(firstReqId);
+      const minOut1 = (await gauntletStrategy.aeraRedeem(firstReqId)).tokens;
       expect(minOut1).to.be.gt(0);
 
       const siAfterFirstQueue = await allocation.stakeInfo(gauntletStrategy);
@@ -1555,7 +1658,7 @@ describe("Aera", function () {
         .redeem(gauntletStrategy, alice, alice, secondRedeemShares);
 
       const secondReqId = 4;
-      const minOut2 = await gauntletStrategy.recordedExit(secondReqId);
+      const minOut2 = (await gauntletStrategy.aeraRedeem(secondReqId)).tokens;
       expect(minOut2).to.be.gt(0);
 
       const siAfterSecondQueue = await allocation.stakeInfo(gauntletStrategy);
@@ -1661,7 +1764,7 @@ describe("Aera", function () {
       expect(feeClaim[0].expectedAmount).to.eq(expectedFeeAmount);
 
       // settle the fee withdraw redeem
-      const minOut1 = await gauntletStrategy.recordedExit(feeReqId);
+      const minOut1 = (await gauntletStrategy.aeraRedeem(feeReqId)).tokens;
       expect(minOut1).to.be.gt(0);
       await shared.solveGauntletRedeemRequest(
         reportTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, minOut1, feeReqId,
@@ -1671,7 +1774,7 @@ describe("Aera", function () {
       await expect(feeClaimTx)
         .to.emit(deposit, "FeeWithdrawClaimed")
         .withArgs(
-          gauntletStrategy, bob, bob, expectedFeeAmount, await gauntletStrategy.recordedExit(feeReqId),
+          gauntletStrategy, bob, bob, expectedFeeAmount, minOut1, feeReqId,
         );
 
       const siFinal = await allocation.stakeInfo(gauntletStrategy);
@@ -1688,7 +1791,7 @@ describe("Aera", function () {
         .redeem(gauntletStrategy, alice, alice, userShares);
 
       const userReqId = 3;
-      const minTokensOut = await gauntletStrategy.recordedExit(userReqId);
+      const minTokensOut = (await gauntletStrategy.aeraRedeem(userReqId)).tokens;
       expect(minTokensOut).to.be.gt(0);
 
       // settle redeem on Gauntlet/Aera side

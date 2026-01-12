@@ -30,7 +30,11 @@ interface IAllocation {
     );
 
     event JoinRefunded(
-        // TODO
+        address indexed strategy,
+        address indexed user,
+        uint256 stake,
+        uint256 requestId,
+        address receiver
     );
 
     event Leave(
@@ -113,6 +117,7 @@ interface IAllocation {
     function refundJoinAsync(
         address strategy,
         uint256 requestId,
+        address user,
         address to
     ) external returns (uint256 stake);
 

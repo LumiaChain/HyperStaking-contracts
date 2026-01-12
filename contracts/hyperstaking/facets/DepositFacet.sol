@@ -47,7 +47,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
 
-        _basicChecks(vault, strategy, stake);
+        _basicStakeChecks(vault, strategy, stake);
 
         v.stakeInfo[strategy].totalStake += stake;
 
@@ -85,7 +85,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
 
-        _basicChecks(vault, strategy, stake);
+        _basicStakeChecks(vault, strategy, stake);
 
         v.stakeInfo[strategy].totalStake += stake;
 
@@ -104,21 +104,20 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
 
+        _basicChecks(vault, strategy);
+
         // get async request info from strategy
         (
-            ,
+            address user,
             bool isExit,
             ,
             ,
             ,
         ) = IStrategy(strategy).requestInfo(requestId);
-        require(isExit, BadRequestType());
+        require(!isExit, BadRequestType());
 
         // strategy should validate requestId and return refunded stake amount
-        stake = IAllocation(address(this)).refundJoinAsync(strategy, requestId, to);
-
-        // TODO: hmm
-        _basicChecks(vault, strategy, stake);
+        stake = IAllocation(address(this)).refundJoinAsync(strategy, requestId, user, to);
 
         emit DepositRefund(msg.sender, to, strategy, stake, requestId);
     }
@@ -131,6 +130,8 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
 
+        _basicChecks(vault, strategy);
+
         // get async request info from strategy
         (
             address user,
@@ -142,8 +143,6 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         ) = IStrategy(strategy).requestInfo(requestId);
         require(isExit, BadRequestType());
         require(claimable, RequestNotClaimable());
-
-        _basicChecks(vault, strategy, stake);
 
         // forward to allocation facet and execute the actual claim
         allocation = IAllocation(address(this)).claimJoinAsync(
@@ -196,7 +195,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             if (c.feeWithdraw) {
                 v.stakeInfo[c.strategy].pendingExitFee -= stake;
 
-                emit FeeWithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount);
+                emit FeeWithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount, id);
                 continue;
             }
 
@@ -204,7 +203,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             v.stakeInfo[c.strategy].totalStake -= stake;
             v.stakeInfo[c.strategy].pendingExitStake -= stake;
 
-            emit WithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount);
+            emit WithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount, id);
         }
     }
 
@@ -234,7 +233,56 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         // data used for filtering
         v.groupedClaimIds[strategy][user].push(requestId);
 
-        emit WithdrawQueued(strategy, user, requestId, readyAt, stake, feeWithdraw);
+        emit WithdrawQueued(strategy, user, readyAt, stake, feeWithdraw, requestId);
+    }
+
+    /// @inheritdoc IDeposit
+    function refundWithdraw(
+        uint256 requestId,
+        address to
+    ) external payable nonReentrant returns (uint256 allocationRefunded) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+
+        require(to != address(0), ClaimToZeroAddress());
+
+        Claim memory c = v.pendingClaims[requestId];
+
+        uint256 stake = c.expectedAmount;
+
+        require(c.strategy != address(0), ClaimNotFound(requestId));
+        require(msg.sender == c.eligible, NotEligible(requestId, c.eligible, msg.sender));
+
+        delete v.pendingClaims[requestId]; // remove realized claim
+
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = requestId; // refund one
+
+        // strategy refund exit, strategy should return allocation (shares) back to diamond
+        allocationRefunded = IStrategy(c.strategy).refundExit(ids, address(this));
+
+        // restore allocation back into totalAllocation
+        // totalStake does not change here, because stake never left the strategy
+        v.stakeInfo[c.strategy].totalAllocation += allocationRefunded;
+
+        // exit was queued under either fee or user stake
+        if (c.feeWithdraw) {
+            v.stakeInfo[c.strategy].pendingExitFee -= stake;
+
+            // Fee leave refunds stay local (no bridge), allocation is restored back to the diamond
+
+            emit FeeLeaveRefunded(c.strategy, msg.sender, stake, allocationRefunded, requestId);
+        } else {
+            v.stakeInfo[c.strategy].pendingExitStake -= stake;
+
+            // quote the message fee for the cross-chain dispatch (to = dispatched user)
+            uint256 dispatchFee = quoteDepositDispatch(c.strategy, to, stake);
+            ILockbox(address(this)).collectDispatchFee{value: msg.value}(msg.sender, dispatchFee);
+
+            // bridge stake back to Lumia
+            ILockbox(address(this)).bridgeStakeInfo(c.strategy, to, stake);
+
+            emit WithdrawRefunded(c.strategy, msg.sender, to, stake, allocationRefunded, requestId);
+        }
     }
 
     /* ========== ACL ========== */
@@ -305,14 +353,22 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     //                                     Internal Functions                                     //
     //============================================================================================//
 
-    /// @notice helper check function for deposits
+    /// @notice helper check function
     function _basicChecks(
+        VaultInfo storage vault,
+        address strategy
+    ) internal view {
+        require(vault.strategy != address(0), VaultDoesNotExist(strategy));
+        require(vault.enabled, StrategyDisabled(strategy));
+    }
+
+    /// @notice helper check _basicChecks + stake
+    function _basicStakeChecks(
         VaultInfo storage vault,
         address strategy,
         uint256 stake
     ) internal view {
         require(stake > 0, ZeroStake());
-        require(vault.strategy != address(0), VaultDoesNotExist(strategy));
-        require(vault.enabled, StrategyDisabled(strategy));
+        _basicChecks(vault, strategy);
     }
 }

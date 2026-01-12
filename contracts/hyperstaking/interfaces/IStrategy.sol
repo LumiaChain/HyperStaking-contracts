@@ -54,6 +54,20 @@ interface IStrategy {
         uint256 exitStakeAmount
     );
 
+    /// @notice Emitted when an allocation request is refunded (stake returned)
+    event AllocationRefunded(
+        uint256 indexed id,
+        address receiver,
+        uint256 refundedStake
+    );
+
+    /// @notice Emitted when an exit request is refunded (allocation returned)
+    event ExitRefunded(
+        uint256 indexed id,
+        address receiver,
+        uint256 refundedAllocation
+    );
+
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
@@ -102,6 +116,28 @@ interface IStrategy {
     function claimExit(uint256[] calldata ids_, address receiver_)
         external
         returns (uint256 totalExitStakeAmount);
+
+    /**
+     * @notice Refunds one or more allocation requests
+     * @dev Reverts if a request is already claimed or has a wrong type
+     * @param ids_ Array of request IDs to refund
+     * @param receiver_ The address that will receive refunded stake
+     * @return totalRefundedStake Total stake refunded across all ids
+     */
+    function refundAllocation(uint256[] calldata ids_, address receiver_)
+        external
+        returns (uint256 totalRefundedStake);
+
+    /**
+     * @notice Refunds one or more exit requests
+     * @dev Reverts if a request is already claimed or has a wrong type
+     * @param ids_ Array of request IDs to refund
+     * @param receiver_ The address that will receive refunded allocation
+     * @return totalRefundedAllocation Total allocation refunded across all ids
+     */
+    function refundExit(uint256[] calldata ids_, address receiver_)
+        external
+        returns (uint256 totalRefundedAllocation);
 
     //============================================================================================//
     //                                           View                                             //

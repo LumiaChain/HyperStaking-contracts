@@ -357,6 +357,147 @@ describe("Strategy", function () {
           .to.be.reverted;
       });
     });
+
+    describe("Refunds", function () {
+      it("refunds allocation request (deposit flow) and cleans request storage", async function () {
+        const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+        const { deposit } = hyperStaking;
+        const { owner, strategyManager } = signers;
+
+        // make allocation async so request is actually pending
+        const allocationDelay = 24 * 3600; // 1 day
+        await reserveStrategy.connect(strategyManager).setReadyAtOffsets(allocationDelay, 0);
+
+        const stakeAmount = parseEther("2");
+
+        // deposit creates allocation request (not claimed yet)
+        const depositTx = await deposit.requestDeposit(reserveStrategy, owner, stakeAmount, { value: stakeAmount });
+
+        const reqId = 1;
+        const ts0 = await shared.getCurrentBlockTimestamp();
+        const expectedReadyAt = ts0 + allocationDelay;
+
+        await expect(depositTx)
+          .to.emit(reserveStrategy, "AllocationRequested")
+          .withArgs(reqId, owner, stakeAmount, expectedReadyAt);
+
+        // before readyAt, request should not be claimable
+        const infoBefore = await reserveStrategy.requestInfo(reqId);
+        expect(infoBefore.isExit).to.eq(false);
+        expect(infoBefore.amount).to.eq(stakeAmount);
+        expect(infoBefore.claimed).to.eq(false);
+
+        // jump to readyAt and refund
+        await time.setNextBlockTimestamp(expectedReadyAt);
+
+        const refundTx = deposit.refundDeposit(reserveStrategy, reqId, owner);
+
+        await expect(refundTx)
+          .to.changeEtherBalances([reserveStrategy, owner], [-stakeAmount, stakeAmount]);
+
+        await expect(refundTx)
+          .to.emit(reserveStrategy, "AllocationRefunded")
+          .withArgs(reqId, owner, stakeAmount);
+
+        // request should be cleaned / marked claimed
+        const infoAfter = await reserveStrategy.requestInfo(reqId);
+        expect(infoAfter.claimed).to.eq(true);
+        expect(infoAfter.claimable).to.eq(false);
+
+        // cannot claim after refund
+        await expect(deposit.claimDeposit(reserveStrategy, reqId, owner))
+          .to.be.reverted;
+      });
+
+      it("refunds exit request (withdraw flow), restores vault shares", async function () {
+        const {
+          signers, hyperStaking, lumiaDiamond, reserveStrategy, reserveAssetPrice,
+        } = await loadFixture(deployHyperStaking);
+        const { deposit, lockbox } = hyperStaking;
+        const { realAssets } = lumiaDiamond;
+        const { owner, strategyManager } = signers;
+
+        const stakeAmount = parseEther("6");
+        await deposit.deposit(reserveStrategy, owner, stakeAmount, { value: stakeAmount });
+
+        const { vaultShares } = await shared.getDerivedTokens(
+          lumiaDiamond.hyperlaneHandler,
+          await reserveStrategy.getAddress(),
+        );
+
+        // user should have vault shares after deposit (price 2:1 means shares == stakeAmount)
+        const sharesBeforeRedeem = await vaultShares.balanceOf(owner);
+        expect(sharesBeforeRedeem).to.eq(stakeAmount);
+
+        // make exit async
+        const exitDelay = 2 * 24 * 3600; // 2 days
+        await reserveStrategy.connect(strategyManager).setReadyAtOffsets(0, exitDelay);
+
+        // redeem part -> creates pending claim
+        const redeemStake = parseEther("2");
+        const expectedAllocation = redeemStake * parseEther("1") / reserveAssetPrice;
+
+        await realAssets.redeem(reserveStrategy, owner, owner, redeemStake);
+
+        const claimId = await shared.getLastClaimId(deposit, reserveStrategy, owner);
+
+        // sanity: pending claim exists
+        const claim = (await deposit.pendingClaims([claimId]))[0];
+        expect(claim.strategy).to.eq(await reserveStrategy.getAddress());
+        expect(claim.expectedAmount).to.eq(redeemStake);
+
+        // after redeem, shares should be burned
+        const sharesAfterRedeem = await vaultShares.balanceOf(owner);
+        expect(sharesAfterRedeem).to.eq(sharesBeforeRedeem - redeemStake);
+
+        // refund instead of claimWithdraws
+        const ts0 = await shared.getCurrentBlockTimestamp();
+        const expectedReadyAt = ts0 + exitDelay;
+        expect(claim.unlockTime).to.closeTo(expectedReadyAt, 3);
+
+        await time.setNextBlockTimestamp(claim.unlockTime);
+
+        const refundTx = deposit.refundWithdraw(claimId, owner);
+
+        // refund should return allocation back (revenueAsset) and then restore shares
+        await expect(refundTx).to.changeTokenBalance(vaultShares, owner, redeemStake);
+
+        await expect(refundTx)
+          .to.emit(reserveStrategy, "ExitRefunded")
+          .withArgs(claimId, lockbox, expectedAllocation);
+
+        // pending claim should be cleared
+        const deleted = (await deposit.pendingClaims([claimId]))[0];
+        expect(deleted.strategy).to.eq(ZeroAddress);
+        expect(deleted.unlockTime).to.eq(0);
+        expect(deleted.eligible).to.eq(ZeroAddress);
+        expect(deleted.expectedAmount).to.eq(0);
+
+        // cannot claim after refund
+        await expect(deposit.claimWithdraws([claimId], owner))
+          .to.be.reverted;
+      });
+
+      it("reverts refund if request is not ready yet (too early)", async function () {
+        const { hyperStaking, lumiaDiamond, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+        const { deposit } = hyperStaking;
+        const { realAssets } = lumiaDiamond;
+        const { owner, strategyManager } = signers;
+
+        await deposit.deposit(reserveStrategy, owner, parseEther("3"), { value: parseEther("3") });
+
+        const exitDelay = 24 * 3600; // 1 day
+        await reserveStrategy.connect(strategyManager).setReadyAtOffsets(0, exitDelay);
+
+        await realAssets.redeem(reserveStrategy, owner, owner, parseEther("1"));
+
+        const claimId = await shared.getLastClaimId(deposit, reserveStrategy, owner);
+
+        // too early refund should revert (same gating as claim)
+        await expect(deposit.refundWithdraw(claimId, owner))
+          .to.be.reverted;
+      });
+    });
   });
 
   describe("Dinero Strategy", function () {

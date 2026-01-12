@@ -194,6 +194,46 @@ contract MockReserveStrategy is AbstractStrategy {
         emit Received(msg.sender, msg.value);
     }
 
+    /// @inheritdoc IStrategy
+    function refundAllocation(
+        uint256[] calldata ids_,
+        address receiver_
+    ) external override onlyLumiaDiamond returns (uint256 refundedStake) {
+        require(ids_.length == 1, DontSupportArrays());
+        uint256 id = ids_[0];
+
+        // in this mock we allow refund only when the request is claimable
+        StrategyRequest memory r = _loadClaimable(id, StrategyKind.Allocation);
+        _markClaimed(id);
+
+        refundedStake = r.amount;
+
+        // return original stake back to receiver
+        stake.transfer(receiver_, refundedStake);
+
+        emit AllocationRefunded(id, receiver_, refundedStake);
+    }
+
+    /// @inheritdoc IStrategy
+    function refundExit(
+        uint256[] calldata ids_,
+        address receiver_
+    ) external override onlyLumiaDiamond returns (uint256 refundedAllocation) {
+        require(ids_.length == 1, DontSupportArrays());
+        uint256 id = ids_[0];
+
+        // exit request stores allocation amount (revenueAsset units)
+        StrategyRequest memory r = _loadClaimable(id, StrategyKind.Exit);
+        _markClaimed(id);
+
+        refundedAllocation = r.amount;
+
+        // return original allocation back to receiver
+        IERC20(revenueAsset).safeTransfer(receiver_, refundedAllocation);
+
+        emit ExitRefunded(id, receiver_, refundedAllocation);
+    }
+
     // ========= View ========= //
 
     /// @inheritdoc IStrategy

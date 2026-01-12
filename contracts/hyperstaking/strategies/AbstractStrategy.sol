@@ -54,6 +54,7 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
     error NotStrategyUpgrader();
     error DontSupportArrays();
 
+    error RefundNotSupported();
     error AlreadyClaimed();
     error NotReady();
     error WrongKind();
@@ -110,9 +111,21 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
     //                                      Public Functions                                      //
     //============================================================================================//
 
+    /// @inheritdoc IStrategy
+    /// @dev Default function, to support refunds, override it in the strategy implementation
+    function refundAllocation(uint256[] calldata, address) external virtual returns (uint256) {
+        revert RefundNotSupported();
+    }
+
+    /// @inheritdoc IStrategy
+    /// @dev Default function, to support refunds, override it in the strategy implementation
+    function refundExit(uint256[] calldata, address) external virtual returns (uint256) {
+        revert RefundNotSupported();
+    }
+
     /// @notice Semantic version of this implementation
     function implementationVersion() external pure returns (string memory) {
-        return "IStrategy 1.0.0";
+        return "IStrategy 1.1.0";
     }
 
     // ========= Previews ========= //
@@ -268,14 +281,24 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
         });
     }
 
-    /// @dev Loads a request and pre-validates it
-    function _loadClaimable(
+    /// @dev Loads a validated active request
+    function _loadActive(
         uint256 id_,
         StrategyKind expected_
     ) internal view returns (StrategyRequest memory r) {
         r = _req[id_];
         require(!r.claimed, AlreadyClaimed());
         require(r.kind == expected_, WrongKind());
+    }
+
+    /// @dev Loads a claimable request, pre-validates it
+    function _loadClaimable(
+        uint256 id_,
+        StrategyKind expected_
+    ) internal view returns (StrategyRequest memory r) {
+        r = _loadActive(id_, expected_);
+
+        // request must be ready to claim
         require(block.timestamp >= r.readyAt, NotReady());
     }
 

@@ -224,7 +224,7 @@ export async function solveGauntletDepositRequest(
   gauntletStrategy: Contract,
   provisioner: Contract,
   token: Addressable,
-  amount: bigint,
+  tokens: bigint,
   requestId: number,
 ) {
   const depositRequestHash = await getEventArg(
@@ -234,12 +234,12 @@ export async function solveGauntletDepositRequest(
   );
   expect(depositRequestHash).to.not.equal(ZeroBytes32);
 
-  const units = await gauntletStrategy.recordedAllocation(requestId);
+  const minUnitsOut = (await gauntletStrategy.aeraDeposit(requestId)).units;
   await provisioner.testSolveDeposit(
     token,
     await gauntletStrategy.getAddress(),
-    amount,
-    units,
+    tokens,
+    minUnitsOut,
     depositRequestHash,
   );
 }
@@ -249,7 +249,7 @@ export async function solveGauntletRedeemRequest(
   gauntletStrategy: Contract,
   provisioner: Contract,
   token: Addressable,
-  amount: bigint,
+  minTokensOut: bigint,
   requestId: number,
 ) {
   const redeemRequestHash = await getEventArg(
@@ -259,11 +259,11 @@ export async function solveGauntletRedeemRequest(
   );
   expect(redeemRequestHash).to.not.equal(ZeroBytes32);
 
-  const units = await gauntletStrategy.recordedExit(requestId);
+  const units = (await gauntletStrategy.aeraRedeem(requestId)).units;
   await provisioner.testSolveRedeem(
     token,
     await gauntletStrategy.getAddress(),
-    amount,
+    minTokensOut,
     units,
     redeemRequestHash,
   );

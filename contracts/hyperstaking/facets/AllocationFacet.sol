@@ -82,12 +82,16 @@ contract AllocationFacet is IAllocation, HyperStakingAcl, ReentrancyGuardUpgrade
     function refundJoinAsync(
         address strategy,
         uint256 requestId,
+        address user,
         address to
     ) external diamondInternal returns (uint256 stake) {
-        // TODO
-        stake = 0;
+        // make an array
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = requestId;
 
-        emit JoinRefunded();
+        stake = IStrategy(strategy).refundAllocation(ids, to);
+
+        emit JoinRefunded(strategy, user, stake, requestId, to);
     }
 
     /// @inheritdoc IAllocation

@@ -43,7 +43,8 @@ interface IDeposit {
         address indexed from,
         address to,
         uint256 stake,
-        uint256 exitAmount
+        uint256 exitAmount,
+        uint256 requestId
     );
 
     event FeeWithdrawClaimed(
@@ -51,16 +52,34 @@ interface IDeposit {
         address indexed feeRecipient,
         address to,
         uint256 fee,
-        uint256 exitAmount
+        uint256 exitAmount,
+        uint256 requestId
     );
 
     event WithdrawQueued(
         address indexed strategy,
         address indexed to,
-        uint256 requestId,
         uint64 unlockTime,
         uint256 expectedAmount,
-        bool indexed feeWithdraw
+        bool indexed feeWithdraw,
+        uint256 requestId
+    );
+
+    event FeeLeaveRefunded(
+        address indexed strategy,
+        address indexed from,
+        uint256 stake,
+        uint256 allocationRefunded,
+        uint256 requestId
+    );
+
+    event WithdrawRefunded(
+        address indexed strategy,
+        address indexed from,
+        address to,
+        uint256 stake,
+        uint256 allocationRefunded,
+        uint256 requestId
     );
 
     //============================================================================================//
@@ -172,6 +191,13 @@ interface IDeposit {
         uint256 allocation,
         bool feeWithdraw
     ) external;
+
+    /// @notice Refund an async exit after it was queued (reverts the exit and restores allocation)
+    /// @dev Uses the pending claim as the source of truth and bridges stake back to the Lumia diamond
+    function refundWithdraw(
+        uint256 requestId,
+        address to
+    ) external payable returns (uint256 allocationRefunded);
 
     /* ========== */
 

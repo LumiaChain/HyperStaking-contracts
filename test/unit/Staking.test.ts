@@ -293,7 +293,7 @@ describe("Staking", function () {
       expectedUnlock = blockTime + exitDelay;
       await expect(realAssets.redeem(reserveStrategy1, owner, owner, withdrawAmount))
         .to.emit(deposit, "WithdrawQueued")
-        .withArgs(reserveStrategy1, owner, lastClaimId + 1n, expectedUnlock, withdrawAmount, false);
+        .withArgs(reserveStrategy1, owner, expectedUnlock, withdrawAmount, false, lastClaimId + 1n);
 
       const lastClaimId2 = await shared.getLastClaimId(deposit, reserveStrategy1, owner);
       expect(lastClaimId2).to.equal(lastClaimId + 1n);
@@ -327,7 +327,7 @@ describe("Staking", function () {
 
       await expect(claimTx)
         .to.emit(deposit, "WithdrawClaimed")
-        .withArgs(reserveStrategy1, alice, alice, withdrawAmount, withdrawAmount);
+        .withArgs(reserveStrategy1, alice, alice, withdrawAmount, withdrawAmount, lastClaimId3);
 
       // Allocation
       const vaultInfo = await allocation.stakeInfo(reserveStrategy1);
@@ -370,7 +370,7 @@ describe("Staking", function () {
 
         await expect(claimTx)
           .to.emit(deposit, "WithdrawClaimed")
-          .withArgs(reserveStrategy2, owner, owner, withdrawAmount, withdrawAmount);
+          .withArgs(reserveStrategy2, owner, owner, withdrawAmount, withdrawAmount, lastClaimId);
       }
 
       // wihdraw to another address
