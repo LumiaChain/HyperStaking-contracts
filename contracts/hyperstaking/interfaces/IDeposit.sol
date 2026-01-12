@@ -3,7 +3,7 @@ pragma solidity =0.8.27;
 
 // solhint-disable func-name-mixedcase
 
-import {Claim} from "../libraries/LibHyperStaking.sol";
+import {WithdrawClaim} from "../libraries/LibHyperStaking.sol";
 
 /**
  * @title IDeposit
@@ -212,10 +212,10 @@ interface IDeposit {
     //============================================================================================//
 
     /// @notice Returns claims for given requestIds; chooses fee/user mapping by flag
-    function pendingClaims(uint256[] calldata requestIds)
+    function pendingWithdrawClaims(uint256[] calldata requestIds)
         external
         view
-        returns (Claim[] memory claims);
+        returns (WithdrawClaim[] memory claims);
 
     /// @notice Returns up to `limit` most recent claim IDs for a strategy and user
     /// @dev Newest IDs first

@@ -92,7 +92,7 @@ describe("Strategy", function () {
       const { strategyUpgrader, alice } = signers;
 
       // check versioning
-      expect(await reserveStrategy.implementationVersion()).to.equal("IStrategy 1.0.0");
+      expect(await reserveStrategy.implementationVersion()).to.equal("IStrategy 1.1.0");
 
       const IMPL_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
       const proxyContract = await ethers.getContractAt("UUPSUpgradeable", reserveStrategy);
@@ -118,7 +118,7 @@ describe("Strategy", function () {
         .to.equal(await implV2.getAddress());
 
       // check versioning again (check if new implementation is working)
-      expect(await reserveStrategy.implementationVersion()).to.equal("IStrategy 1.0.0");
+      expect(await reserveStrategy.implementationVersion()).to.equal("IStrategy 1.1.0");
     });
   });
 
@@ -442,7 +442,7 @@ describe("Strategy", function () {
         const claimId = await shared.getLastClaimId(deposit, reserveStrategy, owner);
 
         // sanity: pending claim exists
-        const claim = (await deposit.pendingClaims([claimId]))[0];
+        const claim = (await deposit.pendingWithdrawClaims([claimId]))[0];
         expect(claim.strategy).to.eq(await reserveStrategy.getAddress());
         expect(claim.expectedAmount).to.eq(redeemStake);
 
@@ -467,7 +467,7 @@ describe("Strategy", function () {
           .withArgs(claimId, lockbox, expectedAllocation);
 
         // pending claim should be cleared
-        const deleted = (await deposit.pendingClaims([claimId]))[0];
+        const deleted = (await deposit.pendingWithdrawClaims([claimId]))[0];
         expect(deleted.strategy).to.eq(ZeroAddress);
         expect(deleted.unlockTime).to.eq(0);
         expect(deleted.eligible).to.eq(ZeroAddress);

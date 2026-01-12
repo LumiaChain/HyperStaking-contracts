@@ -46,7 +46,7 @@ struct StakeInfo {
 // @param eligible Address allowed to execute the claim
 // @param expectedAmount The amount of stake expected to be withdrawn in this claim
 // @param feeWithdraw Whether protocol-fee claims (true) or user claims (false)
-struct Claim {
+struct WithdrawClaim {
     address strategy;
     uint64 unlockTime;
     address eligible;
@@ -103,9 +103,9 @@ struct HyperStakingStorage {
     uint256 nextRequestId;
 
     /// @notice Pending claims by requestId
-    mapping(uint256 requestId => Claim) pendingClaims;
+    mapping(uint256 requestId => WithdrawClaim) pendingWithdrawClaims;
 
-    /// @notice Pending withdrawal IDs by strategy and user
+    /// @notice Pending claim IDs by strategy and user, includes both deposit and withdraw requests
     mapping(address strategy => mapping(address user => uint256[])) groupedClaimIds;
 
     /// @notice General lockbox data

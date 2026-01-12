@@ -17,7 +17,7 @@ import {
 
 import {StakeInfoData} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 import {
-    HyperStakingStorage, LibHyperStaking, VaultInfo, Claim
+    HyperStakingStorage, LibHyperStaking, VaultInfo, WithdrawClaim
 } from "../libraries/LibHyperStaking.sol";
 
 import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
@@ -89,8 +89,17 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
         v.stakeInfo[strategy].totalStake += stake;
 
+        vault.stakeCurrency.transferFrom(
+            msg.sender,
+            address(this),
+            stake // dispatch fee currency not needed here, stake is bridged during claim
+        );
+
         // true - bridge info to Lumia chain to mint coresponding rwa asset
         requestId = IAllocation(address(this)).joinAsync(strategy, to, stake);
+
+        // store request id, for convenience
+        v.groupedClaimIds[strategy][to].push(requestId);
 
         emit DepositRequest(msg.sender, to, strategy, stake, requestId);
     }
@@ -141,7 +150,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             ,
             bool claimable
         ) = IStrategy(strategy).requestInfo(requestId);
-        require(isExit, BadRequestType());
+        require(!isExit, BadRequestType());
         require(claimable, RequestNotClaimable());
 
         // forward to allocation facet and execute the actual claim
@@ -171,7 +180,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
         for (uint256 i = 0; i < n; ++i) {
             uint256 id = requestIds[i];
-            Claim memory c = v.pendingClaims[id];
+            WithdrawClaim memory c = v.pendingWithdrawClaims[id];
 
             uint256 stake = c.expectedAmount;
 
@@ -182,7 +191,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
                 ClaimTooEarly(uint64(block.timestamp), c.unlockTime)
             );
 
-            delete v.pendingClaims[id]; // remove realized claim
+            delete v.pendingWithdrawClaims[id]; // remove realized claim
 
             // claim one by one, as strategy may not support array claims
             uint256[] memory ids = new uint256[](1);
@@ -222,7 +231,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         uint256 requestId = LibHyperStaking.newRequestId();
         uint64 readyAt = IStrategy(strategy).requestExit(requestId, allocation, user);
 
-        v.pendingClaims[requestId] = Claim({
+        v.pendingWithdrawClaims[requestId] = WithdrawClaim({
             strategy: strategy,
             unlockTime: readyAt,
             eligible: user,
@@ -245,14 +254,14 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
         require(to != address(0), ClaimToZeroAddress());
 
-        Claim memory c = v.pendingClaims[requestId];
+        WithdrawClaim memory c = v.pendingWithdrawClaims[requestId];
 
         uint256 stake = c.expectedAmount;
 
         require(c.strategy != address(0), ClaimNotFound(requestId));
         require(msg.sender == c.eligible, NotEligible(requestId, c.eligible, msg.sender));
 
-        delete v.pendingClaims[requestId]; // remove realized claim
+        delete v.pendingWithdrawClaims[requestId]; // remove realized claim
 
         uint256[] memory ids = new uint256[](1);
         ids[0] = requestId; // refund one
@@ -300,17 +309,17 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     // ========= View ========= //
 
     /// @inheritdoc IDeposit
-    function pendingClaims(
+    function pendingWithdrawClaims(
         uint256[] calldata requestIds
-    ) external view returns (Claim[] memory claims) {
+    ) external view returns (WithdrawClaim[] memory claims) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
 
         uint256 n = requestIds.length;
-        claims = new Claim[](n);
+        claims = new WithdrawClaim[](n);
 
         for (uint256 i = 0; i < n; ++i) {
             uint256 requestId = requestIds[i];
-            claims[i] = v.pendingClaims[requestId];
+            claims[i] = v.pendingWithdrawClaims[requestId];
         }
     }
 

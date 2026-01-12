@@ -25,10 +25,17 @@ import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interf
 import { IERC20 } from "../typechain-types";
 
 import { SingleDirectSingleVaultStateReqStruct } from "../typechain-types/contracts/external/superform/core/BaseRouter";
-import { ClaimStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IDeposit";
+import { WithdrawClaimStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IDeposit";
 
 // full - because there are two differnet vesions of IERC20 used in the project
 export const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";
+
+export async function toIERC20(contractAddr: Addressable): Promise<IERC20> {
+  return await ethers.getContractAt(
+    fullyQualifiedIERC20,
+    contractAddr,
+  ) as unknown as IERC20;
+}
 
 export const stableUnits = (val: string) => parseUnits(val, 6);
 
@@ -225,7 +232,7 @@ export async function solveGauntletDepositRequest(
   provisioner: Contract,
   token: Addressable,
   tokens: bigint,
-  requestId: number,
+  requestId: number | bigint,
 ) {
   const depositRequestHash = await getEventArg(
     tx,
@@ -250,7 +257,7 @@ export async function solveGauntletRedeemRequest(
   provisioner: Contract,
   token: Addressable,
   minTokensOut: bigint,
-  requestId: number,
+  requestId: number | bigint,
 ) {
   const redeemRequestHash = await getEventArg(
     tx,
@@ -288,8 +295,12 @@ const errorsIface = new Interface([
 ]);
 export const errors = { interface: errorsIface };
 
-export async function getLastClaimId(deposit: Contract, reserveStrategy1: Addressable, owner: Addressable) {
-  const lastClaims = await deposit.lastClaims(reserveStrategy1, owner, 1);
+export async function getLastClaimId(
+  deposit: Contract,
+  strategy: Addressable,
+  owner: Addressable,
+): Promise<bigint> {
+  const lastClaims = await deposit.lastClaims(strategy, owner, 1);
   return lastClaims[0] as bigint; // return only the claimId
 }
 
@@ -349,7 +360,7 @@ export function claimAtDeadline(
   });
 
   const run = (async () => {
-    const pendingClaim: ClaimStruct[] = await deposit.pendingClaims([requestId]);
+    const pendingClaim: WithdrawClaimStruct[] = await deposit.pendingWithdrawClaims([requestId]);
     const deadline = pendingClaim[0].unlockTime;
 
     const now = await getCurrentBlockTimestamp();
@@ -372,4 +383,27 @@ export function claimAtDeadline(
   (run as any).claimTx = claimTxPromise;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return run as any;
+}
+
+// fast-forwards the next block timestamp to just after the `readyAt` time of a strategy request
+export async function fastForwardStrategyRequest(
+  strategy: Contract,
+  requestId: number | bigint,
+) {
+  const reqInfo = await strategy.requestInfo(requestId);
+  await time.setNextBlockTimestamp(
+    Number(reqInfo.readyAt) + 1, // move past readyAt
+  );
+}
+
+// fast-forwards the next block timestamp to the last user request unlock time
+export async function fastForwardUserLastRequest(
+  deposit: Contract,
+  strategy: Contract,
+  user: Addressable,
+): Promise<bigint> {
+  const requestId = await getLastClaimId(deposit, strategy, user);
+  fastForwardStrategyRequest(strategy, requestId);
+
+  return requestId;
 }

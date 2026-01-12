@@ -335,7 +335,7 @@ describe("Aera", function () {
 
     it("stake: single user, events, stakeInfo, lockbox & LP balances", async function () {
       const {
-        signers, hyperStaking, gauntletStrategy, vaultShares, testUSDC,
+        signers, hyperStaking, gauntletStrategy, vaultShares, testUSDC, aeraMock,
       } = await loadFixture(deployHyperStaking);
 
       const { deposit, allocation, lockbox } = hyperStaking;
@@ -350,15 +350,20 @@ describe("Aera", function () {
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
 
       const reqId = 1;
-      const readyAt = 0;
 
-      const tx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount);
+      const tx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
+      const reqInfo = await gauntletStrategy.requestInfo(reqId);
 
       await expect(tx)
         .to.emit(gauntletStrategy, "AllocationRequested")
-        .withArgs(reqId, alice, stakeAmount, readyAt);
+        .withArgs(reqId, alice, stakeAmount, reqInfo.readyAt);
 
-      await expect(tx)
+      await shared.fastForwardStrategyRequest(gauntletStrategy, reqId);
+      await shared.solveGauntletDepositRequest(
+        tx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, reqId,
+      );
+
+      await expect(deposit.connect(alice).claimDeposit(gauntletStrategy, reqId))
         .to.emit(gauntletStrategy, "AllocationClaimed")
         .withArgs(reqId, lockbox.target, expectedAlloc);
 
@@ -369,7 +374,7 @@ describe("Aera", function () {
 
       // lockbox holds revenue asset (receipt/units)
       const revenueAssetAddr = await gauntletStrategy.revenueAsset();
-      const revenueAsset = await ethers.getContractAt("LumiaGtUSDa", revenueAssetAddr);
+      const revenueAsset = await shared.toIERC20(revenueAssetAddr);
       expect(await revenueAsset.balanceOf(lockbox)).to.equal(expectedAlloc);
 
       // LP (vault shares on Lumia chain) minted to user
@@ -378,7 +383,7 @@ describe("Aera", function () {
 
     it("stake: two users, interleaved; sums, LP balances correct", async function () {
       const {
-        hyperStaking, gauntletStrategy, vaultShares, signers, testUSDC,
+        hyperStaking, gauntletStrategy, vaultShares, signers, testUSDC, aeraMock,
       } = await loadFixture(deployHyperStaking);
 
       const { deposit, allocation, lockbox } = hyperStaking;
@@ -395,22 +400,40 @@ describe("Aera", function () {
 
       // alice first
       const aliceReqId = 1;
-      await expect(
-        deposit.connect(alice).deposit(gauntletStrategy, alice, aliceStake),
-      )
+      const aliceTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, aliceStake);
+      const aliceReqInfo = await gauntletStrategy.requestInfo(aliceReqId);
+
+      await expect(aliceTx)
         .to.emit(gauntletStrategy, "AllocationRequested")
-        .withArgs(aliceReqId, alice, aliceStake, 0)
-        .and.to.emit(gauntletStrategy, "AllocationClaimed")
+        .withArgs(aliceReqId, alice, aliceStake, aliceReqInfo.readyAt);
+
+      await shared.fastForwardStrategyRequest(gauntletStrategy, aliceReqId);
+      await shared.solveGauntletDepositRequest(
+        aliceTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, aliceStake, aliceReqId,
+      );
+
+      await expect(
+        deposit.connect(alice).claimDeposit(gauntletStrategy, aliceReqId),
+      )
+        .to.emit(gauntletStrategy, "AllocationClaimed")
         .withArgs(aliceReqId, lockbox.target, aliceAlloc);
 
       // bob next
       const bobReqId = 2;
-      await expect(
-        deposit.connect(bob).deposit(gauntletStrategy, bob, bobStake),
-      )
+      const bobTx = await deposit.connect(bob).requestDeposit(gauntletStrategy, bob, bobStake);
+      const bobReqInfo = await gauntletStrategy.requestInfo(bobReqId);
+
+      await expect(bobTx)
         .to.emit(gauntletStrategy, "AllocationRequested")
-        .withArgs(bobReqId, bob, bobStake, 0)
-        .and.to.emit(gauntletStrategy, "AllocationClaimed")
+        .withArgs(bobReqId, bob, bobStake, bobReqInfo.readyAt);
+
+      shared.fastForwardStrategyRequest(gauntletStrategy, bobReqId);
+      await shared.solveGauntletDepositRequest(
+        bobTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, bobStake, bobReqId,
+      );
+
+      await expect(deposit.connect(bob).claimDeposit(gauntletStrategy, bobReqId))
+        .to.emit(gauntletStrategy, "AllocationClaimed")
         .withArgs(bobReqId, lockbox.target, bobAlloc);
 
       // stakeInfo totals
@@ -419,8 +442,7 @@ describe("Aera", function () {
       expect(stakeInfo.totalAllocation).to.equal(aliceAlloc + bobAlloc);
 
       // lockbox holds combined allocation units (revenue asset)
-      const revenueAsset = await ethers.getContractAt(
-        "LumiaGtUSDa",
+      const revenueAsset = await shared.toIERC20(
         await gauntletStrategy.revenueAsset(),
       );
       expect(await revenueAsset.balanceOf(lockbox)).to.equal(aliceAlloc + bobAlloc);
@@ -468,10 +490,14 @@ describe("Aera", function () {
       expect(expectedAlloc - precisionError).to.be.eq(rawUnits - (rawUnits * 300n) / 10_000n);
 
       // --- Stake & settle deposit ---
-      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount);
+      const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
       await shared.solveGauntletDepositRequest(
         stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
       );
+
+      const reqId = await shared.fastForwardUserLastRequest(deposit, gauntletStrategy, alice);
+
+      await deposit.connect(alice).claimDeposit(gauntletStrategy, reqId);
 
       // LP 1:1 in stake units
       const userShares = await vaultShares.balanceOf(alice);
@@ -543,16 +569,20 @@ describe("Aera", function () {
 
       const expectedAllocation = await gauntletStrategy.previewAllocation(stakeAmount);
 
-      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount);
-
-      await expect(stakeTx)
-        .to.emit(gauntletStrategy, "AllocationRequested").withArgs(1, alice, stakeAmount, 0)
-        .and.to.emit(gauntletStrategy, "AllocationClaimed").withArgs(1, lockbox.target, expectedAllocation);
-
       const reqId = 1;
+      const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
+
+      expect(stakeTx).to.emit(gauntletStrategy, "AllocationRequested").withArgs(reqId, alice, stakeAmount, 0);
+
       await shared.solveGauntletDepositRequest(
         stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, reqId,
       );
+
+      await shared.fastForwardStrategyRequest(gauntletStrategy, reqId);
+
+      await expect(deposit.connect(alice).claimDeposit(gauntletStrategy, reqId))
+        .to.emit(gauntletStrategy, "AllocationClaimed")
+        .withArgs(reqId, lockbox.target, expectedAllocation);
 
       // sanity: LP shares minted 1:1 in Lumia
       expect(await vaultShares.balanceOf(alice)).to.equal(stakeAmount);
@@ -637,11 +667,13 @@ describe("Aera", function () {
       const stakeAmount = parseUnits("1500", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
 
-      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount);
+      const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
 
       await shared.solveGauntletDepositRequest(
         stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
       );
+      const reqId = await shared.fastForwardUserLastRequest(deposit, gauntletStrategy, alice);
+      await deposit.connect(alice).claimDeposit(gauntletStrategy, reqId);
 
       expect(await vaultShares.balanceOf(alice)).to.eq(stakeAmount);
 
@@ -709,11 +741,14 @@ describe("Aera", function () {
 
       // stake again, so report can proceed
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
-      const stakeTx2 = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount);
+      const stakeTx2 = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
 
       await shared.solveGauntletDepositRequest(
         stakeTx2, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 3,
       );
+
+      const reqId2 = await shared.fastForwardUserLastRequest(deposit, gauntletStrategy, alice);
+      await deposit.connect(alice).claimDeposit(gauntletStrategy, reqId2);
 
       // now report should work
 
@@ -744,11 +779,16 @@ describe("Aera", function () {
       const stakeAmount = parseUnits("3000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
 
-      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount);
+      const reqId = 1;
+
+      const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
 
       await shared.solveGauntletDepositRequest(
-        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, reqId,
       );
+
+      await shared.fastForwardStrategyRequest(gauntletStrategy, reqId);
+      await deposit.connect(alice).claimDeposit(gauntletStrategy, reqId);
 
       // --- Price +20% (units more valuable) ---
       const now = await shared.getCurrentBlockTimestamp();
@@ -801,13 +841,15 @@ describe("Aera", function () {
       const redeemTx = await realAssets.connect(alice)
         .redeem(gauntletStrategy, alice, alice, userShares);
 
+      const reqInfo = await gauntletStrategy.requestInfo(2);
+
       await expect(redeemTx)
         .to.emit(gauntletStrategy, "ExitRequested")
         .withArgs(
           2,
           alice,
           expectedExitShares,
-          anyValue, // deadline could be +/- depending on test timing
+          reqInfo.readyAt,
         );
 
       const minTokensOut = (await gauntletStrategy.aeraRedeem(2)).tokens;
@@ -1027,7 +1069,7 @@ describe("Aera", function () {
     });
 
     describe("Refunds", function () {
-      it.only("refunds exit request (redeem flow) and restores vault shares (Gauntlet)", async function () {
+      it("refunds exit request (redeem flow) and restores vault shares (Gauntlet)", async function () {
         const {
           signers, hyperStaking, lumiaDiamond, gauntletStrategy, vaultShares, testUSDC, aeraMock,
         } = await loadFixture(deployHyperStaking);
@@ -1052,11 +1094,15 @@ describe("Aera", function () {
         const stakeAmount = parseUnits("1000", 6);
         await testUSDC.connect(alice).approve(deposit, stakeAmount);
 
-        const stakeTx = await deposit.connect(alice).deposit(
+        const stakeTx = await deposit.connect(alice).requestDeposit(
           gauntletStrategy,
           alice,
           stakeAmount,
         );
+
+        const depositReqId = await shared.getLastClaimId(deposit, gauntletStrategy, alice);
+
+        console.log("Deposit Req ID:", depositReqId);
 
         await shared.solveGauntletDepositRequest(
           stakeTx,
@@ -1064,8 +1110,11 @@ describe("Aera", function () {
           aeraMock.aeraProvisioner,
           testUSDC,
           stakeAmount,
-          1, // requestId
+          depositReqId,
         );
+
+        await shared.fastForwardStrategyRequest(gauntletStrategy, depositReqId);
+        await deposit.connect(alice).claimDeposit(gauntletStrategy, depositReqId);
 
         const sharesBefore = await vaultShares.balanceOf(alice);
         expect(sharesBefore).to.eq(stakeAmount);
@@ -1082,14 +1131,14 @@ describe("Aera", function () {
           redeemStake,
         );
 
-        const claimId = await shared.getLastClaimId(deposit, gauntletStrategy, alice);
+        const redeemClaimId = await shared.getLastClaimId(deposit, gauntletStrategy, alice);
 
         // shares burned immediately on Lumia side
         const sharesAfterRedeem = await vaultShares.balanceOf(alice);
         expect(sharesAfterRedeem).to.eq(sharesBefore - redeemStake);
 
         // pending claim sanity
-        const pending = (await deposit.pendingClaims([claimId]))[0];
+        const pending = (await deposit.pendingWithdrawClaims([redeemClaimId]))[0];
         expect(pending.strategy).to.eq(await gauntletStrategy.getAddress());
         expect(pending.eligible).to.eq(alice);
         expect(pending.expectedAmount).to.eq(redeemStake);
@@ -1099,7 +1148,7 @@ describe("Aera", function () {
 
         await time.setNextBlockTimestamp(Number(pending.unlockTime + 1n));
 
-        const refundTx = deposit.connect(alice).refundWithdraw(claimId, alice);
+        const refundTx = deposit.connect(alice).refundWithdraw(redeemClaimId, alice);
 
         // user gets shares back 1:1
         await expect(refundTx).to.changeTokenBalance(vaultShares, alice, redeemStake);
@@ -1107,17 +1156,17 @@ describe("Aera", function () {
         // strategy returns revenue-asset allocation back to the lockbox (strategy-level event)
         await expect(refundTx)
           .to.emit(gauntletStrategy, "ExitRefunded")
-          .withArgs(claimId, lockbox, expectedExitAllocation);
+          .withArgs(redeemClaimId, lockbox, expectedExitAllocation);
 
         // pending claim cleared
-        const deleted = (await deposit.pendingClaims([claimId]))[0];
+        const deleted = (await deposit.pendingWithdrawClaims([redeemClaimId]))[0];
         expect(deleted.strategy).to.eq(ZeroAddress);
         expect(deleted.unlockTime).to.eq(0);
         expect(deleted.eligible).to.eq(ZeroAddress);
         expect(deleted.expectedAmount).to.eq(0);
 
         // cannot claim after refund
-        await expect(deposit.connect(alice).claimWithdraws([claimId], alice))
+        await expect(deposit.connect(alice).claimWithdraws([redeemClaimId], alice))
           .to.be.reverted;
       });
     });
@@ -1222,7 +1271,8 @@ describe("Aera", function () {
 
             const expectedAlloc = await gauntletStrategy.previewAllocation(stakeAmount);
 
-            const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount);
+            let reqId = 1;
+            const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
 
             // settle deposit (requestId = 1)
             await shared.solveGauntletDepositRequest(
@@ -1231,8 +1281,11 @@ describe("Aera", function () {
               aeraMock.aeraProvisioner,
               testUSDC,
               stakeAmount,
-              1,
+              reqId,
             );
+
+            await shared.fastForwardStrategyRequest(gauntletStrategy, reqId);
+            await deposit.connect(alice).claimDeposit(gauntletStrategy, reqId);
 
             // LP minted 1:1 in Lumia
             const userShares = await vaultShares.balanceOf(alice);
@@ -1257,7 +1310,7 @@ describe("Aera", function () {
             const redeemTx = await realAssets.connect(alice).redeem(gauntletStrategy, alice, alice, redeemAmt);
 
             // requestId = 2 for the first redeem in this fixture
-            const reqId = 2;
+            reqId = 2;
             const minTokensOut = (await gauntletStrategy.aeraRedeem(reqId)).tokens;
             expect(minTokensOut).to.be.gt(0);
 
@@ -1353,15 +1406,16 @@ describe("Aera", function () {
       // stake 10_000 USDC
       const stakeAmount = parseUnits("10000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
-      const stakeTx = await deposit.connect(alice).deposit(
-        gauntletStrategy,
-        alice,
-        stakeAmount,
-      );
+
+      const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
+
+      const reqId = await shared.fastForwardUserLastRequest(deposit, gauntletStrategy, alice);
 
       await shared.solveGauntletDepositRequest(
-        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, /* requestId */ 1,
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, reqId,
       );
+
+      await deposit.connect(alice).claimDeposit(gauntletStrategy, reqId);
 
       // apply price loss
       const newPrice = parseUnits("0.75", 6); // 25% loss
@@ -1441,15 +1495,15 @@ describe("Aera", function () {
 
       const stakeAmount = parseUnits("9000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
-      const stakeTx = await deposit.connect(alice).deposit(
-        gauntletStrategy,
-        alice,
-        stakeAmount,
-      );
+
+      const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
+      const reqId = await shared.fastForwardUserLastRequest(deposit, gauntletStrategy, alice);
 
       await shared.solveGauntletDepositRequest(
-        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, /* requestId */ 1,
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, reqId,
       );
+
+      await deposit.connect(alice).claimDeposit(gauntletStrategy, reqId);
 
       const newPrice = parseUnits("0.50", 6); // 50% loss
       await applyNewPrice(aeraMock, testUSDC, owner, stakeAmount, newPrice);
@@ -1523,15 +1577,14 @@ describe("Aera", function () {
 
       const stakeAmount = parseUnits("5000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
-      const stakeTx = await deposit.connect(alice).deposit(
-        gauntletStrategy,
-        alice,
-        stakeAmount,
-      );
+
+      const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
+      const reqId = await shared.fastForwardUserLastRequest(deposit, gauntletStrategy, alice);
 
       await shared.solveGauntletDepositRequest(
-        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, /* requestId */ 1,
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, reqId,
       );
+      await deposit.connect(alice).claimDeposit(gauntletStrategy, reqId);
 
       // push price up + mint gains into aera vault so accounting is consistent
       const newPrice = parseUnits("2.00", 6); // 100% gain
@@ -1591,11 +1644,14 @@ describe("Aera", function () {
       const stakeAmount = parseUnits("5000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
 
-      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount);
+      const reqId = 1;
+      const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
 
       await shared.solveGauntletDepositRequest(
-        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1, // allocation requestId
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, reqId, // allocation requestId
       );
+      await shared.fastForwardStrategyRequest(gauntletStrategy, reqId);
+      await deposit.connect(alice).claimDeposit(gauntletStrategy, reqId);
 
       const siAfterStake = await allocation.stakeInfo(gauntletStrategy);
       expect(siAfterStake.totalStake).to.eq(stakeAmount);
@@ -1718,11 +1774,14 @@ describe("Aera", function () {
       const stakeAmount = parseUnits("5000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
 
-      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount);
+      const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
+      const reqId = await shared.fastForwardUserLastRequest(deposit, gauntletStrategy, alice);
 
       await shared.solveGauntletDepositRequest(
-        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1, // allocation requestId
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, reqId, // allocation requestId
       );
+
+      await deposit.connect(alice).claimDeposit(gauntletStrategy, reqId);
 
       const siAfterStake = await allocation.stakeInfo(gauntletStrategy);
       expect(siAfterStake.totalStake).to.eq(stakeAmount);
@@ -1758,7 +1817,7 @@ describe("Aera", function () {
       // sequence: 1 = allocation for deposit, 2 = fee leave inside report
       const feeReqId = 2;
 
-      const feeClaim = await deposit.pendingClaims([feeReqId]);
+      const feeClaim = await deposit.pendingWithdrawClaims([feeReqId]);
       expect(feeClaim[0].strategy).to.eq(gauntletStrategy);
       expect(feeClaim[0].feeWithdraw).to.eq(true);
       expect(feeClaim[0].expectedAmount).to.eq(expectedFeeAmount);
@@ -1839,11 +1898,16 @@ describe("Aera", function () {
       // --- stake & settle ---
       const stakeAmount = parseUnits("1000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
-      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount);
+
+      const reqId = 1;
+      const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
 
       await shared.solveGauntletDepositRequest(
-        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, reqId,
       );
+
+      await shared.fastForwardStrategyRequest(gauntletStrategy, reqId);
+      await deposit.connect(alice).claimDeposit(gauntletStrategy, reqId);
 
       // --- crash price to a very low but non zero level ---
       const ts = (await shared.getCurrentBlockTimestamp()) + 60;
@@ -1905,10 +1969,15 @@ describe("Aera", function () {
       // --- stake & settle ---
       const stakeAmount = parseUnits("1000", 6);
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
-      const stakeTx = await deposit.connect(alice).deposit(gauntletStrategy, alice, stakeAmount);
+
+      const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
+      const reqId = await shared.fastForwardUserLastRequest(deposit, gauntletStrategy, alice);
+
       await shared.solveGauntletDepositRequest(
-        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, reqId,
       );
+
+      await deposit.connect(alice).claimDeposit(gauntletStrategy, reqId);
 
       // sanity: user has shares
       const userShares = await vaultShares.balanceOf(alice);

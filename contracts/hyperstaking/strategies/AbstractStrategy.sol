@@ -173,8 +173,8 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
             bool isExit,
             uint256 amount,
             uint64 readyAt,
-            bool claimable,
-            bool claimed
+            bool claimed,
+            bool claimable
         )
     {
         StrategyRequest memory r = _req[id_];

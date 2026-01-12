@@ -7,7 +7,7 @@ import DiamondModule from "../../ignition/modules/Diamond";
 import RevertingContractModule from "../../ignition/modules/test/RevertingContract";
 
 import * as shared from "../shared";
-import { ClaimStruct } from "../../typechain-types/contracts/hyperstaking/facets/DepositFacet";
+import { WithdrawClaimStruct } from "../../typechain-types/contracts/hyperstaking/facets/DepositFacet";
 import { deployHyperStakingBase } from "../setup";
 import { TestCurrencyHandler } from "../../typechain-types";
 
@@ -152,8 +152,8 @@ describe("Staking", function () {
         await realAssets.connect(alice).redeem(reserveStrategy1, alice, alice, stakeAmount); // price 1:1
 
         const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy1, alice);
-        const pendingClaims: ClaimStruct[] = await deposit.pendingClaims([lastClaimId]);
-        expect(pendingClaims[0].unlockTime).to.equal(syncReadyAt);
+        const pendingWithdrawClaims: WithdrawClaimStruct[] = await deposit.pendingWithdrawClaims([lastClaimId]);
+        expect(pendingWithdrawClaims[0].unlockTime).to.equal(syncReadyAt);
       }
 
       // --- Async Path
@@ -170,10 +170,10 @@ describe("Staking", function () {
         await realAssets.connect(alice).redeem(reserveStrategy1, alice, alice, stakeAmount);
 
         const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy1, alice);
-        const pendingClaims: ClaimStruct[] = await deposit.pendingClaims([lastClaimId]);
+        const pendingWithdrawClaims: WithdrawClaimStruct[] = await deposit.pendingWithdrawClaims([lastClaimId]);
 
         // some delay may happen during test processing
-        expect(pendingClaims[0].unlockTime).to.be.closeTo(expectedUnlock, 3);
+        expect(pendingWithdrawClaims[0].unlockTime).to.be.closeTo(expectedUnlock, 3);
       }
     });
 
@@ -260,7 +260,7 @@ describe("Staking", function () {
 
       const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy1, owner);
 
-      const claim = (await deposit.pendingClaims([lastClaimId]))[0] as ClaimStruct;
+      const claim = (await deposit.pendingWithdrawClaims([lastClaimId]))[0] as WithdrawClaimStruct;
       expect(claim.strategy).to.equal(reserveStrategy1);
       expect(claim.unlockTime).to.equal(expectedUnlock);
       expect(claim.eligible).to.equal(owner);
@@ -282,7 +282,7 @@ describe("Staking", function () {
           [withdrawAmount, -withdrawAmount],
         );
 
-      const deletedClaim = (await deposit.pendingClaims([lastClaimId]))[0] as ClaimStruct;
+      const deletedClaim = (await deposit.pendingWithdrawClaims([lastClaimId]))[0] as WithdrawClaimStruct;
       expect(deletedClaim.strategy).to.equal(ZeroAddress);
       expect(deletedClaim.unlockTime).to.equal(0);
       expect(deletedClaim.eligible).to.equal(ZeroAddress);
@@ -298,7 +298,7 @@ describe("Staking", function () {
       const lastClaimId2 = await shared.getLastClaimId(deposit, reserveStrategy1, owner);
       expect(lastClaimId2).to.equal(lastClaimId + 1n);
 
-      const claim2 = (await deposit.pendingClaims([lastClaimId2]))[0] as ClaimStruct;
+      const claim2 = (await deposit.pendingWithdrawClaims([lastClaimId2]))[0] as WithdrawClaimStruct;
       expect(claim2.unlockTime).to.equal(expectedUnlock);
       expect(claim2.expectedAmount).to.equal(withdrawAmount);
 

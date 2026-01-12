@@ -6,7 +6,6 @@ pragma solidity =0.8.27;
 import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
 import {IHyperFactory} from "../interfaces/IHyperFactory.sol";
 import {AbstractStrategy} from "./AbstractStrategy.sol";
-import {LumiaGtUSDa} from "./tokens/LumiaGtUSDa.sol";
 
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -44,9 +43,6 @@ contract GauntletStrategy is AbstractStrategy {
 
     /// @notice Current Aera config
     AeraConfig public aeraConfig;
-
-    /// @notice Address of the Gauntlet derived token, used as allocation for the HyperStaking
-    LumiaGtUSDa public LUMIA_GTUSDA;
 
     /// @notice Stake token accepted by the strategy (input currency)
     IERC20 public STAKE_TOKEN;
@@ -114,9 +110,6 @@ contract GauntletStrategy is AbstractStrategy {
 
         require(stakeToken_ != address(0), ZeroAddress());
 
-        // deploys new ERC20 token owned by this strategy
-        LUMIA_GTUSDA = new LumiaGtUSDa();
-
         STAKE_TOKEN = IERC20(stakeToken_);
         AERA_PROVISIONER = Provisioner(aeraProvisioner_);
         AERA_PRICE = AERA_PROVISIONER.PRICE_FEE_CALCULATOR();
@@ -151,7 +144,9 @@ contract GauntletStrategy is AbstractStrategy {
         require(user_ != address(0), ZeroUser());
         require(amount_ != 0, ZeroAmount());
 
-        readyAt = previewAllocationReadyAt(amount_);
+        uint256 deadline = _aeraDeadline();
+        readyAt = uint64(deadline); // use aera deadline for readyAt
+
         _storeAllocationRequest(
             requestId_,
             user_,
@@ -165,8 +160,6 @@ contract GauntletStrategy is AbstractStrategy {
         // transfer stake amount to this contract and approve Aera
         STAKE_TOKEN.safeTransferFrom(msg.sender, address(this), amount_);
         STAKE_TOKEN.safeIncreaseAllowance(address(AERA_PROVISIONER), amount_);
-
-        uint256 deadline = _aeraDeadline();
 
         RequestType requestType = aeraConfig.isFixedPrice ?
             RequestType.DEPOSIT_FIXED_PRICE :
@@ -239,8 +232,7 @@ contract GauntletStrategy is AbstractStrategy {
         uint256 minTokensOut = _previewExitRaw(shares_);
 
         // transfer stake amount to this contract and approve Aera
-        IERC20(address(LUMIA_GTUSDA)).safeTransferFrom(msg.sender, address(this), shares_);
-
+        IERC20(AERA_VAULT).safeTransferFrom(msg.sender, address(this), shares_);
         IERC20(AERA_VAULT).safeIncreaseAllowance(address(AERA_PROVISIONER), shares_);
 
         RequestType requestType = aeraConfig.isFixedPrice ?
@@ -357,13 +349,15 @@ contract GauntletStrategy is AbstractStrategy {
 
     /// @inheritdoc IStrategy
     function revenueAsset() public view virtual returns(address) {
-        return address(LUMIA_GTUSDA);
+        return AERA_VAULT;
     }
 
     /// @inheritdoc IStrategy
-    function previewAllocationReadyAt(uint256) public pure returns (uint64 readyAt) {
-        // TODO: when wrapper token is removed, return non-zero readyAt here
-        readyAt = 0; // claimable immediately, thanks to wrapper token
+    function previewAllocationReadyAt(uint256) public view returns (uint64 readyAt) {
+        // uses deadlineOffset, but not adjust for hash collision
+        // may differ from _aeraDeadline
+        uint256 deadline = block.timestamp + aeraConfig.deadlineOffset;
+        readyAt = uint64(deadline);
     }
 
     /// @inheritdoc IStrategy
@@ -393,8 +387,8 @@ contract GauntletStrategy is AbstractStrategy {
         // mark request as claimed, and clear storage
         _markClaimed(id_);
 
-        // mint derivative allocation tokens
-        LUMIA_GTUSDA.mint(receiver_, allocation);
+        require(IERC20(AERA_VAULT).balanceOf(address(this)) >= allocation, MissingLiquidity());
+        IERC20(AERA_VAULT).safeTransfer(receiver_, allocation);
 
         emit AllocationClaimed(id_, receiver_, allocation);
     }
@@ -405,14 +399,11 @@ contract GauntletStrategy is AbstractStrategy {
         address receiver_
     ) internal returns (uint256 exitAmount) {
         // check if already claimed, wrong kind, or not ready
-        StrategyRequest memory r = _loadClaimable(id_, StrategyKind.Exit);
+        _loadClaimable(id_, StrategyKind.Exit);
 
         // guaranteed tokens for this request
         exitAmount = aeraRedeem[id_].tokens;
         require(exitAmount != 0, PendingExitMissing());
-
-        // burn wrapper shares - prevent double spend
-        LUMIA_GTUSDA.burn(r.amount);
 
         // mark request as claimed and clear redeem record
         _markClaimed(id_);
@@ -486,7 +477,7 @@ contract GauntletStrategy is AbstractStrategy {
 
         // provisioner returns allocation shares to this contract, forward to receiver
         allocationRefunded = requestData.units;
-        IERC20(address(LUMIA_GTUSDA)).safeTransfer(receiver_, allocationRefunded);
+        IERC20(AERA_VAULT).safeTransfer(receiver_, allocationRefunded);
 
         emit ExitRefunded(id_, receiver_, allocationRefunded);
     }
