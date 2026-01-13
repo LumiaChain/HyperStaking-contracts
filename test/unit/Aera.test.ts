@@ -491,11 +491,11 @@ describe("Aera", function () {
 
       // --- Stake & settle deposit ---
       const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
-      await shared.solveGauntletDepositRequest(
-        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
-      );
-
       const reqId = await shared.fastForwardUserLastRequest(deposit, gauntletStrategy, alice);
+
+      await shared.solveGauntletDepositRequest(
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, reqId,
+      );
 
       await deposit.connect(alice).claimDeposit(gauntletStrategy, reqId);
 
@@ -668,11 +668,11 @@ describe("Aera", function () {
       await testUSDC.connect(alice).approve(deposit, stakeAmount);
 
       const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
+      const reqId = await shared.fastForwardUserLastRequest(deposit, gauntletStrategy, alice);
 
       await shared.solveGauntletDepositRequest(
-        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, 1,
+        stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, reqId,
       );
-      const reqId = await shared.fastForwardUserLastRequest(deposit, gauntletStrategy, alice);
       await deposit.connect(alice).claimDeposit(gauntletStrategy, reqId);
 
       expect(await vaultShares.balanceOf(alice)).to.eq(stakeAmount);
