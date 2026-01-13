@@ -4,21 +4,28 @@ pragma solidity =0.8.27;
 import {ILockbox} from "../interfaces/ILockbox.sol";
 import {IAllocation} from "../interfaces/IAllocation.sol";
 import {HyperStakingAcl} from "../HyperStakingAcl.sol";
-
 import {IStakeInfoRoute} from "../interfaces/IStakeInfoRoute.sol";
 import {IStakeRewardRoute} from "../interfaces/IStakeRewardRoute.sol";
 
 import {
     StakeInfoData, StakeRewardData, MessageType, HyperlaneMailboxMessages
-} from "../libraries/HyperlaneMailboxMessages.sol";
+} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
-import {NotAuthorized, BadOriginDestination } from "../../shared/Errors.sol";
+import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
+import {NotAuthorized, BadOriginDestination, DispatchUnderpaid } from "../../shared/Errors.sol";
 
 import {
-    LibHyperStaking, LockboxData, FailedRedeem, FailedRedeemData, PendingMailbox, PendingLumiaFactory
+    LibHyperStaking,
+    LockboxData,
+    HyperlaneMessage,
+    FailedRedeem,
+    FailedRedeemData,
+    PendingMailbox,
+    PendingLumiaFactory
 } from "../libraries/LibHyperStaking.sol";
+import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplayGuard.sol";
 
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
@@ -29,6 +36,7 @@ import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet
  */
 contract LockboxFacet is ILockbox, HyperStakingAcl {
     using HyperlaneMailboxMessages for bytes;
+    using CurrencyHandler for Currency;
     using EnumerableSet for EnumerableSet.UintSet;
 
     //============================================================================================//
@@ -54,10 +62,11 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         address strategy,
         address user,
         uint256 stake
-    ) external payable diamondInternal {
+    ) external diamondInternal {
         StakeInfoData memory data = StakeInfoData({
+            nonce: LibHyperlaneReplayGuard.newNonce(),
             strategy: strategy,
-            sender: user,
+            user: user,
             stake: stake
         });
 
@@ -72,8 +81,9 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     function bridgeStakeReward(
         address strategy,
         uint256 stakeAdded
-    ) external payable diamondInternal {
+    ) external diamondInternal {
         StakeRewardData memory data = StakeRewardData({
+            nonce: LibHyperlaneReplayGuard.newNonce(),
             strategy: strategy,
             stakeAdded: stakeAdded
         });
@@ -86,24 +96,56 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     }
 
     /// @inheritdoc ILockbox
+    function collectDispatchFee(
+        address from,
+        uint256 dispatchFee
+    ) external payable diamondInternal {
+        if (dispatchFee == 0) return;
+
+        if (msg.value < dispatchFee) {
+            revert DispatchUnderpaid();
+        }
+
+        Currency memory nativeCurrency = Currency({
+            token: address(0)
+        });
+
+        // required native fee value from msg.sender into this (diamond)
+        nativeCurrency.transferFrom(
+            from,
+            address(this),
+            dispatchFee
+        );
+    }
+
+    /// @inheritdoc ILockbox
     function handle(
         uint32 origin,
         bytes32 sender,
         bytes calldata data
     ) external payable onlyMailbox {
+        // parse sender
+        address senderAddress = TypeCasts.bytes32ToAddress(sender);
         LockboxData storage box = LibHyperStaking.diamondStorage().lockboxData;
 
-        emit ReceivedMessage(origin, sender, msg.value, string(data));
-
-        box.lastMessage.sender = TypeCasts.bytes32ToAddress(sender);
-        box.lastMessage.data = data;
-
+        // checks
         require(
-            box.lastMessage.sender == address(box.lumiaFactory),
-            NotFromLumiaFactory(box.lastMessage.sender)
+            senderAddress == address(box.lumiaFactory),
+            NotFromLumiaFactory(senderAddress)
         );
-
         require(origin == box.destination, BadOriginDestination(origin));
+
+        // applayer replay protection, required because mailbox rotation resets Mailbox.delivered state
+        LibHyperlaneReplayGuard.requireNotProcessedData(origin, sender, data);
+
+        // save lastMessage in the storage
+        box.lastMessage = HyperlaneMessage({
+            sender: senderAddress,
+            data: data
+        });
+
+        // emit event before route
+        emit ReceivedMessage(origin, sender, msg.value, data);
 
         // parse message type (HyperlaneMailboxMessages)
         MessageType msgType = data.messageType();
@@ -257,7 +299,7 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
     /// @dev On failure, the action is stored for re-execution
     function _handleStakeRedeem(bytes calldata data) internal {
         address strategy = data.strategy();
-        address user = data.sender(); // sender -> actual hyperstaking user
+        address user = data.user(); // actual hyperstaking user
         uint256 stake = data.redeemAmount(); // amount -> amount of rwa asset / stake
 
         // solhint-disable-next-line no-empty-blocks

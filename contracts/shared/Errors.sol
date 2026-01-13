@@ -15,5 +15,14 @@ error ZeroAllocationExit();
 
 error UpdateFailed();
 
-// cross-chain error
+// thrown when a reward donation is attempted while the vault has zero share supply
+// OZ ERC4626 zero-supply edge case
+error RewardDonationZeroSupply();
+
+/// ------------ cross-chain errors
+
 error BadOriginDestination(uint32 originDestination);
+error DispatchUnderpaid();
+
+error HyperlaneReplay(bytes32 msgId);
+

@@ -190,7 +190,7 @@ describe("Strategy", function () {
         signers, hyperStaking, lumiaDiamond, reserveStrategy,
       } = await loadFixture(deployHyperStaking);
       const { deposit } = hyperStaking;
-      const { hyperlaneHandler, realAssets } = lumiaDiamond;
+      const { realAssets } = lumiaDiamond;
       const { alice } = signers;
 
       const stakeAmount = parseEther("5");
@@ -212,12 +212,8 @@ describe("Strategy", function () {
       // queue withdraw
       const withdraw = parseEther("1");
 
-      const vaultSharesAddress = (await hyperlaneHandler.getRouteInfo(reserveStrategy)).vaultShares;
-      const vaultShares = await ethers.getContractAt("LumiaVaultShares", vaultSharesAddress);
-
       const expectedAllocation = await reserveStrategy.previewAllocation(withdraw);
 
-      await vaultShares.connect(alice).approve(realAssets, withdraw);
       await realAssets.connect(alice).redeem(reserveStrategy, alice, alice, withdraw);
 
       const id2 = await shared.getLastClaimId(deposit, reserveStrategy, alice);
@@ -412,7 +408,7 @@ describe("Strategy", function () {
 
     it("unstaking from to dinero strategy should exchange apxEth back to eth", async function () {
       const {
-        signers, hyperStaking, lumiaDiamond, autoPxEth, vaultShares, dineroStrategy, defaultWithdrawDelay,
+        signers, hyperStaking, lumiaDiamond, autoPxEth, dineroStrategy, defaultWithdrawDelay,
       } = await loadFixture(deployHyperStaking);
       const { deposit, hyperFactory, lockbox, allocation } = hyperStaking;
       const { realAssets } = lumiaDiamond;
@@ -428,9 +424,6 @@ describe("Strategy", function () {
       await time.setNextBlockTimestamp(blockTime);
       const expectedAllocation = await dineroStrategy.previewAllocation(stakeAmount);
       await deposit.stakeDeposit(dineroStrategy, owner, stakeAmount, { value: stakeAmount });
-
-      await time.setNextBlockTimestamp(blockTime);
-      await vaultShares.approve(realAssets, stakeAmount);
 
       await time.setNextBlockTimestamp(blockTime);
 

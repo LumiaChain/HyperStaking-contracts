@@ -673,7 +673,6 @@ describe("CurveStrategy", function () {
       const rwaBalance = await vaultShares.balanceOf(alice);
       expect(rwaBalance).to.be.eq(amount);
 
-      await vaultShares.connect(alice).approve(realAssets, rwaBalance);
       const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
 
       const revenueAsset = await shared.getRevenueAsset(swapSuperStrategy);
@@ -738,8 +737,6 @@ describe("CurveStrategy", function () {
       // lpToken on the Lumia chain side
       const rwaBalance = await vaultShares.balanceOf(alice);
       expect(rwaBalance).to.be.eq(amount);
-
-      await vaultShares.connect(alice).approve(realAssets, rwaBalance);
 
       // At this step, bob saws alice's redeem request in mempool and
       // sends redeem from alice to bob with higher gas price

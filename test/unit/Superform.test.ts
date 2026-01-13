@@ -417,7 +417,6 @@ describe("Superform", function () {
       expect(rwaBalance).to.be.eq(amount);
 
       const reqId = 2;
-      await vaultShares.connect(alice).approve(realAssets, rwaBalance);
       const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await expect(realAssets.connect(alice).redeem(superformStrategy, alice, alice, rwaBalance))
         .to.emit(superformStrategy, "ExitRequested")
@@ -463,7 +462,6 @@ describe("Superform", function () {
       await testUSDC.approve(tokenizedStrategy, currentVaultAssets); // double the assets
       await tokenizedStrategy.simulateYieldGeneration(erc4626Vault, currentVaultAssets);
 
-      await vaultShares.connect(alice).approve(realAssets, rwaBalance);
       const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await realAssets.connect(alice).redeem(superformStrategy, alice, alice, rwaBalance);
 
@@ -486,6 +484,14 @@ describe("Superform", function () {
       const feeRecipient = bob;
       await allocation.connect(vaultManager).setFeeRecipient(superformStrategy, feeRecipient);
 
+      // it should not be possible to report, when vault has no shares
+      await expect(allocation.connect(vaultManager).report(superformStrategy))
+        .to.be.revertedWithCustomError(shared.errors, "RewardDonationZeroSupply");
+
+      // stake again, so report can proceed
+      await testUSDC.connect(alice).approve(deposit, amount);
+      await deposit.connect(alice).stakeDeposit(superformStrategy, alice, amount);
+
       const reportTx = allocation.connect(vaultManager).report(superformStrategy);
 
       // events
@@ -498,13 +504,11 @@ describe("Superform", function () {
 
       // balance
       await expect(reportTx).to.changeTokenBalance(principalToken, vaultShares, expectedRevenue);
-
-      expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
     });
 
     it("revenue should also depend on bridge safety margin", async function () {
       const {
-        signers, hyperStaking, lumiaDiamond, testUSDC, erc4626Vault, superformStrategy, superVault, vaultShares,
+        signers, hyperStaking, lumiaDiamond, testUSDC, erc4626Vault, superformStrategy, superVault,
       } = await loadFixture(deployHyperStaking);
       const { deposit, allocation } = hyperStaking;
       const { realAssets } = lumiaDiamond;
@@ -524,7 +528,6 @@ describe("Superform", function () {
       await tokenizedStrategy.simulateYieldGeneration(erc4626Vault, additionlAssets);
 
       // withdraw half of the assets
-      await vaultShares.connect(alice).approve(realAssets, amount / 2n);
       await realAssets.connect(alice).redeem(superformStrategy, alice, alice, amount / 2n);
 
       const newBridgeSafetyMargin = parseEther("0.1"); // 10%;

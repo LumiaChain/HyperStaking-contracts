@@ -12,7 +12,7 @@ interface IRealAssets {
 
     event RwaMint(
         address indexed strategy,
-        address sender,
+        address user,
         uint256 stake,
         uint256 shares
     );
@@ -53,4 +53,15 @@ interface IRealAssets {
         address to,
         uint256 shares
     ) external payable;
+
+    //============================================================================================//
+    //                                           View                                             //
+    //============================================================================================//
+
+    /// @notice Helper to easily quote the dispatch fee for redeem
+    function quoteRedeem(
+        address strategy,
+        address to,
+        uint256 shares
+    ) external view returns (uint256);
 }

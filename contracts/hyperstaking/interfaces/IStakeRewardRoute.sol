@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.27;
 
-import {StakeRewardData} from "../libraries/HyperlaneMailboxMessages.sol";
+import {StakeRewardData} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 
 /**
  * @title IStakeRewardRoute
@@ -15,6 +15,7 @@ interface IStakeRewardRoute {
     event StakeRewardDispatched(
         address indexed mailbox,
         address lumiaFactory,
+        uint64 nonce,
         address indexed strategy,
         uint256 stake
     );

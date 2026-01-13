@@ -47,6 +47,29 @@ contract LumiaVaultShares is ERC4626, Ownable2Step {
     //                                      Public Functions                                      //
     //============================================================================================//
 
+    /**
+     * @notice Redeems shares using the diamond as the owner
+     * @dev Mirrors the standard ERC4626 redeem flow but takes `caller` explicitly
+     *      `caller` must be the original msg.sender from the diamond facet
+     *      Allowance is checked in _withdraw against `caller` when `caller != owner`
+     */
+    function diamondRedeem(
+        uint256 shares,
+        address caller,
+        address receiver,
+        address owner
+    ) external onlyOwner returns (uint256) {
+        uint256 maxShares = maxRedeem(owner);
+        if (shares > maxShares) {
+            revert ERC4626ExceededMaxRedeem(owner, shares, maxShares);
+        }
+
+        uint256 assets = previewRedeem(shares);
+        _withdraw(caller, receiver, owner, assets, shares);
+
+        return assets;
+    }
+
     /** @dev See {IERC4626-deposit}. */
     function deposit(
         uint256 assets,
@@ -88,21 +111,6 @@ contract LumiaVaultShares is ERC4626, Ownable2Step {
         return super.redeem(shares, receiver, owner);
     }
 
-    /**
-     * @dev See {ERC20 _spendAllowance}
-     * @notice Allows to spend approvals on behalf of others, enabling a third party
-     *         to redeem ERC4626 shares
-     *
-     * Revert if not enough allowance is available.
-     */
-    function spendAllowance(
-        address owner,
-        address caller,
-        uint256 shares
-    ) public virtual onlyOwner {
-        _spendAllowance(owner, caller, shares);
-    }
-
     /// @notice Disable renouncing ownership
     function renounceOwnership() public view override onlyOwner {
         revert RenounceOwnershipDisabled();
@@ -117,11 +125,12 @@ contract LumiaVaultShares is ERC4626, Ownable2Step {
     //                                     Internal Functions                                     //
     //============================================================================================//
 
-    /**
-     * @dev Override withdraw/redeem common workflow, and replace sending underlying assets directly
-     *      to the receiver, instead of that approve vault to execute further lumia strategy logic
-     *      which will eventually send receiver the associated with this strategy initial stake deposit
-     */
+     /**
+      * @dev Overrides the standard withdraw/redeem workflow and replaces sending assets directly
++     *      to the receiver with approving the receiver for further Lumia flow. The receiver contract
+      *      then performs the cross-chain logic and eventually releases the stake to the end user
++     *      NOTE: receiver should be a contract, not an EOA, assets are approved rather than transferred
+      */
     function _withdraw(
         address caller,
         address receiver,

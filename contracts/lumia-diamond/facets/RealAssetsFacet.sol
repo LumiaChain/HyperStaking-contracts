@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {IRealAssets} from "../interfaces/IRealAssets.sol";
+import {IHyperlaneHandler} from "../interfaces/IHyperlaneHandler.sol";
 import {IStakeRedeemRoute} from "../interfaces/IStakeRedeemRoute.sol";
 import {LumiaDiamondAcl} from "../LumiaDiamondAcl.sol";
 import {
@@ -17,9 +18,10 @@ import {
 
 import {
     HyperlaneMailboxMessages, StakeRedeemData
-} from "../../hyperstaking/libraries/HyperlaneMailboxMessages.sol";
+} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
+import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplayGuard.sol";
 
-import {ZeroAddress, ZeroAmount} from "../../shared/Errors.sol";
+import {ZeroAddress, ZeroAmount, RewardDonationZeroSupply } from "../../shared/Errors.sol";
 
 /**
  * @title RealAssetsFacet
@@ -40,7 +42,7 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
         bytes calldata data
     ) external diamondInternal nonReentrant {
         address strategy = data.strategy();
-        address sender = data.sender();
+        address user = data.user();
         uint256 stake = data.stake();
 
         InterchainFactoryStorage storage ifs = LibInterchainFactory.diamondStorage();
@@ -51,11 +53,11 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
         // mint principal first
         LumiaPrincipal(address(r.assetToken)).mint(address(this), stake);
 
-        // deposit principal to vault and send shares to sender
+        // deposit principal to vault and send shares to the user
         r.assetToken.safeIncreaseAllowance(address(r.vaultShares), stake);
-        uint256 shares = r.vaultShares.deposit(stake, sender);
+        uint256 shares = r.vaultShares.deposit(stake, user);
 
-        emit RwaMint(strategy, sender, stake, shares);
+        emit RwaMint(strategy, user, stake, shares);
     }
 
     /// @inheritdoc IRealAssets
@@ -69,6 +71,9 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
         LibInterchainFactory.checkRoute(ifs, strategy);
 
         RouteInfo storage r = ifs.routes[strategy];
+
+        // block donation if the vault has no outstanding shares
+        require(r.vaultShares.totalSupply() > 0, RewardDonationZeroSupply());
 
         // mint additional principal
         LumiaPrincipal(address(r.assetToken)).mint(address(this), stakeAdded);
@@ -95,25 +100,50 @@ contract RealAssetsFacet is IRealAssets, LumiaDiamondAcl, ReentrancyGuardUpgrade
 
         RouteInfo storage r = ifs.routes[strategy];
 
-        if (from != msg.sender) {
-            r.vaultShares.spendAllowance(from, msg.sender, shares);
-        }
+        uint256 assetsPreview = r.vaultShares.previewRedeem(shares);
+        require(assetsPreview > 0, ZeroAmount());
 
-        // redeem shares `from` to this contract (require user allowance to burn shares)
-        uint256 assets = r.vaultShares.redeem(shares, address(this), from);
+        // redeem shares from `from` into this contract using the explicit `caller`
+        // when caller != from an allowance from `from` to `caller` is required to burn the shares
+        uint256 assets = r.vaultShares.diamondRedeem(shares, msg.sender, address(this), from);
+        require(assets > 0, ZeroAmount());
 
         // burn assets, so they can be unlocked on the origin chain
         LumiaPrincipal(address(r.assetToken)).burnFrom(address(r.vaultShares), assets);
 
+        // quote message fee for forwarding a message across chains
+        uint256 dispatchFee = quoteRedeem(strategy, to, shares);
+        IHyperlaneHandler(address(this)).collectDispatchFee{value: msg.value}(msg.sender, dispatchFee);
+
         // use hyperlane handler function for dispatching stake redeem msg
-        StakeRedeemData memory data = StakeRedeemData({
-            strategy: strategy,
-            sender: to,
-            redeemAmount: assets
-        });
-        IStakeRedeemRoute(address(this)).stakeRedeemDispatch{value: msg.value}(data);
+        IHyperlaneHandler(address(this)).bridgeStakeRedeem(
+            strategy,
+            to,
+            assets,
+            dispatchFee
+        );
 
         emit RwaRedeem(strategy, from, to, assets, shares);
     }
 
+    // ========= View ========= //
+
+    /// @inheritdoc IRealAssets
+    function quoteRedeem(
+        address strategy,
+        address to,
+        uint256 shares
+    ) public view returns (uint256) {
+        RouteInfo storage r = LibInterchainFactory.diamondStorage().routes[strategy];
+
+        uint256 assets = r.vaultShares.previewRedeem(shares);
+
+        StakeRedeemData memory dispatchData = StakeRedeemData({
+            nonce: LibHyperlaneReplayGuard.previewNonce(),
+            strategy: strategy,
+            user: to,
+            redeemAmount: assets
+        });
+        return IStakeRedeemRoute(address(this)).quoteDispatchStakeRedeem(dispatchData);
+    }
 }

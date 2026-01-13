@@ -15,7 +15,7 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC165, IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 
-import {Currency} from "../libraries/CurrencyHandler.sol";
+import {Currency} from "../../shared/libraries/CurrencyHandler.sol";
 
 /**
  * @title SuperformStrategy

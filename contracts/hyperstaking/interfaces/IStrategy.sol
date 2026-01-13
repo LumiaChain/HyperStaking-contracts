@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.27;
 
-import {Currency} from "../libraries/CurrencyHandler.sol";
+import {Currency} from "../../shared/libraries/CurrencyHandler.sol";
 
 enum StrategyKind { Allocation, Exit }
 
