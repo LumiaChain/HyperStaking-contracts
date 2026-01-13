@@ -48,6 +48,7 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
 
     error ZeroUser();
     error RequestIdExists(uint256 id);
+    error RequestNotFound(uint256 id);
 
     error NotLumiaDiamond();
     error NotStrategyManager();
@@ -233,6 +234,9 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
         uint256 amount_,
         address to_
     ) external onlyStrategyManager {
+        require(to_ != address(0), ZeroAddress());
+        require(amount_ > 0, ZeroAmount());
+
         currency_.transfer(to_, amount_);
         emit EmergencyWithdraw(msg.sender, currency_.token, amount_, to_);
     }
@@ -250,6 +254,7 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
         uint256 amount_,
         uint64 readyAt_
     ) internal {
+        require(amount_ > 0, ZeroAmount());
         require(user_ != address(0), ZeroUser());
         require(_req[id_].user == address(0), RequestIdExists(id_));
 
@@ -269,6 +274,7 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
         uint256 shares_,
         uint64 readyAt_
     ) internal {
+        require(shares_ > 0, ZeroAmount());
         require(user_ != address(0), ZeroUser());
         require(_req[id_].user == address(0), RequestIdExists(id_));
 
@@ -289,6 +295,7 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
         r = _req[id_];
         require(!r.claimed, AlreadyClaimed());
         require(r.kind == expected_, WrongKind());
+        require(r.user != address(0), RequestNotFound(id_));
     }
 
     /// @dev Loads a claimable request, pre-validates it

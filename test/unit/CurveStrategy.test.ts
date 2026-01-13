@@ -679,7 +679,7 @@ describe("CurveStrategy", function () {
         .to.changeTokenBalance(vaultShares, alice, -rwaBalance);
 
       const lastClaimId = await shared.getLastClaimId(deposit, swapSuperStrategy, alice);
-      const { claimTx } = shared.claimAtDeadline(deposit, lastClaimId, alice);
+      const claimTx = shared.claimAtDeadline(deposit, lastClaimId, alice);
 
       await expect(claimTx)
         .to.changeTokenBalance(revenueAsset, lockbox, -rwaBalance);
@@ -747,7 +747,7 @@ describe("CurveStrategy", function () {
         .to.changeTokenBalance(vaultShares, alice, -rwaBalance);
 
       const lastClaimId = await shared.getLastClaimId(deposit, swapSuperStrategy, bob);
-      const { claimTx } = shared.claimAtDeadline(deposit, lastClaimId, bob);
+      const claimTx = shared.claimAtDeadline(deposit, lastClaimId, bob);
 
       await expect(claimTx)
         .to.changeTokenBalances(testUSDC,

@@ -317,7 +317,7 @@ describe("Staking", function () {
       const lastClaimId3 = await shared.getLastClaimId(deposit, reserveStrategy1, alice);
       expect(lastClaimId3).to.equal(lastClaimId2 + 1n);
 
-      const { claimTx } = shared.claimAtDeadline(deposit, lastClaimId3, alice);
+      const claimTx = shared.claimAtDeadline(deposit, lastClaimId3, alice);
 
       await expect(claimTx)
         .to.changeEtherBalances(
@@ -353,7 +353,7 @@ describe("Staking", function () {
         await realAssets.redeem(reserveStrategy2, owner, owner, withdrawAmount);
         const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy2, owner);
 
-        const { claimTx } = shared.claimAtDeadline(deposit, lastClaimId, owner);
+        const claimTx = shared.claimAtDeadline(deposit, lastClaimId, owner);
 
         await expect(claimTx)
           .to.changeTokenBalances(testERC20,
@@ -366,7 +366,7 @@ describe("Staking", function () {
         await realAssets.redeem(reserveStrategy2, owner, owner, withdrawAmount);
 
         const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy2, owner);
-        const { claimTx } = shared.claimAtDeadline(deposit, lastClaimId, owner);
+        const claimTx = shared.claimAtDeadline(deposit, lastClaimId, owner);
 
         await expect(claimTx)
           .to.emit(deposit, "WithdrawClaimed")
@@ -385,13 +385,13 @@ describe("Staking", function () {
         // only alice should be able to claim
         const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy2, alice);
 
-        const { claimTx: claimTx1 } = shared.claimAtDeadline(deposit, lastClaimId, bob, alice);
+        const claimTx1 = shared.claimAtDeadline(deposit, lastClaimId, bob, alice);
         await expect(claimTx1)
           .to.be.revertedWithCustomError(deposit, "NotEligible")
           .withArgs(lastClaimId, alice, bob);
 
         // but alice can claim and send to another account
-        const { claimTx: claimTx2 } = shared.claimAtDeadline(deposit, lastClaimId, alice, bob);
+        const claimTx2 = shared.claimAtDeadline(deposit, lastClaimId, alice, bob);
         await expect(claimTx2)
           .to.changeTokenBalances(testERC20,
             [bob, reserveStrategy2],
@@ -658,7 +658,7 @@ describe("Staking", function () {
         await realAssets.redeem(reserveStrategy1, owner, owner, stakeAmount);
 
         const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy1, owner);
-        const { claimTx } = shared.claimAtDeadline(deposit, lastClaimId, owner, revertingContract);
+        const claimTx = shared.claimAtDeadline(deposit, lastClaimId, owner, revertingContract);
         await expect(claimTx).to.be.revertedWithCustomError(shared.errors, "TransferFailed");
       });
 

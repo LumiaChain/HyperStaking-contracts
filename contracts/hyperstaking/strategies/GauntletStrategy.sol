@@ -3,7 +3,7 @@ pragma solidity =0.8.27;
 
 // solhint-disable var-name-mixedcase
 
-import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
+import {StrategyKind, IStrategy} from "../interfaces/IStrategy.sol";
 import {IHyperFactory} from "../interfaces/IHyperFactory.sol";
 import {AbstractStrategy} from "./AbstractStrategy.sol";
 

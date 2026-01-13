@@ -352,7 +352,7 @@ describe("Lockbox", function () {
       );
 
       const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy, alice);
-      const { claimTx } = shared.claimAtDeadline(deposit, lastClaimId, alice);
+      const claimTx = shared.claimAtDeadline(deposit, lastClaimId, alice);
       await expect(claimTx)
         .to.changeEtherBalances(
           [alice, reserveStrategy],

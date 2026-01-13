@@ -354,7 +354,7 @@ describe("VaultShares", function () {
       expect(await vaultShares.balanceOf(bob)).to.be.eq(0);
 
       const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy, bob);
-      const { claimTx } = shared.claimAtDeadline(deposit, lastClaimId, bob);
+      const claimTx = shared.claimAtDeadline(deposit, lastClaimId, bob);
       await expect(claimTx)
         .to.changeEtherBalance(bob, stakeAmount);
 

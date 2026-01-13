@@ -12,7 +12,6 @@ import {
   Addressable,
   TransactionResponse,
   Log,
-  TransactionReceipt,
 } from "ethers";
 import SuperformMockModule from "../ignition/modules/test/SuperformMock";
 import CurveMockModule from "../ignition/modules/test/CurveMock";
@@ -346,43 +345,27 @@ export async function getEventArg(tx: TransactionResponse, eventName: string, co
   return null;
 }
 
-// Claims a pending withdraw exactly at its `unlockTime` by fast-forwarding the next block timestamp if needed
-// Returns an awaitable promise that mines the claim, and also exposes `promise.claimTx` for tests
-export function claimAtDeadline(
+// claims a pending withdraw at its `unlockTime` by fast-forwarding the next block timestamp if needed
+// returns an promise that mines the claim
+export async function claimAtDeadline(
   deposit: Contract,
   requestId: number | bigint,
   from: Signer,
   to?: Addressable,
-): Promise<TransactionReceipt> & { claimTx: Promise<TransactionResponse> } {
-  let resolveClaimTx;
-  const claimTxPromise = new Promise((resolve) => {
-    resolveClaimTx = resolve;
-  });
+): Promise<TransactionResponse> {
+  const pendingClaim: WithdrawClaimStruct[] = await deposit.pendingWithdrawClaims([requestId]);
+  const deadline = Number(pendingClaim[0].unlockTime) + 1; // move past unlockTime
 
-  const run = (async () => {
-    const pendingClaim: WithdrawClaimStruct[] = await deposit.pendingWithdrawClaims([requestId]);
-    const deadline = pendingClaim[0].unlockTime;
+  const now = await getCurrentBlockTimestamp();
+  if (now < Number(deadline)) {
+    await time.setNextBlockTimestamp(Number(deadline));
+  }
 
-    const now = await getCurrentBlockTimestamp();
-    if (now < Number(deadline)) {
-      await time.setNextBlockTimestamp(Number(deadline));
-    }
+  if (!to) {
+    to = from;
+  }
 
-    if (!to) {
-      to = from;
-    }
-
-    const claimTx = deposit.connect(from).claimWithdraws([requestId], to);
-    resolveClaimTx!(claimTx);
-
-    const receipt = await (await claimTx).wait();
-    return receipt;
-  })();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (run as any).claimTx = claimTxPromise;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return run as any;
+  return deposit.connect(from).claimWithdraws([requestId], to);
 }
 
 // fast-forwards the next block timestamp to just after the `readyAt` time of a strategy request

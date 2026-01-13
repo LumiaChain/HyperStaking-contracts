@@ -699,23 +699,23 @@ describe("Aera", function () {
       const deadline = BigInt(now + 60) + aeraConfig.deadlineOffset;
 
       // check ExitRequested event
+      const redeemReqId = await shared.getLastClaimId(deposit, gauntletStrategy, alice);
       const expectedExitShares = await gauntletStrategy.previewAllocation(stakeAmount);
       await expect(redeemTx)
         .to.emit(gauntletStrategy, "ExitRequested")
-        .withArgs(2, alice, expectedExitShares, deadline);
+        .withArgs(redeemReqId, alice, expectedExitShares, deadline);
 
       const expectedExitAmount = await gauntletStrategy.previewExit(expectedExitShares);
-      expect((await gauntletStrategy.aeraRedeem(2)).tokens).to.equal(expectedExitAmount);
+      expect((await gauntletStrategy.aeraRedeem(redeemReqId)).tokens).to.equal(expectedExitAmount);
 
       await shared.solveGauntletRedeemRequest(
-        redeemTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, expectedExitAmount, 2,
+        redeemTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, expectedExitAmount, redeemReqId,
       );
 
-      await time.setNextBlockTimestamp(Number(deadline));
-      const lastId = await shared.getLastClaimId(deposit, gauntletStrategy, alice);
-      await expect(deposit.connect(alice).claimWithdraws([lastId], alice))
+      await time.setNextBlockTimestamp(Number(deadline) + 1);
+      await expect(deposit.connect(alice).claimWithdraws([redeemReqId], alice))
         .to.emit(gauntletStrategy, "ExitClaimed")
-        .withArgs(2, alice, expectedExitAmount);
+        .withArgs(redeemReqId, alice, expectedExitAmount);
 
       // user fully out; totalStake==0, but totalAllocation > 0 (revenue left in units)
       let si = await allocation.stakeInfo(gauntletStrategy);
@@ -860,7 +860,7 @@ describe("Aera", function () {
         redeemTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, minTokensOut, 2,
       );
 
-      await time.setNextBlockTimestamp(Number(deadline));
+      await time.setNextBlockTimestamp(Number(deadline + 3)); // slight buffer
       const lastId = await shared.getLastClaimId(deposit, gauntletStrategy, alice);
 
       const claimTx = await deposit.connect(alice).claimWithdraws([lastId], alice);
@@ -1102,8 +1102,6 @@ describe("Aera", function () {
 
         const depositReqId = await shared.getLastClaimId(deposit, gauntletStrategy, alice);
 
-        console.log("Deposit Req ID:", depositReqId);
-
         await shared.solveGauntletDepositRequest(
           stakeTx,
           gauntletStrategy,
@@ -1325,7 +1323,7 @@ describe("Aera", function () {
             );
 
             const lastId = await shared.getLastClaimId(deposit, gauntletStrategy, alice);
-            const { claimTx } = shared.claimAtDeadline(deposit, lastId, alice);
+            const claimTx = await shared.claimAtDeadline(deposit, lastId, alice);
 
             await expect(claimTx)
               .to.emit(gauntletStrategy, "ExitClaimed")
@@ -1445,12 +1443,12 @@ describe("Aera", function () {
       );
 
       // claim second first, then first (order should not change totals)
-      const { claimTx: claim2 } = shared.claimAtDeadline(deposit, 3, alice);
+      const claim2 = await shared.claimAtDeadline(deposit, 3, alice);
       await expect(claim2)
         .to.emit(gauntletStrategy, "ExitClaimed")
         .withArgs(3, alice, r2.minOut);
 
-      const { claimTx: claim1 } = shared.claimAtDeadline(deposit, 2, alice);
+      const claim1 = await shared.claimAtDeadline(deposit, 2, alice);
       await expect(claim1)
         .to.emit(gauntletStrategy, "ExitClaimed")
         .withArgs(2, alice, r1.minOut);
@@ -1828,7 +1826,7 @@ describe("Aera", function () {
       await shared.solveGauntletRedeemRequest(
         reportTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, minOut1, feeReqId,
       );
-      const { claimTx: feeClaimTx } = shared.claimAtDeadline(deposit, feeReqId, bob);
+      const feeClaimTx = await shared.claimAtDeadline(deposit, feeReqId, bob);
 
       await expect(feeClaimTx)
         .to.emit(deposit, "FeeWithdrawClaimed")
@@ -1859,7 +1857,7 @@ describe("Aera", function () {
       );
 
       // claim on HyperStaking side
-      const { claimTx } = shared.claimAtDeadline(deposit, userReqId, alice);
+      const claimTx = shared.claimAtDeadline(deposit, userReqId, alice);
 
       await expect(claimTx)
         .to.emit(gauntletStrategy, "ExitClaimed")

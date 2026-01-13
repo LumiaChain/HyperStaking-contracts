@@ -421,7 +421,7 @@ describe("Superform", function () {
         .withArgs(reqId, alice, amount, 0);
 
       expect(await aerc20.allowance(deposit, superformStrategy)).to.eq(0);
-      const { claimTx } = shared.claimAtDeadline(deposit, reqId, alice);
+      const claimTx = shared.claimAtDeadline(deposit, reqId, alice);
 
       await expect(claimTx)
         .to.changeTokenBalance(aerc20, lockbox, -amount);
