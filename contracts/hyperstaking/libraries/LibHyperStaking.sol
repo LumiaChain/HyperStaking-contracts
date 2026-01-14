@@ -37,6 +37,7 @@ struct VaultInfo {
 struct StakeInfo {
     uint256 totalStake;
     uint256 totalAllocation;
+    uint256 pendingDepositStake; // stake moved but allocation not claimed yet
     uint256 pendingExitStake; // stake already queued to leave, not yet claimed
     uint256 pendingExitFee; // fee queued to leave
 }
@@ -105,8 +106,8 @@ struct HyperStakingStorage {
     /// @notice Pending claims by requestId
     mapping(uint256 requestId => WithdrawClaim) pendingWithdrawClaims;
 
-    /// @notice Pending claim IDs by strategy and user, includes both deposit and withdraw requests
-    mapping(address strategy => mapping(address user => uint256[])) groupedClaimIds;
+    /// @notice Pending request IDs by strategy and user, includes both deposit and withdraw requests
+    mapping(address strategy => mapping(address user => uint256[])) groupedRequestIds;
 
     /// @notice General lockbox data
     LockboxData lockboxData;

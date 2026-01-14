@@ -386,7 +386,7 @@ export async function fastForwardUserLastRequest(
   user: Addressable,
 ): Promise<bigint> {
   const requestId = await getLastClaimId(deposit, strategy, user);
-  fastForwardStrategyRequest(strategy, requestId);
+  await fastForwardStrategyRequest(strategy, requestId);
 
   return requestId;
 }

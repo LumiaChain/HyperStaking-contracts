@@ -114,12 +114,14 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
 
     /// @inheritdoc IStrategy
     /// @dev Default function, to support refunds, override it in the strategy implementation
+    ///      Only for strategies with async flows and explicit refund support
     function refundAllocation(uint256[] calldata, address) external virtual returns (uint256) {
         revert RefundNotSupported();
     }
 
     /// @inheritdoc IStrategy
     /// @dev Default function, to support refunds, override it in the strategy implementation
+    ///      Only for strategies with async flows and explicit refund support
     function refundExit(uint256[] calldata, address) external virtual returns (uint256) {
         revert RefundNotSupported();
     }
@@ -293,9 +295,9 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
         StrategyKind expected_
     ) internal view returns (StrategyRequest memory r) {
         r = _req[id_];
+        require(r.user != address(0), RequestNotFound(id_));
         require(!r.claimed, AlreadyClaimed());
         require(r.kind == expected_, WrongKind());
-        require(r.user != address(0), RequestNotFound(id_));
     }
 
     /// @dev Loads a claimable request, pre-validates it

@@ -427,7 +427,7 @@ describe("Aera", function () {
         .to.emit(gauntletStrategy, "AllocationRequested")
         .withArgs(bobReqId, bob, bobStake, bobReqInfo.readyAt);
 
-      shared.fastForwardStrategyRequest(gauntletStrategy, bobReqId);
+      await shared.fastForwardStrategyRequest(gauntletStrategy, bobReqId);
       await shared.solveGauntletDepositRequest(
         bobTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, bobStake, bobReqId,
       );
@@ -572,7 +572,12 @@ describe("Aera", function () {
       const reqId = 1;
       const stakeTx = await deposit.connect(alice).requestDeposit(gauntletStrategy, alice, stakeAmount);
 
-      expect(stakeTx).to.emit(gauntletStrategy, "AllocationRequested").withArgs(reqId, alice, stakeAmount, 0);
+      // check before claim
+      await globalThis.$invChecker!.check();
+
+      const reqInfo = await gauntletStrategy.requestInfo(1);
+
+      await expect(stakeTx).to.emit(gauntletStrategy, "AllocationRequested").withArgs(reqId, alice, stakeAmount, reqInfo.readyAt);
 
       await shared.solveGauntletDepositRequest(
         stakeTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, stakeAmount, reqId,
@@ -628,6 +633,9 @@ describe("Aera", function () {
       // ---------- Claim after delay ----------
 
       await time.setNextBlockTimestamp(deadline);
+
+      // check before claim
+      await globalThis.$invChecker!.check();
 
       const lastClaimId = await shared.getLastClaimId(deposit, gauntletStrategy, alice);
       const claimTx = await deposit.connect(alice).claimWithdraws([lastClaimId], alice);
@@ -860,7 +868,7 @@ describe("Aera", function () {
         redeemTx, gauntletStrategy, aeraMock.aeraProvisioner, testUSDC, minTokensOut, 2,
       );
 
-      await time.setNextBlockTimestamp(Number(deadline + 3)); // slight buffer
+      await time.setNextBlockTimestamp(Number(deadline) + 2); // slight buffer
       const lastId = await shared.getLastClaimId(deposit, gauntletStrategy, alice);
 
       const claimTx = await deposit.connect(alice).claimWithdraws([lastId], alice);

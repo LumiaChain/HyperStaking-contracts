@@ -1,4 +1,5 @@
 import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import { ethers, ignition } from "hardhat";
 import { parseEther, ZeroAddress } from "ethers";
@@ -262,15 +263,14 @@ describe("Staking", function () {
 
       const claim = (await deposit.pendingWithdrawClaims([lastClaimId]))[0] as WithdrawClaimStruct;
       expect(claim.strategy).to.equal(reserveStrategy1);
-      expect(claim.unlockTime).to.equal(expectedUnlock);
+      expect(claim.unlockTime).to.be.closeTo(expectedUnlock, 3);
       expect(claim.eligible).to.equal(owner);
       expect(claim.expectedAmount).to.equal(withdrawAmount);
       expect(claim.feeWithdraw).to.eq(false);
 
-      blockTime = await shared.getCurrentBlockTimestamp();
       await expect(deposit.claimWithdraws([lastClaimId], owner))
         .to.be.revertedWithCustomError(deposit, "ClaimTooEarly")
-        .withArgs(blockTime, claim.unlockTime);
+        .withArgs(anyValue, claim.unlockTime);
 
       // some delay may happen during test processing
       expect(claim.unlockTime).to.be.closeTo(expectedUnlock, 3);
@@ -306,8 +306,6 @@ describe("Staking", function () {
       await deposit.claimWithdraws([lastClaimId2], owner);
 
       // wihdraw to another address
-      blockTime = await shared.getCurrentBlockTimestamp();
-      expectedUnlock = blockTime + exitDelay;
       await expect(realAssets.redeem(reserveStrategy1, owner, alice, withdrawAmount))
         .to.changeTokenBalances(revenueAsset,
           [lockbox, reserveStrategy1],
@@ -463,7 +461,7 @@ describe("Staking", function () {
         const reportTx = allocation.connect(vaultManager).report(reserveStrategy2);
 
         // check invariants right after report
-        globalThis.$invChecker!.check();
+        await globalThis.$invChecker!.check();
 
         // events
         const feeRate = 0;

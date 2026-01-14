@@ -23,6 +23,8 @@ import {
 import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
 import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplayGuard.sol";
 
+import {NotAuthorized, ValueNotAccepted} from "../../shared/Errors.sol";
+
 /**
  * @title DepositFacet
  * @notice Entry point for staking operations. Handles user deposits and withdrawals
@@ -88,6 +90,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         _basicStakeChecks(vault, strategy, stake);
 
         v.stakeInfo[strategy].totalStake += stake;
+        v.stakeInfo[strategy].pendingDepositStake += stake;
 
         vault.stakeCurrency.transferFrom(
             msg.sender,
@@ -99,7 +102,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         requestId = IAllocation(address(this)).joinAsync(strategy, to, stake);
 
         // store request id, for convenience
-        v.groupedClaimIds[strategy][to].push(requestId);
+        v.groupedRequestIds[strategy][to].push(requestId);
 
         emit DepositRequest(msg.sender, to, strategy, stake, requestId);
     }
@@ -125,8 +128,14 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         ) = IStrategy(strategy).requestInfo(requestId);
         require(!isExit, BadRequestType());
 
+        // only the request user can trigger a refund
+        require(msg.sender == user, NotAuthorized(msg.sender));
+
         // strategy should validate requestId and return refunded stake amount
         stake = IAllocation(address(this)).refundJoinAsync(strategy, requestId, user, to);
+
+        v.stakeInfo[strategy].totalStake -= stake;
+        v.stakeInfo[strategy].pendingDepositStake -= stake;
 
         emit DepositRefund(msg.sender, to, strategy, stake, requestId);
     }
@@ -153,6 +162,8 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         require(!isExit, BadRequestType());
         require(claimable, RequestNotClaimable());
 
+        v.stakeInfo[strategy].pendingDepositStake -= stake;
+
         // forward to allocation facet and execute the actual claim
         allocation = IAllocation(address(this)).claimJoinAsync(
             strategy,
@@ -171,7 +182,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     /* ========== Withdraw ========== */
 
     /// @inheritdoc IDeposit
-    function claimWithdraws(uint256[] calldata requestIds, address to) external {
+    function claimWithdraws(uint256[] calldata requestIds, address to) external nonReentrant {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         uint256 n = requestIds.length;
 
@@ -240,7 +251,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         });
 
         // data used for filtering
-        v.groupedClaimIds[strategy][user].push(requestId);
+        v.groupedRequestIds[strategy][user].push(requestId);
 
         emit WithdrawQueued(strategy, user, readyAt, stake, feeWithdraw, requestId);
     }
@@ -275,9 +286,12 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
         // exit was queued under either fee or user stake
         if (c.feeWithdraw) {
+            // Fee leave refunds stay local (no bridge)
+            require(msg.value == 0, ValueNotAccepted());
+
             v.stakeInfo[c.strategy].pendingExitFee -= stake;
 
-            // Fee leave refunds stay local (no bridge), allocation is restored back to the diamond
+            // Allocation is restored back to the diamond
 
             emit FeeLeaveRefunded(c.strategy, msg.sender, stake, allocationRefunded, requestId);
         } else {
@@ -330,7 +344,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         uint256 limit
     ) external view returns (uint256[] memory ids) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        uint256[] storage arr = v.groupedClaimIds[strategy][user];
+        uint256[] storage arr = v.groupedRequestIds[strategy][user];
 
         uint256 len = arr.length;
         if (limit > len) {

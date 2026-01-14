@@ -62,6 +62,7 @@ async function deployHyperStaking() {
 
   // -------------------- Setup Checker --------------------
 
+  await invariantChecker.addStrategy(await reserveStrategy.getAddress());
   await invariantChecker.addStrategy(await dineroStrategy.getAddress());
   setGlobalInvariantChecker(invariantChecker);
 
@@ -361,7 +362,7 @@ describe("Strategy", function () {
     describe("Refunds", function () {
       it("refunds allocation request (deposit flow) and cleans request storage", async function () {
         const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
-        const { deposit } = hyperStaking;
+        const { deposit, allocation } = hyperStaking;
         const { owner, strategyManager } = signers;
 
         // make allocation async so request is actually pending
@@ -387,6 +388,10 @@ describe("Strategy", function () {
         expect(infoBefore.amount).to.eq(stakeAmount);
         expect(infoBefore.claimed).to.eq(false);
 
+        const vaultInfoBefore = await allocation.stakeInfo(reserveStrategy);
+        expect(vaultInfoBefore.totalStake).to.equal(stakeAmount);
+        expect(vaultInfoBefore.totalAllocation).to.equal(0);
+
         // jump to readyAt and refund
         await time.setNextBlockTimestamp(expectedReadyAt);
 
@@ -404,6 +409,10 @@ describe("Strategy", function () {
         expect(infoAfter.claimed).to.eq(true);
         expect(infoAfter.claimable).to.eq(false);
 
+        const vaultInfoAfter = await allocation.stakeInfo(reserveStrategy);
+        expect(vaultInfoAfter.totalStake).to.equal(0);
+        expect(vaultInfoAfter.totalAllocation).to.equal(0);
+
         // cannot claim after refund
         await expect(deposit.claimDeposit(reserveStrategy, reqId, owner))
           .to.be.reverted;
@@ -413,7 +422,7 @@ describe("Strategy", function () {
         const {
           signers, hyperStaking, lumiaDiamond, reserveStrategy, reserveAssetPrice,
         } = await loadFixture(deployHyperStaking);
-        const { deposit, lockbox } = hyperStaking;
+        const { deposit, allocation, lockbox } = hyperStaking;
         const { realAssets } = lumiaDiamond;
         const { owner, strategyManager } = signers;
 
@@ -433,6 +442,12 @@ describe("Strategy", function () {
         const exitDelay = 2 * 24 * 3600; // 2 days
         await reserveStrategy.connect(strategyManager).setReadyAtOffsets(0, exitDelay);
 
+        const totalAllocation = stakeAmount * parseEther("1") / reserveAssetPrice;
+
+        const vaultInfoBefore = await allocation.stakeInfo(reserveStrategy);
+        expect(vaultInfoBefore.totalStake).to.equal(stakeAmount);
+        expect(vaultInfoBefore.totalAllocation).to.equal(totalAllocation);
+
         // redeem part -> creates pending claim
         const redeemStake = parseEther("2");
         const expectedAllocation = redeemStake * parseEther("1") / reserveAssetPrice;
@@ -449,6 +464,10 @@ describe("Strategy", function () {
         // after redeem, shares should be burned
         const sharesAfterRedeem = await vaultShares.balanceOf(owner);
         expect(sharesAfterRedeem).to.eq(sharesBeforeRedeem - redeemStake);
+
+        const vaultInfoMid = await allocation.stakeInfo(reserveStrategy);
+        expect(vaultInfoMid.totalStake).to.equal(stakeAmount);
+        expect(vaultInfoMid.totalAllocation).to.equal(totalAllocation - expectedAllocation);
 
         // refund instead of claimWithdraws
         const ts0 = await shared.getCurrentBlockTimestamp();
@@ -472,6 +491,11 @@ describe("Strategy", function () {
         expect(deleted.unlockTime).to.eq(0);
         expect(deleted.eligible).to.eq(ZeroAddress);
         expect(deleted.expectedAmount).to.eq(0);
+
+        // stakeInfo should be restored
+        const vaultInfoAfter = await allocation.stakeInfo(reserveStrategy);
+        expect(vaultInfoAfter.totalStake).to.equal(stakeAmount);
+        expect(vaultInfoAfter.totalAllocation).to.equal(totalAllocation);
 
         // cannot claim after refund
         await expect(deposit.claimWithdraws([claimId], owner))

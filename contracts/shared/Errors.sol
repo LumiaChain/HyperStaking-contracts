@@ -12,6 +12,7 @@ error ZeroAmount();
 
 error ZeroStakeExit();
 error ZeroAllocationExit();
+error ValueNotAccepted();
 
 error UpdateFailed();
 

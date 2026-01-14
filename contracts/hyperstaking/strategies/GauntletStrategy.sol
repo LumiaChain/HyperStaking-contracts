@@ -165,7 +165,7 @@ contract GauntletStrategy is AbstractStrategy {
             RequestType.DEPOSIT_FIXED_PRICE :
             RequestType.DEPOSIT_AUTO_PRICE;
 
-        AeraRequestData memory requetData = AeraRequestData({
+        AeraRequestData memory requestData = AeraRequestData({
             requestType: requestType,
             tokens: amount_,
             units: minUnitsOut,
@@ -173,16 +173,16 @@ contract GauntletStrategy is AbstractStrategy {
             deadline: deadline,
             maxPriceAge: aeraConfig.maxPriceAge
         });
-        aeraDeposit[requestId_] = requetData; // save request data for later claim & refund
+        aeraDeposit[requestId_] = requestData; // save request data for later claim & refund
 
         // actual deposit request
         AERA_PROVISIONER.requestDeposit(
             STAKE_TOKEN,
-            requetData.tokens,
-            requetData.units,
-            requetData.solverTip,
-            requetData.deadline,
-            requetData.maxPriceAge,
+            requestData.tokens,
+            requestData.units,
+            requestData.solverTip,
+            requestData.deadline,
+            requestData.maxPriceAge,
             aeraConfig.isFixedPrice
         );
 
@@ -190,7 +190,7 @@ contract GauntletStrategy is AbstractStrategy {
         emit AeraAsyncDepositHash(_getRequestHashParams(
             STAKE_TOKEN,
             address(this),
-            requetData
+            requestData
         ));
 
         emit AllocationRequested(requestId_, user_, amount_, readyAt);
@@ -239,7 +239,7 @@ contract GauntletStrategy is AbstractStrategy {
              RequestType.REDEEM_FIXED_PRICE :
              RequestType.REDEEM_AUTO_PRICE;
 
-        AeraRequestData memory requetData = AeraRequestData({
+        AeraRequestData memory requestData = AeraRequestData({
             requestType: requestType,
             tokens: minTokensOut,
             units: shares_,
@@ -247,16 +247,16 @@ contract GauntletStrategy is AbstractStrategy {
             deadline: deadline,
             maxPriceAge: aeraConfig.maxPriceAge
         });
-        aeraRedeem[requestId_] = requetData; // save request data for later claim & refund
+        aeraRedeem[requestId_] = requestData; // save request data for later claim & refund
 
         // actual deposit request
         AERA_PROVISIONER.requestRedeem(
             STAKE_TOKEN,
-            requetData.units,
-            requetData.tokens,
-            requetData.solverTip,
-            requetData.deadline,
-            requetData.maxPriceAge,
+            requestData.units,
+            requestData.tokens,
+            requestData.solverTip,
+            requestData.deadline,
+            requestData.maxPriceAge,
             aeraConfig.isFixedPrice
         );
 
@@ -264,7 +264,7 @@ contract GauntletStrategy is AbstractStrategy {
         emit AeraAsyncRedeemHash(_getRequestHashParams(
             STAKE_TOKEN,
             address(this),
-            requetData
+            requestData
         ));
 
         emit ExitRequested(requestId_, user_, shares_, readyAt);
@@ -386,6 +386,7 @@ contract GauntletStrategy is AbstractStrategy {
 
         // mark request as claimed, and clear storage
         _markClaimed(id_);
+        delete aeraDeposit[id_];
 
         require(IERC20(AERA_VAULT).balanceOf(address(this)) >= allocation, MissingLiquidity());
         IERC20(AERA_VAULT).safeTransfer(receiver_, allocation);
@@ -407,6 +408,7 @@ contract GauntletStrategy is AbstractStrategy {
 
         // mark request as claimed and clear redeem record
         _markClaimed(id_);
+        delete aeraRedeem[id_];
 
         // transfer stake to receiver; revert if contract lacks liquidity
         require(STAKE_TOKEN.balanceOf(address(this)) >= exitAmount, MissingLiquidity());
@@ -441,6 +443,7 @@ contract GauntletStrategy is AbstractStrategy {
 
         // mark handled and clear records
         _markClaimed(id_);
+        delete aeraDeposit[id_];
 
         // provisioner returns stake tokens to this contract, forward to receiver
         stakeRefunded = requestData.tokens;
@@ -474,6 +477,7 @@ contract GauntletStrategy is AbstractStrategy {
 
         // mark handled and clear records
         _markClaimed(id_);
+        delete aeraRedeem[id_];
 
         // provisioner returns allocation shares to this contract, forward to receiver
         allocationRefunded = requestData.units;
