@@ -12,11 +12,29 @@ interface IAllocation {
     //                                          Events                                            //
     //============================================================================================//
 
+    /// used in both sync and async claim flows
     event Join(
         address indexed strategy,
         address indexed user,
         uint256 stake,
-        uint256 allocation
+        uint256 allocation,
+        uint256 requestId
+    );
+
+    event JoinRequested(
+        address indexed strategy,
+        address indexed user,
+        uint256 stake,
+        uint256 requestId,
+        uint64 readyAt
+    );
+
+    event JoinRefunded(
+        address indexed strategy,
+        address indexed user,
+        uint256 stake,
+        uint256 requestId,
+        address receiver
     );
 
     event Leave(
@@ -57,7 +75,8 @@ interface IAllocation {
     //                                          Errors                                            //
     //============================================================================================//
 
-    error AsyncAllocationNotSupported();
+    error NotSyncFlow();
+    error NotAsyncFlow();
 
     error StrategyDoesNotExist(address strategy);
 
@@ -73,12 +92,45 @@ interface IAllocation {
     //============================================================================================//
 
     /**
-     * @notice Join for a specified strategy by staking a certain amount
-     * @param strategy The strategy for which the user is joining
-     * @param user The address of the user
-     * @param stake The stake amount
+     * @notice Join using sync flow (request + claim in one tx)
      */
-    function join(address strategy, address user, uint256 stake) external payable;
+    function joinSync(
+        address strategy,
+        address user,
+        uint256 stake
+    ) external payable returns (uint256 requestId, uint256 allocation);
+
+    /**
+     * @notice Join using async flow (only create request)
+     */
+    function joinAsync(
+        address strategy,
+        address user,
+        uint256 stake
+    ) external payable returns (uint256 requestId);
+
+    /**
+     * @notice Refunds a previously created async join request
+     * @dev Used when an async join request cannot be completed; returns stake back to `to`
+     * @return stake The amount of stake refunded
+     */
+    function refundJoinAsync(
+        address strategy,
+        uint256 requestId,
+        address user,
+        address to
+    ) external returns (uint256 stake);
+
+    /**
+     * @notice Claims a previously created async join request
+     * @return allocation The amount of strategy allocation credited to the user
+     */
+    function claimJoinAsync(
+        address strategy,
+        uint256 requestId,
+        address user,
+        uint256 stake
+    ) external returns (uint256 allocation);
 
     /**
      * @notice Leave for a specified strategy and asset amount

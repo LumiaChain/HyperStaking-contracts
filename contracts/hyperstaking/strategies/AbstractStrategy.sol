@@ -48,12 +48,14 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
 
     error ZeroUser();
     error RequestIdExists(uint256 id);
+    error RequestNotFound(uint256 id);
 
     error NotLumiaDiamond();
     error NotStrategyManager();
     error NotStrategyUpgrader();
     error DontSupportArrays();
 
+    error RefundNotSupported();
     error AlreadyClaimed();
     error NotReady();
     error WrongKind();
@@ -110,9 +112,23 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
     //                                      Public Functions                                      //
     //============================================================================================//
 
+    /// @inheritdoc IStrategy
+    /// @dev Default function, to support refunds, override it in the strategy implementation
+    ///      Only for strategies with async flows and explicit refund support
+    function refundAllocation(uint256[] calldata, address) external virtual returns (uint256) {
+        revert RefundNotSupported();
+    }
+
+    /// @inheritdoc IStrategy
+    /// @dev Default function, to support refunds, override it in the strategy implementation
+    ///      Only for strategies with async flows and explicit refund support
+    function refundExit(uint256[] calldata, address) external virtual returns (uint256) {
+        revert RefundNotSupported();
+    }
+
     /// @notice Semantic version of this implementation
     function implementationVersion() external pure returns (string memory) {
-        return "IStrategy 1.0.0";
+        return "IStrategy 1.1.0";
     }
 
     // ========= Previews ========= //
@@ -160,8 +176,8 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
             bool isExit,
             uint256 amount,
             uint64 readyAt,
-            bool claimable,
-            bool claimed
+            bool claimed,
+            bool claimable
         )
     {
         StrategyRequest memory r = _req[id_];
@@ -182,8 +198,8 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
             bool[] memory isExits,
             uint256[] memory amounts,
             uint64[] memory readyAts,
-            bool[] memory claimables,
-            bool[] memory claimedArr
+            bool[] memory claimedArr,
+            bool[] memory claimables
         )
     {
         uint256 n = ids_.length;
@@ -191,8 +207,8 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
         isExits = new bool[](n);
         amounts = new uint256[](n);
         readyAts = new uint64[](n);
-        claimables = new bool[](n);
         claimedArr = new bool[](n);
+        claimables = new bool[](n);
 
         for (uint256 i; i < n; ++i) {
             StrategyRequest memory r = _req[ids_[i]];
@@ -220,6 +236,9 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
         uint256 amount_,
         address to_
     ) external onlyStrategyManager {
+        require(to_ != address(0), ZeroAddress());
+        require(amount_ > 0, ZeroAmount());
+
         currency_.transfer(to_, amount_);
         emit EmergencyWithdraw(msg.sender, currency_.token, amount_, to_);
     }
@@ -237,6 +256,7 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
         uint256 amount_,
         uint64 readyAt_
     ) internal {
+        require(amount_ > 0, ZeroAmount());
         require(user_ != address(0), ZeroUser());
         require(_req[id_].user == address(0), RequestIdExists(id_));
 
@@ -256,6 +276,7 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
         uint256 shares_,
         uint64 readyAt_
     ) internal {
+        require(shares_ > 0, ZeroAmount());
         require(user_ != address(0), ZeroUser());
         require(_req[id_].user == address(0), RequestIdExists(id_));
 
@@ -268,14 +289,25 @@ abstract contract AbstractStrategy is IStrategy, Initializable, UUPSUpgradeable 
         });
     }
 
-    /// @dev Loads a request and pre-validates it
-    function _loadClaimable(
+    /// @dev Loads a validated active request
+    function _loadActive(
         uint256 id_,
         StrategyKind expected_
     ) internal view returns (StrategyRequest memory r) {
         r = _req[id_];
+        require(r.user != address(0), RequestNotFound(id_));
         require(!r.claimed, AlreadyClaimed());
         require(r.kind == expected_, WrongKind());
+    }
+
+    /// @dev Loads a claimable request, pre-validates it
+    function _loadClaimable(
+        uint256 id_,
+        StrategyKind expected_
+    ) internal view returns (StrategyRequest memory r) {
+        r = _loadActive(id_, expected_);
+
+        // request must be ready to claim
         require(block.timestamp >= r.readyAt, NotReady());
     }
 

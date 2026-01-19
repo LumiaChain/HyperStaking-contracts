@@ -54,6 +54,20 @@ interface IStrategy {
         uint256 exitStakeAmount
     );
 
+    /// @notice Emitted when an allocation request is refunded (stake returned)
+    event AllocationRefunded(
+        uint256 indexed id,
+        address receiver,
+        uint256 refundedStake
+    );
+
+    /// @notice Emitted when an exit request is refunded (allocation returned)
+    event ExitRefunded(
+        uint256 indexed id,
+        address receiver,
+        uint256 refundedAllocation
+    );
+
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
@@ -103,6 +117,28 @@ interface IStrategy {
         external
         returns (uint256 totalExitStakeAmount);
 
+    /**
+     * @notice Refunds one or more allocation requests
+     * @dev Reverts if a request is already claimed or has a wrong type
+     * @param ids_ Array of request IDs to refund
+     * @param receiver_ The address that will receive refunded stake
+     * @return totalRefundedStake Total stake refunded across all ids
+     */
+    function refundAllocation(uint256[] calldata ids_, address receiver_)
+        external
+        returns (uint256 totalRefundedStake);
+
+    /**
+     * @notice Refunds one or more exit requests
+     * @dev Reverts if a request is already claimed or has a wrong type
+     * @param ids_ Array of request IDs to refund
+     * @param receiver_ The address that will receive refunded allocation
+     * @return totalRefundedAllocation Total allocation refunded across all ids
+     */
+    function refundExit(uint256[] calldata ids_, address receiver_)
+        external
+        returns (uint256 totalRefundedAllocation);
+
     //============================================================================================//
     //                                           View                                             //
     //============================================================================================//
@@ -125,6 +161,14 @@ interface IStrategy {
     /// @return The address of the revenue-accumulating asset (allocation asset)
     function revenueAsset() external view returns (address);
 
+    /// @notice Preview when a new allocation would become claimable
+    /// @dev Returns a timestamp (seconds). Returns 0 for synchronous deposit strategies.
+    function previewAllocationReadyAt(uint256 stakeAmount_) external view returns (uint64 readyAt);
+
+    /// @notice Preview when a new exit would become claimable
+    /// @dev Returns a timestamp (seconds). Returns 0 for synchronous redeem strategies.
+    function previewExitReadyAt(uint256 shares_) external view returns (uint64 readyAt);
+
     /// @dev Preview the asset allocation for a given stake amount
     function previewAllocation(uint256 stakeAmount_) external view returns (uint256 allocation);
 
@@ -140,8 +184,8 @@ interface IStrategy {
             bool isExit,            // false = allocation, true = exit
             uint256 amount,         // stake for allocation, shares for exit
             uint64 readyAt,         // 0 => claimable immediately
-            bool claimable,
-            bool claimed
+            bool claimed,
+            bool claimable
         );
 
     /// @dev Batched requestInfo for multiple ids; arrays match ids_.length
@@ -153,7 +197,7 @@ interface IStrategy {
             bool[] memory isExits,
             uint256[] memory amounts,
             uint64[] memory readyAts,
-            bool[] memory claimables,
-            bool[] memory claimedArr
+            bool[] memory claimedArr,
+            bool[] memory claimables
         );
 }

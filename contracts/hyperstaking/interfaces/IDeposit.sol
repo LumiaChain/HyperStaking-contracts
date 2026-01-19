@@ -3,7 +3,7 @@ pragma solidity =0.8.27;
 
 // solhint-disable func-name-mixedcase
 
-import {Claim} from "../libraries/LibHyperStaking.sol";
+import {WithdrawClaim} from "../libraries/LibHyperStaking.sol";
 
 /**
  * @title IDeposit
@@ -14,11 +14,28 @@ interface IDeposit {
     //                                          Events                                            //
     //============================================================================================//
 
-    event StakeDeposit(
+    event DepositRequest(
         address from,
         address indexed to,
         address indexed strategy,
-        uint256 stake
+        uint256 stake,
+        uint256 requestId
+    );
+
+    event DepositRefund(
+        address from,
+        address indexed to,
+        address indexed strategy,
+        uint256 stake,
+        uint256 requestId
+    );
+
+    event Deposit(
+        address from,
+        address indexed to,
+        address indexed strategy,
+        uint256 stake,
+        uint256 requestId
     );
 
     event WithdrawClaimed(
@@ -26,7 +43,8 @@ interface IDeposit {
         address indexed from,
         address to,
         uint256 stake,
-        uint256 exitAmount
+        uint256 exitAmount,
+        uint256 requestId
     );
 
     event FeeWithdrawClaimed(
@@ -34,22 +52,34 @@ interface IDeposit {
         address indexed feeRecipient,
         address to,
         uint256 fee,
-        uint256 exitAmount
+        uint256 exitAmount,
+        uint256 requestId
     );
 
     event WithdrawQueued(
         address indexed strategy,
         address indexed to,
-        uint256 requestId,
         uint64 unlockTime,
         uint256 expectedAmount,
-        bool indexed feeWithdraw
+        bool indexed feeWithdraw,
+        uint256 requestId
     );
 
-    event WithdrawDelaySet(
-        address indexed stakingManager,
-        uint256 previousDelay,
-        uint256 newDelay
+    event FeeLeaveRefunded(
+        address indexed strategy,
+        address indexed from,
+        uint256 stake,
+        uint256 allocationRefunded,
+        uint256 requestId
+    );
+
+    event WithdrawRefunded(
+        address indexed strategy,
+        address indexed from,
+        address to,
+        uint256 stake,
+        uint256 allocationRefunded,
+        uint256 requestId
     );
 
     //============================================================================================//
@@ -58,6 +88,12 @@ interface IDeposit {
 
     /// @notice Thrown when attempting to stake zero amount
     error ZeroStake();
+
+    /// @notice Thrown when an unexpected request type is used
+    error BadRequestType();
+
+    /// @notice Thrown when request is not ready to claim
+    error RequestNotClaimable();
 
     /// @notice Thrown when attempting to stake to disabled strategy
     error StrategyDisabled(address strategy);
@@ -80,9 +116,6 @@ interface IDeposit {
     /// @notice Thrown when the sender is not the eligible address for the claim
     error NotEligible(uint256 id, address eligible, address sender);
 
-    /// @notice Thrown when trying to set too high withdraw delay
-    error WithdrawDelayTooHigh(uint64 newDelay);
-
     //============================================================================================//
     //                                          Mutable                                           //
     //============================================================================================//
@@ -90,16 +123,45 @@ interface IDeposit {
     /* ========== Deposit  ========== */
 
     /**
-     * @notice Deposits a specified stake amount into chosen strategy
+     * @notice Deposit (sync) or claim a previous async deposit request
+     * @dev If `requestId` is 0, does a sync deposit. If non-zero, claims that request
      * @param strategy The address of the strategy selected by the user
      * @param to The address receiving the staked token allocation (typically the user's address)
      * @param stake The amount of the token to stake
      */
-    function stakeDeposit(
+    function deposit(
         address strategy,
         address to,
         uint256 stake
-    ) external payable;
+    ) external payable returns (uint256 requestId, uint256 allocation);
+
+    /**
+     * @notice Create an async deposit request
+     * @dev For async strategies only, stake is moved now, allocation is claimed later
+     */
+    function requestDeposit(
+        address strategy,
+        address to,
+        uint256 stake
+    ) external payable returns (uint256 requestId);
+
+    /**
+     * @notice Refund stake for a failed or canceled async request
+     */
+    function refundDeposit(
+        address strategy,
+        uint256 requestId,
+        address to
+    ) external returns (uint256 stake);
+
+    /**
+     * @notice Claims a completed async deposit request
+     * @dev Reverts if the request is not claimable, already claimed, or has an unexpected type
+     */
+    function claimDeposit(
+        address strategy,
+        uint256 requestId
+    ) external payable returns (uint256 allocation);
 
     /* ========== Stake Withdraw  ========== */
 
@@ -130,14 +192,14 @@ interface IDeposit {
         bool feeWithdraw
     ) external;
 
-    /* ========== */
+    /// @notice Refund an async exit after it was queued (reverts the exit and restores allocation)
+    /// @dev Uses the pending claim as the source of truth and bridges stake back to the Lumia diamond
+    function refundWithdraw(
+        uint256 requestId,
+        address to
+    ) external payable returns (uint256 allocationRefunded);
 
-    /**
-     * @notice Sets the global delay between queuing and withdrawing
-     * @dev Only callable by the Staking Manger role
-     * @param newDelay Delay in seconds (e.g. 2 days → 172_800)
-     */
-    function setWithdrawDelay(uint64 newDelay) external;
+    /* ========== */
 
     /// @notice Pauses stake functionalities
     function pauseDeposit() external;
@@ -149,17 +211,11 @@ interface IDeposit {
     //                                           View                                             //
     //============================================================================================//
 
-    /// @notice public constant, but it is nice to make interface for Diamond
-    function MAX_WITHDRAW_DELAY() external view returns(uint64);
-
-    /// @notice Cool‑down in seconds that must elapse before a queued claim can be withdrawn
-    function withdrawDelay() external view returns (uint64);
-
     /// @notice Returns claims for given requestIds; chooses fee/user mapping by flag
-    function pendingWithdraws(uint256[] calldata requestIds)
+    function pendingWithdrawClaims(uint256[] calldata requestIds)
         external
         view
-        returns (Claim[] memory claims);
+        returns (WithdrawClaim[] memory claims);
 
     /// @notice Returns up to `limit` most recent claim IDs for a strategy and user
     /// @dev Newest IDs first
@@ -171,7 +227,7 @@ interface IDeposit {
     /* ========== */
 
     /// @notice Helper to easily quote the dispatch fee for stakeDeposit
-    function quoteStakeDeposit(
+    function quoteDepositDispatch(
         address strategy,
         address to,
         uint256 stake

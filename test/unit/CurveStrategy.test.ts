@@ -1,4 +1,4 @@
-import { time, loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 
 import { ethers, ignition } from "hardhat";
 import { Interface, parseEther, parseUnits, Contract, ZeroAddress } from "ethers";
@@ -13,7 +13,7 @@ import { deployHyperStakingBase } from "../setup";
 
 async function deployHyperStaking() {
   const {
-    signers, hyperStaking, lumiaDiamond, testUSDC, testUSDT, erc4626Vault, invariantChecker, defaultWithdrawDelay,
+    signers, hyperStaking, lumiaDiamond, testUSDC, testUSDT, erc4626Vault, invariantChecker,
   } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Superform --------------------
@@ -113,7 +113,6 @@ async function deployHyperStaking() {
   return {
     signers, // signers
     hyperStaking, lumiaDiamond, // diamonds deployment
-    defaultWithdrawDelay, // deposit parameter
     swapSuperStrategy, superVault, superformFactory, superUSDC, curvePool, // strategy and related
     testUSDC, testUSDT, erc4626Vault, principalToken, vaultShares, // test contracts
     vaultTokenName, vaultTokenSymbol, // values
@@ -638,7 +637,7 @@ describe("CurveStrategy", function () {
 
     it("staking using swap strategy", async function () {
       const {
-        signers, hyperStaking, lumiaDiamond, swapSuperStrategy, vaultShares, superUSDC, testUSDC, testUSDT, erc4626Vault, curvePool, defaultWithdrawDelay,
+        signers, hyperStaking, lumiaDiamond, swapSuperStrategy, vaultShares, superUSDC, testUSDC, testUSDT, erc4626Vault, curvePool,
       } = await loadFixture(deployHyperStaking);
       const { deposit, allocation, hyperFactory, lockbox } = hyperStaking;
       const { hyperlaneHandler, realAssets } = lumiaDiamond;
@@ -647,7 +646,7 @@ describe("CurveStrategy", function () {
       const amount = parseUnits("2000", 6);
 
       await testUSDT.connect(alice).approve(deposit, amount);
-      const depositTx = deposit.connect(alice).stakeDeposit(swapSuperStrategy, alice, amount);
+      const depositTx = deposit.connect(alice).deposit(swapSuperStrategy, alice, amount);
 
       await expect(depositTx).to.changeTokenBalances(testUSDT,
         [alice, curvePool], [-amount, amount]);
@@ -673,8 +672,6 @@ describe("CurveStrategy", function () {
       const rwaBalance = await vaultShares.balanceOf(alice);
       expect(rwaBalance).to.be.eq(amount);
 
-      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
-
       const revenueAsset = await shared.getRevenueAsset(swapSuperStrategy);
       const redeemTx = realAssets.connect(alice).redeem(swapSuperStrategy, alice, alice, rwaBalance);
 
@@ -682,8 +679,7 @@ describe("CurveStrategy", function () {
         .to.changeTokenBalance(vaultShares, alice, -rwaBalance);
 
       const lastClaimId = await shared.getLastClaimId(deposit, swapSuperStrategy, alice);
-      await time.setNextBlockTimestamp(expectedUnlock);
-      const claimTx = deposit.connect(alice).claimWithdraws([lastClaimId], alice);
+      const claimTx = shared.claimAtDeadline(deposit, lastClaimId, alice);
 
       await expect(claimTx)
         .to.changeTokenBalance(revenueAsset, lockbox, -rwaBalance);
@@ -703,7 +699,7 @@ describe("CurveStrategy", function () {
 
     it("check on redeem vulnerability", async function () {
       const {
-        signers, hyperStaking, lumiaDiamond, testUSDC, testUSDT, erc4626Vault, swapSuperStrategy, curvePool, vaultShares, superUSDC, defaultWithdrawDelay,
+        signers, hyperStaking, lumiaDiamond, testUSDC, testUSDT, erc4626Vault, swapSuperStrategy, curvePool, vaultShares, superUSDC,
       } = await loadFixture(deployHyperStaking);
       const { deposit, allocation, hyperFactory } = hyperStaking;
       const { hyperlaneHandler, realAssets } = lumiaDiamond;
@@ -712,7 +708,7 @@ describe("CurveStrategy", function () {
       const amount = parseUnits("2000", 6);
 
       await testUSDT.connect(alice).approve(deposit, amount);
-      const depositTx = deposit.connect(alice).stakeDeposit(swapSuperStrategy, alice, amount);
+      const depositTx = deposit.connect(alice).deposit(swapSuperStrategy, alice, amount);
 
       await expect(depositTx).to.changeTokenBalances(testUSDT,
         [alice, curvePool], [-amount, amount]);
@@ -750,11 +746,8 @@ describe("CurveStrategy", function () {
       await expect(realAssets.connect(bob).redeem(swapSuperStrategy, alice, bob, rwaBalance))
         .to.changeTokenBalance(vaultShares, alice, -rwaBalance);
 
-      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
-
       const lastClaimId = await shared.getLastClaimId(deposit, swapSuperStrategy, bob);
-      await time.setNextBlockTimestamp(expectedUnlock);
-      const claimTx = deposit.connect(bob).claimWithdraws([lastClaimId], bob);
+      const claimTx = shared.claimAtDeadline(deposit, lastClaimId, bob);
 
       await expect(claimTx)
         .to.changeTokenBalances(testUSDC,

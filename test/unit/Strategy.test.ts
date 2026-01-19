@@ -24,7 +24,7 @@ async function getMockedPirex() {
 
 async function deployHyperStaking() {
   const {
-    signers, testWstETH, hyperStaking, lumiaDiamond, invariantChecker, defaultWithdrawDelay,
+    signers, testWstETH, hyperStaking, lumiaDiamond, invariantChecker,
   } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Apply Strategies --------------------
@@ -62,6 +62,7 @@ async function deployHyperStaking() {
 
   // -------------------- Setup Checker --------------------
 
+  await invariantChecker.addStrategy(await reserveStrategy.getAddress());
   await invariantChecker.addStrategy(await dineroStrategy.getAddress());
   setGlobalInvariantChecker(invariantChecker);
 
@@ -77,7 +78,6 @@ async function deployHyperStaking() {
   /* eslint-disable object-property-newline */
   return {
     signers, // signers
-    defaultWithdrawDelay,
     hyperStaking, lumiaDiamond, // diamonds deployment
     pxEth, upxEth, pirexEth, autoPxEth, // pirex mock
     testWstETH, reserveStrategy, dineroStrategy, principalToken, vaultShares, // test contracts
@@ -93,7 +93,7 @@ describe("Strategy", function () {
       const { strategyUpgrader, alice } = signers;
 
       // check versioning
-      expect(await reserveStrategy.implementationVersion()).to.equal("IStrategy 1.0.0");
+      expect(await reserveStrategy.implementationVersion()).to.equal("IStrategy 1.1.0");
 
       const IMPL_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
       const proxyContract = await ethers.getContractAt("UUPSUpgradeable", reserveStrategy);
@@ -119,7 +119,7 @@ describe("Strategy", function () {
         .to.equal(await implV2.getAddress());
 
       // check versioning again (check if new implementation is working)
-      expect(await reserveStrategy.implementationVersion()).to.equal("IStrategy 1.0.0");
+      expect(await reserveStrategy.implementationVersion()).to.equal("IStrategy 1.1.0");
     });
   });
 
@@ -146,7 +146,7 @@ describe("Strategy", function () {
       const readyAt = 0;
       const expectedAllocation = ownerAmount * parseEther("1") / reserveAssetPrice;
 
-      const depositTx = await deposit.stakeDeposit(reserveStrategy, owner, ownerAmount, { value: ownerAmount });
+      const depositTx = await deposit.deposit(reserveStrategy, owner, ownerAmount, { value: ownerAmount });
 
       await expect(depositTx)
         .to.emit(reserveStrategy, "AllocationRequested")
@@ -162,7 +162,7 @@ describe("Strategy", function () {
       const reqId2 = 2;
       const expectedAllocation2 = aliceAmount * parseEther("1") / reserveAssetPrice;
 
-      const depositTx2 = deposit.stakeDeposit(reserveStrategy, alice, aliceAmount, { value: aliceAmount });
+      const depositTx2 = deposit.deposit(reserveStrategy, alice, aliceAmount, { value: aliceAmount });
 
       await expect(depositTx2)
         .to.emit(reserveStrategy, "AllocationRequested")
@@ -195,7 +195,7 @@ describe("Strategy", function () {
 
       const stakeAmount = parseEther("5");
 
-      await deposit.connect(alice).stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
+      await deposit.connect(alice).deposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
 
       const readyAt = 0;
       const id1 = 1; // allocation request
@@ -312,7 +312,7 @@ describe("Strategy", function () {
 
         const badStrategy = "0x36fD7e46150d3C0Be5741b0fc8b0b2af4a0D4Dc5";
 
-        await expect(deposit.stakeDeposit(badStrategy, owner, 1, { value: 1 }))
+        await expect(deposit.deposit(badStrategy, owner, 1, { value: 1 }))
           .to.be.revertedWithCustomError(deposit, "VaultDoesNotExist")
           .withArgs(badStrategy);
       });
@@ -343,15 +343,182 @@ describe("Strategy", function () {
         )).to.be.revertedWithCustomError(hyperFactory, "VaultAlreadyExist");
       });
 
-      it("Vault external functions not be accessible outside deposit", async function () {
+      it("Allocation external functions not be accessible outside deposit", async function () {
         const { signers, hyperStaking, reserveStrategy } = await loadFixture(deployHyperStaking);
         const { allocation } = hyperStaking;
         const { alice } = signers;
 
-        await expect(allocation.join(reserveStrategy, alice, 1000))
+        await expect(allocation.joinSync(reserveStrategy, alice, 1000))
+          .to.be.reverted;
+
+        await expect(allocation.joinAsync(reserveStrategy, alice, 1000))
           .to.be.reverted;
 
         await expect(allocation.leave(reserveStrategy, alice, 1000))
+          .to.be.reverted;
+      });
+    });
+
+    describe("Refunds", function () {
+      it("refunds allocation request (deposit flow) and cleans request storage", async function () {
+        const { hyperStaking, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+        const { deposit, allocation } = hyperStaking;
+        const { owner, strategyManager } = signers;
+
+        // make allocation async so request is actually pending
+        const allocationDelay = 24 * 3600; // 1 day
+        await reserveStrategy.connect(strategyManager).setReadyAtOffsets(allocationDelay, 0);
+
+        const stakeAmount = parseEther("2");
+
+        // deposit creates allocation request (not claimed yet)
+        const depositTx = await deposit.requestDeposit(reserveStrategy, owner, stakeAmount, { value: stakeAmount });
+
+        const reqId = 1;
+        const ts0 = await shared.getCurrentBlockTimestamp();
+        const expectedReadyAt = ts0 + allocationDelay;
+
+        await expect(depositTx)
+          .to.emit(reserveStrategy, "AllocationRequested")
+          .withArgs(reqId, owner, stakeAmount, expectedReadyAt);
+
+        // before readyAt, request should not be claimable
+        const infoBefore = await reserveStrategy.requestInfo(reqId);
+        expect(infoBefore.isExit).to.eq(false);
+        expect(infoBefore.amount).to.eq(stakeAmount);
+        expect(infoBefore.claimed).to.eq(false);
+
+        const vaultInfoBefore = await allocation.stakeInfo(reserveStrategy);
+        expect(vaultInfoBefore.totalStake).to.equal(stakeAmount);
+        expect(vaultInfoBefore.totalAllocation).to.equal(0);
+
+        // jump to readyAt and refund
+        await time.setNextBlockTimestamp(expectedReadyAt);
+
+        const refundTx = deposit.refundDeposit(reserveStrategy, reqId, owner);
+
+        await expect(refundTx)
+          .to.changeEtherBalances([reserveStrategy, owner], [-stakeAmount, stakeAmount]);
+
+        await expect(refundTx)
+          .to.emit(reserveStrategy, "AllocationRefunded")
+          .withArgs(reqId, owner, stakeAmount);
+
+        // request should be cleaned / marked claimed
+        const infoAfter = await reserveStrategy.requestInfo(reqId);
+        expect(infoAfter.claimed).to.eq(true);
+        expect(infoAfter.claimable).to.eq(false);
+
+        const vaultInfoAfter = await allocation.stakeInfo(reserveStrategy);
+        expect(vaultInfoAfter.totalStake).to.equal(0);
+        expect(vaultInfoAfter.totalAllocation).to.equal(0);
+
+        // cannot claim after refund
+        await expect(deposit.claimDeposit(reserveStrategy, reqId, owner))
+          .to.be.reverted;
+      });
+
+      it("refunds exit request (withdraw flow), restores vault shares", async function () {
+        const {
+          signers, hyperStaking, lumiaDiamond, reserveStrategy, reserveAssetPrice,
+        } = await loadFixture(deployHyperStaking);
+        const { deposit, allocation, lockbox } = hyperStaking;
+        const { realAssets } = lumiaDiamond;
+        const { owner, strategyManager } = signers;
+
+        const stakeAmount = parseEther("6");
+        await deposit.deposit(reserveStrategy, owner, stakeAmount, { value: stakeAmount });
+
+        const { vaultShares } = await shared.getDerivedTokens(
+          lumiaDiamond.hyperlaneHandler,
+          await reserveStrategy.getAddress(),
+        );
+
+        // user should have vault shares after deposit (price 2:1 means shares == stakeAmount)
+        const sharesBeforeRedeem = await vaultShares.balanceOf(owner);
+        expect(sharesBeforeRedeem).to.eq(stakeAmount);
+
+        // make exit async
+        const exitDelay = 2 * 24 * 3600; // 2 days
+        await reserveStrategy.connect(strategyManager).setReadyAtOffsets(0, exitDelay);
+
+        const totalAllocation = stakeAmount * parseEther("1") / reserveAssetPrice;
+
+        const vaultInfoBefore = await allocation.stakeInfo(reserveStrategy);
+        expect(vaultInfoBefore.totalStake).to.equal(stakeAmount);
+        expect(vaultInfoBefore.totalAllocation).to.equal(totalAllocation);
+
+        // redeem part -> creates pending claim
+        const redeemStake = parseEther("2");
+        const expectedAllocation = redeemStake * parseEther("1") / reserveAssetPrice;
+
+        await realAssets.redeem(reserveStrategy, owner, owner, redeemStake);
+
+        const claimId = await shared.getLastClaimId(deposit, reserveStrategy, owner);
+
+        // sanity: pending claim exists
+        const claim = (await deposit.pendingWithdrawClaims([claimId]))[0];
+        expect(claim.strategy).to.eq(await reserveStrategy.getAddress());
+        expect(claim.expectedAmount).to.eq(redeemStake);
+
+        // after redeem, shares should be burned
+        const sharesAfterRedeem = await vaultShares.balanceOf(owner);
+        expect(sharesAfterRedeem).to.eq(sharesBeforeRedeem - redeemStake);
+
+        const vaultInfoMid = await allocation.stakeInfo(reserveStrategy);
+        expect(vaultInfoMid.totalStake).to.equal(stakeAmount);
+        expect(vaultInfoMid.totalAllocation).to.equal(totalAllocation - expectedAllocation);
+
+        // refund instead of claimWithdraws
+        const ts0 = await shared.getCurrentBlockTimestamp();
+        const expectedReadyAt = ts0 + exitDelay;
+        expect(claim.unlockTime).to.closeTo(expectedReadyAt, 3);
+
+        await time.setNextBlockTimestamp(claim.unlockTime);
+
+        const refundTx = deposit.refundWithdraw(claimId, owner);
+
+        // refund should return allocation back (revenueAsset) and then restore shares
+        await expect(refundTx).to.changeTokenBalance(vaultShares, owner, redeemStake);
+
+        await expect(refundTx)
+          .to.emit(reserveStrategy, "ExitRefunded")
+          .withArgs(claimId, lockbox, expectedAllocation);
+
+        // pending claim should be cleared
+        const deleted = (await deposit.pendingWithdrawClaims([claimId]))[0];
+        expect(deleted.strategy).to.eq(ZeroAddress);
+        expect(deleted.unlockTime).to.eq(0);
+        expect(deleted.eligible).to.eq(ZeroAddress);
+        expect(deleted.expectedAmount).to.eq(0);
+
+        // stakeInfo should be restored
+        const vaultInfoAfter = await allocation.stakeInfo(reserveStrategy);
+        expect(vaultInfoAfter.totalStake).to.equal(stakeAmount);
+        expect(vaultInfoAfter.totalAllocation).to.equal(totalAllocation);
+
+        // cannot claim after refund
+        await expect(deposit.claimWithdraws([claimId], owner))
+          .to.be.reverted;
+      });
+
+      it("reverts refund if request is not ready yet (too early)", async function () {
+        const { hyperStaking, lumiaDiamond, reserveStrategy, signers } = await loadFixture(deployHyperStaking);
+        const { deposit } = hyperStaking;
+        const { realAssets } = lumiaDiamond;
+        const { owner, strategyManager } = signers;
+
+        await deposit.deposit(reserveStrategy, owner, parseEther("3"), { value: parseEther("3") });
+
+        const exitDelay = 24 * 3600; // 1 day
+        await reserveStrategy.connect(strategyManager).setReadyAtOffsets(0, exitDelay);
+
+        await realAssets.redeem(reserveStrategy, owner, owner, parseEther("1"));
+
+        const claimId = await shared.getLastClaimId(deposit, reserveStrategy, owner);
+
+        // too early refund should revert (same gating as claim)
+        await expect(deposit.refundWithdraw(claimId, owner))
           .to.be.reverted;
       });
     });
@@ -378,7 +545,7 @@ describe("Strategy", function () {
       // events
       const reqId = 1;
       const readyAt = 0;
-      const depositTx = await deposit.stakeDeposit(dineroStrategy, owner, stakeAmount, { value: stakeAmount });
+      const depositTx = await deposit.deposit(dineroStrategy, owner, stakeAmount, { value: stakeAmount });
 
       await expect(depositTx)
         .to.emit(dineroStrategy, "AllocationRequested")
@@ -408,7 +575,7 @@ describe("Strategy", function () {
 
     it("unstaking from to dinero strategy should exchange apxEth back to eth", async function () {
       const {
-        signers, hyperStaking, lumiaDiamond, autoPxEth, dineroStrategy, defaultWithdrawDelay,
+        signers, hyperStaking, lumiaDiamond, autoPxEth, dineroStrategy,
       } = await loadFixture(deployHyperStaking);
       const { deposit, hyperFactory, lockbox, allocation } = hyperStaking;
       const { realAssets } = lumiaDiamond;
@@ -423,7 +590,7 @@ describe("Strategy", function () {
 
       await time.setNextBlockTimestamp(blockTime);
       const expectedAllocation = await dineroStrategy.previewAllocation(stakeAmount);
-      await deposit.stakeDeposit(dineroStrategy, owner, stakeAmount, { value: stakeAmount });
+      await deposit.deposit(dineroStrategy, owner, stakeAmount, { value: stakeAmount });
 
       await time.setNextBlockTimestamp(blockTime);
 
@@ -433,7 +600,6 @@ describe("Strategy", function () {
       const reqId = 2; // 1 - deposit
       const readyAt = 0;
       await time.setNextBlockTimestamp(blockTime);
-      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
       await expect(realAssets.redeem(dineroStrategy, owner, owner, stakeAmount))
         .to.emit(dineroStrategy, "ExitRequested")
         .withArgs(reqId, owner, expectedAllocation, readyAt);
@@ -443,8 +609,7 @@ describe("Strategy", function () {
       expect((await hyperFactory.vaultInfo(dineroStrategy)).revenueAsset).to.equal(autoPxEth);
 
       const lastClaimId = await shared.getLastClaimId(deposit, dineroStrategy, owner);
-      await time.setNextBlockTimestamp(expectedUnlock);
-      await deposit.claimWithdraws([lastClaimId], owner);
+      await shared.claimAtDeadline(deposit, lastClaimId, owner);
 
       expect((await allocation.stakeInfo(dineroStrategy)).totalStake).to.equal(0);
       expect((await allocation.stakeInfo(dineroStrategy)).totalAllocation).to.equal(0);

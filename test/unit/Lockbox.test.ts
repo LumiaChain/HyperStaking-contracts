@@ -14,7 +14,7 @@ import { deployHyperStakingBase } from "../setup";
 
 async function deployHyperStaking() {
   const {
-    signers, testERC20, testWstETH, hyperStaking, lumiaDiamond, mailbox, invariantChecker, defaultWithdrawDelay,
+    signers, testERC20, testWstETH, hyperStaking, lumiaDiamond, mailbox, invariantChecker,
   } = await loadFixture(deployHyperStakingBase);
 
   // -------------------- Apply Strategies --------------------
@@ -54,7 +54,6 @@ async function deployHyperStaking() {
   /* eslint-disable object-property-newline */
   return {
     hyperStaking, lumiaDiamond, // HyperStaking deployment
-    defaultWithdrawDelay,
     testERC20, testWstETH, reserveStrategy, principalToken, vaultShares, // test contracts
     reserveAssetPrice, mailboxFee, // values
     mailbox, // modules
@@ -186,11 +185,11 @@ describe("Lockbox", function () {
 
       const stakeAmount = parseEther("2");
 
-      await expect(deposit.stakeDeposit(
+      await expect(deposit.deposit(
         reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
       ))
-        .to.emit(deposit, "StakeDeposit")
-        .withArgs(owner, alice, reserveStrategy, stakeAmount);
+        .to.emit(deposit, "Deposit")
+        .withArgs(owner, alice, reserveStrategy, stakeAmount, /* reqId */ 1);
 
       const sharesAfter = await vaultShares.balanceOf(alice);
       expect(sharesAfter).to.be.gt(sharesBefore);
@@ -255,15 +254,15 @@ describe("Lockbox", function () {
 
       const stakeAmount = parseEther("3");
 
-      // quoteStakeDeposit should return the same fee as mailboxFee
-      const quote = await deposit.quoteStakeDeposit(
+      // quoteDeposit should return the same fee as mailboxFee
+      const quote = await deposit.quoteDepositDispatch(
         reserveStrategy,
         alice,
         stakeAmount,
       );
       expect(quote).to.equal(mailboxFee);
 
-      await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee });
+      await deposit.deposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee });
 
       const sharesAfter = await vaultShares.balanceOf(alice);
       expect(sharesAfter).to.be.gt(0);
@@ -302,7 +301,7 @@ describe("Lockbox", function () {
 
     it("redeem the should triger leave on the origin chain - non-zero mailbox fee", async function () {
       const {
-        signers, hyperStaking, lumiaDiamond, reserveStrategy, principalToken, vaultShares, testERC20, reserveAssetPrice, mailboxFee, defaultWithdrawDelay,
+        signers, hyperStaking, lumiaDiamond, reserveStrategy, principalToken, vaultShares, testERC20, reserveAssetPrice, mailboxFee,
       } = await loadFixture(deployHyperStaking);
       const { deposit, lockbox } = hyperStaking;
       const { realAssets, stakeRedeemRoute } = lumiaDiamond;
@@ -311,7 +310,7 @@ describe("Lockbox", function () {
       const stakeAmount = parseEther("3");
       const expectedAllocation = stakeAmount * parseEther("1") / reserveAssetPrice;
 
-      await expect(deposit.stakeDeposit(
+      await expect(deposit.deposit(
         reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
       ))
         .to.emit(realAssets, "RwaMint")
@@ -353,9 +352,8 @@ describe("Lockbox", function () {
       );
 
       const lastClaimId = await shared.getLastClaimId(deposit, reserveStrategy, alice);
-      const expectedUnlock = await shared.getCurrentBlockTimestamp() + defaultWithdrawDelay;
-      await time.setNextBlockTimestamp(expectedUnlock);
-      await expect(deposit.connect(alice).claimWithdraws([lastClaimId], alice))
+      const claimTx = shared.claimAtDeadline(deposit, lastClaimId, alice);
+      await expect(claimTx)
         .to.changeEtherBalances(
           [alice, reserveStrategy],
           [stakeAmount, -stakeAmount],
@@ -374,7 +372,7 @@ describe("Lockbox", function () {
 
       const stakeAmount = parseEther("2");
 
-      await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, {
+      await deposit.deposit(reserveStrategy, alice, stakeAmount, {
         value: stakeAmount + mailboxFee,
       });
 
@@ -430,7 +428,7 @@ describe("Lockbox", function () {
       const stakeAmount = parseEther("2");
       const expectedAllocation = stakeAmount * parseEther("1") / reserveAssetPrice;
 
-      await deposit.stakeDeposit(reserveStrategy, alice, stakeAmount, {
+      await deposit.deposit(reserveStrategy, alice, stakeAmount, {
         value: stakeAmount + mailboxFee,
       });
 
@@ -502,7 +500,9 @@ describe("Lockbox", function () {
 
       // --- stake so Alice has shares ---
       const stakeAmount = parseEther("10");
-      await deposit.connect(alice).stakeDeposit(reserveStrategy, alice, stakeAmount, { value: stakeAmount });
+      await deposit.connect(alice).deposit(
+        reserveStrategy, alice, stakeAmount, { value: stakeAmount },
+      );
 
       const userShares = await vaultShares.balanceOf(alice);
       expect(userShares).to.eq(stakeAmount);
@@ -572,7 +572,7 @@ describe("Lockbox", function () {
 
       const stakeAmount = parseEther("5");
 
-      const qStake = await deposit.quoteStakeDeposit(
+      const qStake = await deposit.quoteDepositDispatch(
         erc20Strategy,
         alice,
         stakeAmount,
@@ -584,7 +584,7 @@ describe("Lockbox", function () {
 
       // underpay -> revert
       await expect(
-        deposit.connect(alice).stakeDeposit(
+        deposit.connect(alice).deposit(
           erc20Strategy,
           alice,
           stakeAmount,
@@ -593,7 +593,7 @@ describe("Lockbox", function () {
       ).to.be.revertedWithCustomError(shared.errors, "DispatchUnderpaid");
 
       // correct pay
-      await deposit.connect(alice).stakeDeposit(
+      await deposit.connect(alice).deposit(
         erc20Strategy,
         alice,
         stakeAmount,
@@ -699,9 +699,9 @@ describe("Lockbox", function () {
 
             const stakeAmount = parseUnits(stakeEth.toString(), 17);
 
-            // ================= STAKE: quoteStakeDeposit =================
+            // ================= STAKE =================
 
-            const quotedStakeFee = await deposit.quoteStakeDeposit(
+            const quotedStakeFee = await deposit.quoteDepositDispatch(
               reserveStrategy,
               alice,
               stakeAmount,
@@ -712,7 +712,7 @@ describe("Lockbox", function () {
 
             // underpaying value must revert
             await expect(
-              deposit.connect(alice).stakeDeposit(
+              deposit.connect(alice).deposit(
                 reserveStrategy,
                 alice,
                 stakeAmount,
@@ -724,7 +724,7 @@ describe("Lockbox", function () {
             );
 
             // correct value should pass
-            const stakeTx1 = await deposit.connect(alice).stakeDeposit(
+            const stakeTx1 = await deposit.connect(alice).deposit(
               reserveStrategy,
               alice,
               stakeAmount,
@@ -732,15 +732,15 @@ describe("Lockbox", function () {
             );
 
             await expect(stakeTx1)
-              .to.emit(deposit, "StakeDeposit")
-              .withArgs(alice, alice, reserveStrategy, stakeAmount);
+              .to.emit(deposit, "Deposit")
+              .withArgs(alice, alice, reserveStrategy, stakeAmount, /* reqId */ 1);
 
             const sharesAfterFirst = await vaultShares.balanceOf(alice);
             expect(sharesAfterFirst).to.equal(stakeAmount);
 
             // second stake: cannot reuse ETH already held on diamond
             await expect(
-              deposit.connect(alice).stakeDeposit(
+              deposit.connect(alice).deposit(
                 reserveStrategy,
                 alice,
                 stakeAmount,
@@ -751,20 +751,20 @@ describe("Lockbox", function () {
               "InsufficientValue",
             );
 
-            const stakeTx2 = await deposit.connect(alice).stakeDeposit(
+            const stakeTx2 = await deposit.connect(alice).deposit(
               reserveStrategy,
               alice,
               stakeAmount,
               { value: stakeAmount + mailboxFeeWei },
             );
             await expect(stakeTx2)
-              .to.emit(deposit, "StakeDeposit")
-              .withArgs(alice, alice, reserveStrategy, stakeAmount);
+              .to.emit(deposit, "Deposit")
+              .withArgs(alice, alice, reserveStrategy, stakeAmount, /* reqId */ 2);
 
             const totalShares = await vaultShares.balanceOf(alice);
             expect(totalShares).to.equal(stakeAmount * 2n);
 
-            // ================= REPORT: quoteReport =================
+            // ================= REPORT =================
 
             // make some gains: bump price (2x) and pretend reserve grew
             await reserveStrategy.connect(strategyManager).setAssetPrice(reserveAssetPrice * 2n);
@@ -797,7 +797,7 @@ describe("Lockbox", function () {
 
             await expect(reportTx).to.emit(allocation, "StakeCompounded");
 
-            // ================= REDEEM: quoteRedeem =================
+            // ================= REDEEM =================
 
             const userShares = await vaultShares.balanceOf(alice);
             expect(userShares).to.be.gt(0n);
@@ -969,7 +969,7 @@ describe("Lockbox", function () {
       const { alice, bob } = signers;
 
       const stakeAmount = parseEther("1");
-      await deposit.connect(alice).stakeDeposit(
+      await deposit.connect(alice).deposit(
         reserveStrategy,
         alice.address,
         stakeAmount,
@@ -1026,7 +1026,7 @@ describe("Lockbox", function () {
       const testWrapper = await loadFixture(deployTestWrapper);
 
       const stakeAmount = parseEther("1.2");
-      await deposit.stakeDeposit(
+      await deposit.deposit(
         reserveStrategy, alice, stakeAmount, { value: stakeAmount + mailboxFee },
       );
 

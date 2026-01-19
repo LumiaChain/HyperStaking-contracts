@@ -37,6 +37,7 @@ struct VaultInfo {
 struct StakeInfo {
     uint256 totalStake;
     uint256 totalAllocation;
+    uint256 pendingDepositStake; // stake moved but allocation not claimed yet
     uint256 pendingExitStake; // stake already queued to leave, not yet claimed
     uint256 pendingExitFee; // fee queued to leave
 }
@@ -46,7 +47,7 @@ struct StakeInfo {
 // @param eligible Address allowed to execute the claim
 // @param expectedAmount The amount of stake expected to be withdrawn in this claim
 // @param feeWithdraw Whether protocol-fee claims (true) or user claims (false)
-struct Claim {
+struct WithdrawClaim {
     address strategy;
     uint64 unlockTime;
     address eligible;
@@ -99,17 +100,14 @@ struct HyperStakingStorage {
     /// @notice Info about staking into the vaults
     mapping (address strategy => StakeInfo) stakeInfo;
 
-    /// @notice Global delay, in seconds, that must elapse after a claim is queued
-    uint64 defaultWithdrawDelay;
-
     /// @notice Next request ID for strategy operations
     uint256 nextRequestId;
 
     /// @notice Pending claims by requestId
-    mapping(uint256 requestId => Claim) pendingClaims;
+    mapping(uint256 requestId => WithdrawClaim) pendingWithdrawClaims;
 
-    /// @notice Pending withdrawal IDs by strategy and user
-    mapping(address strategy => mapping(address user => uint256[])) groupedClaimIds;
+    /// @notice Pending request IDs by strategy and user, includes both deposit and withdraw requests
+    mapping(address strategy => mapping(address user => uint256[])) groupedRequestIds;
 
     /// @notice General lockbox data
     LockboxData lockboxData;

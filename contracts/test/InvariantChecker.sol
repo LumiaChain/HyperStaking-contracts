@@ -89,11 +89,15 @@ contract InvariantChecker {
             // cannot have more pending exits than total stake
             StakeInfo memory si = allocationFacet.stakeInfo(strategy);
             require(
-                si.totalStake >= (si.pendingExitStake + failedRedeemsStake),
-                "inv: totalStake < pendingExitStake"
+                si.totalStake >= (
+                    si.pendingExitStake + si.pendingDepositStake + failedRedeemsStake
+                ),
+                "inv: totalStake < pendingStake"
             );
 
-            uint256 available = si.totalStake - (si.pendingExitStake + failedRedeemsStake);
+            uint256 available = si.totalStake - (
+                si.pendingExitStake + si.pendingDepositStake + failedRedeemsStake
+            );
 
             // principal token supply mirrors available stake on Lumia
             IERC20 principal = lumiaPrincipalOf[strategy];
@@ -103,10 +107,11 @@ contract InvariantChecker {
 
             // dbg print mismatch in tests
             if (supply != available) {
-                console.log("dbg: stake available :", available);
-                console.log("dbg: pending stake   :", si.pendingExitStake);
-                console.log("dbg: f-redeem stake  :", failedRedeemsStake);
-                console.log("dbg: principal supply:", supply);
+                console.log("dbg: stake available       :", available);
+                console.log("dbg: pending stake         :", si.pendingExitStake);
+                console.log("dbg: pending deposit stake :", si.pendingDepositStake);
+                console.log("dbg: failed redeem stake   :", failedRedeemsStake);
+                console.log("dbg: principal supply      :", supply);
             }
 
             // supply must match available stake

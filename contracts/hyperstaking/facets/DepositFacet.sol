@@ -17,11 +17,13 @@ import {
 
 import {StakeInfoData} from "../../shared/libraries/HyperlaneMailboxMessages.sol";
 import {
-    HyperStakingStorage, LibHyperStaking, VaultInfo, Claim
+    HyperStakingStorage, LibHyperStaking, VaultInfo, WithdrawClaim
 } from "../libraries/LibHyperStaking.sol";
 
 import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
 import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplayGuard.sol";
+
+import {NotAuthorized, ValueNotAccepted} from "../../shared/Errors.sol";
 
 /**
  * @title DepositFacet
@@ -32,30 +34,27 @@ import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplay
 contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, PausableUpgradeable {
     using CurrencyHandler for Currency;
 
-    uint64 public constant MAX_WITHDRAW_DELAY = 30 days;
-
     //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
 
     /* ========== Deposit ========== */
 
-    /// @notice Stake deposit function
     /// @inheritdoc IDeposit
-    function stakeDeposit(
+    function deposit(
         address strategy,
         address to,
         uint256 stake
-    ) external payable nonReentrant whenNotPaused {
+    ) external payable nonReentrant whenNotPaused returns (uint256 requestId, uint256 allocation) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         VaultInfo storage vault = v.vaultInfo[strategy];
 
-        _checkDeposit(vault, strategy, stake);
+        _basicStakeChecks(vault, strategy, stake);
 
         v.stakeInfo[strategy].totalStake += stake;
 
-        // quote message fee for forwarding message across chains
-        uint256 dispatchFee = quoteStakeDeposit(strategy, to, stake);
+        // quote the message fee for the cross-chain dispatch (to = dispatched user)
+        uint256 dispatchFee = quoteDepositDispatch(strategy, to, stake);
         if (vault.stakeCurrency.isNativeCoin()) {
             vault.stakeCurrency.transferFrom(
                 msg.sender,
@@ -73,16 +72,117 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             );
         }
 
-        // true - bridge info to Lumia chain to mint coresponding rwa asset
-        IAllocation(address(this)).join(strategy, to, stake);
+        // bridge stake info to Lumia chain which mints coresponding rwa asset
+        (requestId, allocation) = IAllocation(address(this)).joinSync(strategy, to, stake);
 
-        emit StakeDeposit(msg.sender, to, strategy, stake);
+        emit Deposit(msg.sender, to, strategy, stake, requestId);
     }
 
-    /* ========== Stake Withdraw ========== */
+    /// @inheritdoc IDeposit
+    function requestDeposit(
+        address strategy,
+        address to,
+        uint256 stake
+    ) external payable nonReentrant whenNotPaused returns (uint256 requestId) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+
+        _basicStakeChecks(vault, strategy, stake);
+
+        v.stakeInfo[strategy].totalStake += stake;
+        v.stakeInfo[strategy].pendingDepositStake += stake;
+
+        vault.stakeCurrency.transferFrom(
+            msg.sender,
+            address(this),
+            stake // dispatch fee currency not needed here, stake is bridged during claim
+        );
+
+        // true - bridge info to Lumia chain to mint coresponding rwa asset
+        requestId = IAllocation(address(this)).joinAsync(strategy, to, stake);
+
+        // store request id, for convenience
+        v.groupedRequestIds[strategy][to].push(requestId);
+
+        emit DepositRequest(msg.sender, to, strategy, stake, requestId);
+    }
 
     /// @inheritdoc IDeposit
-    function claimWithdraws(uint256[] calldata requestIds, address to) external {
+    function refundDeposit(
+        address strategy,
+        uint256 requestId,
+        address to
+    ) external nonReentrant whenNotPaused returns (uint256 stake) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+
+        _basicChecks(vault, strategy);
+
+        // get async request info from strategy
+        (
+            address user,
+            bool isExit,
+            ,
+            ,
+            ,
+        ) = IStrategy(strategy).requestInfo(requestId);
+        require(!isExit, BadRequestType());
+
+        // only the request user can trigger a refund
+        require(msg.sender == user, NotAuthorized(msg.sender));
+
+        // strategy should validate requestId and return refunded stake amount
+        stake = IAllocation(address(this)).refundJoinAsync(strategy, requestId, user, to);
+
+        v.stakeInfo[strategy].totalStake -= stake;
+        v.stakeInfo[strategy].pendingDepositStake -= stake;
+
+        emit DepositRefund(msg.sender, to, strategy, stake, requestId);
+    }
+
+    /// @inheritdoc IDeposit
+    function claimDeposit(
+        address strategy,
+        uint256 requestId
+    ) external payable nonReentrant whenNotPaused returns (uint256 allocation) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+        VaultInfo storage vault = v.vaultInfo[strategy];
+
+        _basicChecks(vault, strategy);
+
+        // get async request info from strategy
+        (
+            address user,
+            bool isExit,
+            uint256 stake,
+            ,
+            ,
+            bool claimable
+        ) = IStrategy(strategy).requestInfo(requestId);
+        require(!isExit, BadRequestType());
+        require(claimable, RequestNotClaimable());
+
+        v.stakeInfo[strategy].pendingDepositStake -= stake;
+
+        // forward to allocation facet and execute the actual claim
+        allocation = IAllocation(address(this)).claimJoinAsync(
+            strategy,
+            requestId,
+            user,
+            stake
+        );
+
+        uint256 dispatchFee = quoteDepositDispatch(strategy, user, stake);
+        ILockbox(address(this)).collectDispatchFee{value: msg.value}(msg.sender, dispatchFee);
+
+        emit Deposit(msg.sender, user, strategy, stake, requestId);
+        return allocation;
+    }
+
+    /* ========== Withdraw ========== */
+
+    /// @inheritdoc IDeposit
+    function claimWithdraws(uint256[] calldata requestIds, address to) external nonReentrant {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
         uint256 n = requestIds.length;
 
@@ -91,7 +191,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
 
         for (uint256 i = 0; i < n; ++i) {
             uint256 id = requestIds[i];
-            Claim memory c = v.pendingClaims[id];
+            WithdrawClaim memory c = v.pendingWithdrawClaims[id];
 
             uint256 stake = c.expectedAmount;
 
@@ -102,7 +202,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
                 ClaimTooEarly(uint64(block.timestamp), c.unlockTime)
             );
 
-            delete v.pendingClaims[id]; // remove realized claim
+            delete v.pendingWithdrawClaims[id]; // remove realized claim
 
             // claim one by one, as strategy may not support array claims
             uint256[] memory ids = new uint256[](1);
@@ -115,7 +215,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             if (c.feeWithdraw) {
                 v.stakeInfo[c.strategy].pendingExitFee -= stake;
 
-                emit FeeWithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount);
+                emit FeeWithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount, id);
                 continue;
             }
 
@@ -123,7 +223,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
             v.stakeInfo[c.strategy].totalStake -= stake;
             v.stakeInfo[c.strategy].pendingExitStake -= stake;
 
-            emit WithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount);
+            emit WithdrawClaimed(c.strategy, msg.sender, to, stake, exitAmount, id);
         }
     }
 
@@ -142,11 +242,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         uint256 requestId = LibHyperStaking.newRequestId();
         uint64 readyAt = IStrategy(strategy).requestExit(requestId, allocation, user);
 
-        if (readyAt == 0 && !feeWithdraw) {
-            readyAt = uint64(block.timestamp) + v.defaultWithdrawDelay;
-        }
-
-        v.pendingClaims[requestId] = Claim({
+        v.pendingWithdrawClaims[requestId] = WithdrawClaim({
             strategy: strategy,
             unlockTime: readyAt,
             eligible: user,
@@ -155,23 +251,64 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         });
 
         // data used for filtering
-        v.groupedClaimIds[strategy][user].push(requestId);
+        v.groupedRequestIds[strategy][user].push(requestId);
 
-        emit WithdrawQueued(strategy, user, requestId, readyAt, stake, feeWithdraw);
+        emit WithdrawQueued(strategy, user, readyAt, stake, feeWithdraw, requestId);
+    }
+
+    /// @inheritdoc IDeposit
+    function refundWithdraw(
+        uint256 requestId,
+        address to
+    ) external payable nonReentrant returns (uint256 allocationRefunded) {
+        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
+
+        require(to != address(0), ClaimToZeroAddress());
+
+        WithdrawClaim memory c = v.pendingWithdrawClaims[requestId];
+
+        uint256 stake = c.expectedAmount;
+
+        require(c.strategy != address(0), ClaimNotFound(requestId));
+        require(msg.sender == c.eligible, NotEligible(requestId, c.eligible, msg.sender));
+
+        delete v.pendingWithdrawClaims[requestId]; // remove realized claim
+
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = requestId; // refund one
+
+        // strategy refund exit, strategy should return allocation (shares) back to diamond
+        allocationRefunded = IStrategy(c.strategy).refundExit(ids, address(this));
+
+        // restore allocation back into totalAllocation
+        // totalStake does not change here, because stake never left the strategy
+        v.stakeInfo[c.strategy].totalAllocation += allocationRefunded;
+
+        // exit was queued under either fee or user stake
+        if (c.feeWithdraw) {
+            // Fee leave refunds stay local (no bridge)
+            require(msg.value == 0, ValueNotAccepted());
+
+            v.stakeInfo[c.strategy].pendingExitFee -= stake;
+
+            // Allocation is restored back to the diamond
+
+            emit FeeLeaveRefunded(c.strategy, msg.sender, stake, allocationRefunded, requestId);
+        } else {
+            v.stakeInfo[c.strategy].pendingExitStake -= stake;
+
+            // quote the message fee for the cross-chain dispatch (to = dispatched user)
+            uint256 dispatchFee = quoteDepositDispatch(c.strategy, to, stake);
+            ILockbox(address(this)).collectDispatchFee{value: msg.value}(msg.sender, dispatchFee);
+
+            // bridge stake back to Lumia
+            ILockbox(address(this)).bridgeStakeInfo(c.strategy, to, stake);
+
+            emit WithdrawRefunded(c.strategy, msg.sender, to, stake, allocationRefunded, requestId);
+        }
     }
 
     /* ========== ACL ========== */
-
-    /// @inheritdoc IDeposit
-    function setWithdrawDelay(uint64 newDelay) external onlyStakingManager {
-        require(newDelay < MAX_WITHDRAW_DELAY, WithdrawDelayTooHigh(newDelay));
-
-        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        uint64 previousDelay = v.defaultWithdrawDelay;
-        v.defaultWithdrawDelay = newDelay;
-
-        emit WithdrawDelaySet(msg.sender, previousDelay, newDelay);
-    }
 
     /// @inheritdoc IDeposit
     function pauseDeposit() external onlyStakingManager whenNotPaused {
@@ -186,23 +323,17 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     // ========= View ========= //
 
     /// @inheritdoc IDeposit
-    function withdrawDelay() external view returns (uint64) {
-        HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        return v.defaultWithdrawDelay;
-    }
-
-    /// @inheritdoc IDeposit
-    function pendingWithdraws(
+    function pendingWithdrawClaims(
         uint256[] calldata requestIds
-    ) external view returns (Claim[] memory claims) {
+    ) external view returns (WithdrawClaim[] memory claims) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
 
         uint256 n = requestIds.length;
-        claims = new Claim[](n);
+        claims = new WithdrawClaim[](n);
 
         for (uint256 i = 0; i < n; ++i) {
             uint256 requestId = requestIds[i];
-            claims[i] = v.pendingClaims[requestId];
+            claims[i] = v.pendingWithdrawClaims[requestId];
         }
     }
 
@@ -213,7 +344,7 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
         uint256 limit
     ) external view returns (uint256[] memory ids) {
         HyperStakingStorage storage v = LibHyperStaking.diamondStorage();
-        uint256[] storage arr = v.groupedClaimIds[strategy][user];
+        uint256[] storage arr = v.groupedRequestIds[strategy][user];
 
         uint256 len = arr.length;
         if (limit > len) {
@@ -227,15 +358,15 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     }
 
     /// @inheritdoc IDeposit
-    function quoteStakeDeposit(
+    function quoteDepositDispatch(
         address strategy,
-        address to,
+        address user,
         uint256 stake
     ) public view returns (uint256) {
         StakeInfoData memory dispatchData = StakeInfoData({
             nonce: LibHyperlaneReplayGuard.previewNonce(),
             strategy: strategy,
-            user: to, // actually to is used as the dispatch user in lockbox
+            user: user,
             stake: stake
         });
         return IStakeInfoRoute(address(this)).quoteDispatchStakeInfo(dispatchData);
@@ -245,14 +376,22 @@ contract DepositFacet is IDeposit, HyperStakingAcl, ReentrancyGuardUpgradeable, 
     //                                     Internal Functions                                     //
     //============================================================================================//
 
-    /// @notice helper check function for deposits
-    function _checkDeposit(
+    /// @notice helper check function
+    function _basicChecks(
+        VaultInfo storage vault,
+        address strategy
+    ) internal view {
+        require(vault.strategy != address(0), VaultDoesNotExist(strategy));
+        require(vault.enabled, StrategyDisabled(strategy));
+    }
+
+    /// @notice helper check _basicChecks + stake
+    function _basicStakeChecks(
         VaultInfo storage vault,
         address strategy,
         uint256 stake
     ) internal view {
         require(stake > 0, ZeroStake());
-        require(vault.strategy != address(0), VaultDoesNotExist(strategy));
-        require(vault.enabled, StrategyDisabled(strategy));
+        _basicChecks(vault, strategy);
     }
 }

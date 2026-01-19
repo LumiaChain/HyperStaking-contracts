@@ -35,6 +35,10 @@ contract MockReserveStrategy is AbstractStrategy {
     /// Price of the asset
     uint256 public assetReserve;
 
+    // configurable async deadline, 0 for sync
+    uint64 public allocationReadyAtOffset;
+    uint64 public exitReadyAtOffset;
+
     /// Storage gap for upgradeability. Must remain the last state variable
     uint256[50] private __gap;
 
@@ -77,6 +81,8 @@ contract MockReserveStrategy is AbstractStrategy {
         uint256 value
     );
 
+    event ReadyAtOffsetsSet(uint64 allocationOffset, uint64 exitOffset);
+
     //============================================================================================//
     //                                        Initialize                                          //
     //============================================================================================//
@@ -109,7 +115,7 @@ contract MockReserveStrategy is AbstractStrategy {
         // fetch stake
         stake.transferFrom(DIAMOND, address(this), stakeAmount_);
 
-        readyAt = 0; // claimable immediately
+        readyAt = previewAllocationReadyAt(stakeAmount_);
         _storeAllocationRequest(
             requestId_,
             user_,
@@ -151,7 +157,7 @@ contract MockReserveStrategy is AbstractStrategy {
             MissingCollateral()
         );
 
-        readyAt = 0; // claimable immediately
+        readyAt = previewExitReadyAt(assetAllocation_);
         _storeExitRequest(
             requestId_,
             user_,
@@ -188,11 +194,67 @@ contract MockReserveStrategy is AbstractStrategy {
         emit Received(msg.sender, msg.value);
     }
 
+    /// @inheritdoc IStrategy
+    function refundAllocation(
+        uint256[] calldata ids_,
+        address receiver_
+    ) external override onlyLumiaDiamond returns (uint256 refundedStake) {
+        require(ids_.length == 1, DontSupportArrays());
+        uint256 id = ids_[0];
+
+        // in this mock we allow refund only when the request is claimable
+        StrategyRequest memory r = _loadClaimable(id, StrategyKind.Allocation);
+        _markClaimed(id);
+
+        refundedStake = r.amount;
+
+        // return original stake back to receiver
+        stake.transfer(receiver_, refundedStake);
+
+        emit AllocationRefunded(id, receiver_, refundedStake);
+    }
+
+    /// @inheritdoc IStrategy
+    function refundExit(
+        uint256[] calldata ids_,
+        address receiver_
+    ) external override onlyLumiaDiamond returns (uint256 refundedAllocation) {
+        require(ids_.length == 1, DontSupportArrays());
+        uint256 id = ids_[0];
+
+        // exit request stores allocation amount (revenueAsset units)
+        StrategyRequest memory r = _loadClaimable(id, StrategyKind.Exit);
+        _markClaimed(id);
+
+        refundedAllocation = r.amount;
+
+        // return original allocation back to receiver
+        IERC20(revenueAsset).safeTransfer(receiver_, refundedAllocation);
+
+        emit ExitRefunded(id, receiver_, refundedAllocation);
+    }
+
     // ========= View ========= //
 
     /// @inheritdoc IStrategy
     function stakeCurrency() external view returns(Currency memory) {
         return stake;
+    }
+
+    /// @inheritdoc IStrategy
+    function previewAllocationReadyAt(uint256) public view returns (uint64 readyAt) {
+        if (allocationReadyAtOffset == 0) {
+            return 0; // sync flow
+        }
+        readyAt = uint64(block.timestamp) + allocationReadyAtOffset;
+    }
+
+    /// @inheritdoc IStrategy
+    function previewExitReadyAt(uint256) public view returns (uint64 readyAt) {
+        if (exitReadyAtOffset == 0) {
+            return 0; // sync flow
+        }
+        readyAt = uint64(block.timestamp) + exitReadyAtOffset;
     }
 
     // ========= Admin ========= //
@@ -223,6 +285,16 @@ contract MockReserveStrategy is AbstractStrategy {
         assetPrice = assetPrice_;
 
         emit AssetPriceSet(msg.sender, revenueAsset, assetPrice_);
+    }
+
+    function setReadyAtOffsets(
+        uint64 allocationOffset_,
+        uint64 exitOffset_
+    ) external onlyStrategyManager {
+        allocationReadyAtOffset = allocationOffset_;
+        exitReadyAtOffset = exitOffset_;
+
+        emit ReadyAtOffsetsSet(allocationOffset_, exitOffset_);
     }
 
     //============================================================================================//

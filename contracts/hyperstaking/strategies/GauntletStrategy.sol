@@ -3,26 +3,35 @@ pragma solidity =0.8.27;
 
 // solhint-disable var-name-mixedcase
 
-import {StrategyKind, StrategyRequest, IStrategy} from "../interfaces/IStrategy.sol";
+import {StrategyKind, IStrategy} from "../interfaces/IStrategy.sol";
 import {IHyperFactory} from "../interfaces/IHyperFactory.sol";
 import {AbstractStrategy} from "./AbstractStrategy.sol";
-import {LumiaGtUSDa} from "./tokens/LumiaGtUSDa.sol";
 
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {Provisioner} from "../../external/aera/Provisioner.sol";
-import {RequestType} from "../../external/aera/Types.sol";
+import {Request, RequestType} from "../../external/aera/Types.sol";
 import {IPriceAndFeeCalculator} from "../../external/aera/interfaces/IPriceAndFeeCalculator.sol";
 
 import {Currency} from "../../shared/libraries/CurrencyHandler.sol";
 
-// @notice Config for Aera Provisioner deposit/redeem calls
+/// @notice Config for Aera Provisioner deposit/redeem calls
 struct AeraConfig {
     uint256 solverTip;
     uint256 deadlineOffset;
     uint256 maxPriceAge;
     uint256 slippageBps;
     bool isFixedPrice;
+}
+
+/// @notice Contains the Aera request params needed for hashing, claim and refund
+struct AeraRequestData {
+    RequestType requestType;
+    uint256 tokens;
+    uint256 units;
+    uint256 solverTip;
+    uint256 deadline;
+    uint256 maxPriceAge;
 }
 
 /**
@@ -34,9 +43,6 @@ contract GauntletStrategy is AbstractStrategy {
 
     /// @notice Current Aera config
     AeraConfig public aeraConfig;
-
-    /// @notice Address of the Gauntlet derived token, used as allocation for the HyperStaking
-    LumiaGtUSDa public LUMIA_GTUSDA;
 
     /// @notice Stake token accepted by the strategy (input currency)
     IERC20 public STAKE_TOKEN;
@@ -50,13 +56,13 @@ contract GauntletStrategy is AbstractStrategy {
     /// @notice The vault contract taken from aera provisioner (actual gtUSDa)
     address public AERA_VAULT;
 
-    /// @notice Recorded allocation amounts per requestId
-    /// @dev Stores the minimum allocation units that were guaranteed when the request was created
-    mapping(uint256 requestId => uint256 minUnitsOut) public recordedAllocation;
+    /// @notice Aera deposit request params indexed by core request id
+    /// @dev Stores the minimum requested allocation units
+    mapping(uint256 requestId => AeraRequestData) public aeraDeposit;
 
-    /// @notice Recorded stake-out per exit request
-    /// @dev Equal to the minTokensOut passed to Aera for this request preserved as a record
-    mapping(uint256 requestId => uint256 minStakeOut) public recordedExit;
+    /// @notice Aera redeem request params indexed by core request id
+    /// @dev Stores the minTokensOut passed to Aera for this request
+    mapping(uint256 requestId => AeraRequestData) public aeraRedeem;
 
     /// @notice Keeps the last used deadline for Aera requests
     uint256 private _lastAeraDeadline;
@@ -104,9 +110,6 @@ contract GauntletStrategy is AbstractStrategy {
 
         require(stakeToken_ != address(0), ZeroAddress());
 
-        // deploys new ERC20 token owned by this strategy
-        LUMIA_GTUSDA = new LumiaGtUSDa();
-
         STAKE_TOKEN = IERC20(stakeToken_);
         AERA_PROVISIONER = Provisioner(aeraProvisioner_);
         AERA_PRICE = AERA_PROVISIONER.PRICE_FEE_CALCULATOR();
@@ -141,7 +144,9 @@ contract GauntletStrategy is AbstractStrategy {
         require(user_ != address(0), ZeroUser());
         require(amount_ != 0, ZeroAmount());
 
-        readyAt = 0; // claimable immediately, thanks to wrapper token
+        uint256 deadline = _aeraDeadline();
+        readyAt = uint64(deadline); // use aera deadline for readyAt
+
         _storeAllocationRequest(
             requestId_,
             user_,
@@ -152,37 +157,40 @@ contract GauntletStrategy is AbstractStrategy {
         // compute minimum allocation aera guarantees
         uint256 minUnitsOut = _previewAllocationRaw(amount_);
 
-        // save minUnitsOut for later claim settlement
-        recordedAllocation[requestId_] = minUnitsOut;
-
         // transfer stake amount to this contract and approve Aera
         STAKE_TOKEN.safeTransferFrom(msg.sender, address(this), amount_);
         STAKE_TOKEN.safeIncreaseAllowance(address(AERA_PROVISIONER), amount_);
 
-        uint256 deadline = _aeraDeadline();
+        RequestType requestType = aeraConfig.isFixedPrice ?
+            RequestType.DEPOSIT_FIXED_PRICE :
+            RequestType.DEPOSIT_AUTO_PRICE;
+
+        AeraRequestData memory requestData = AeraRequestData({
+            requestType: requestType,
+            tokens: amount_,
+            units: minUnitsOut,
+            solverTip: aeraConfig.solverTip,
+            deadline: deadline,
+            maxPriceAge: aeraConfig.maxPriceAge
+        });
+        aeraDeposit[requestId_] = requestData; // save request data for later claim & refund
 
         // actual deposit request
         AERA_PROVISIONER.requestDeposit(
             STAKE_TOKEN,
-            amount_,
-            minUnitsOut,
-            aeraConfig.solverTip,
-            deadline,
-            aeraConfig.maxPriceAge,
+            requestData.tokens,
+            requestData.units,
+            requestData.solverTip,
+            requestData.deadline,
+            requestData.maxPriceAge,
             aeraConfig.isFixedPrice
         );
 
         // emit additional aera-related info about the request
-        RequestType requestType = aeraConfig.isFixedPrice ? RequestType.DEPOSIT_FIXED_PRICE : RequestType.DEPOSIT_AUTO_PRICE;
         emit AeraAsyncDepositHash(_getRequestHashParams(
             STAKE_TOKEN,
             address(this),
-            requestType,
-            amount_,
-            minUnitsOut,
-            aeraConfig.solverTip,
-            deadline,
-            aeraConfig.maxPriceAge
+            requestData
         ));
 
         emit AllocationRequested(requestId_, user_, amount_, readyAt);
@@ -211,7 +219,7 @@ contract GauntletStrategy is AbstractStrategy {
         require(shares_ != 0, ZeroAmount());
 
         uint256 deadline = _aeraDeadline();
-        readyAt = uint64(deadline);
+        readyAt = uint64(deadline); // use aera deadline for readyAt
 
         _storeExitRequest(
             requestId_,
@@ -223,37 +231,40 @@ contract GauntletStrategy is AbstractStrategy {
         // compute conservative minimum stake the strategy guarantees
         uint256 minTokensOut = _previewExitRaw(shares_);
 
-        // guaranteed minimum units for this request
-        recordedExit[requestId_] = minTokensOut;
-
         // transfer stake amount to this contract and approve Aera
-        IERC20(address(LUMIA_GTUSDA)).safeTransferFrom(msg.sender, address(this), shares_);
-
+        IERC20(AERA_VAULT).safeTransferFrom(msg.sender, address(this), shares_);
         IERC20(AERA_VAULT).safeIncreaseAllowance(address(AERA_PROVISIONER), shares_);
+
+        RequestType requestType = aeraConfig.isFixedPrice ?
+             RequestType.REDEEM_FIXED_PRICE :
+             RequestType.REDEEM_AUTO_PRICE;
+
+        AeraRequestData memory requestData = AeraRequestData({
+            requestType: requestType,
+            tokens: minTokensOut,
+            units: shares_,
+            solverTip: aeraConfig.solverTip,
+            deadline: deadline,
+            maxPriceAge: aeraConfig.maxPriceAge
+        });
+        aeraRedeem[requestId_] = requestData; // save request data for later claim & refund
 
         // actual deposit request
         AERA_PROVISIONER.requestRedeem(
             STAKE_TOKEN,
-            shares_,
-            minTokensOut,
-            aeraConfig.solverTip,
-            deadline,
-            aeraConfig.maxPriceAge,
+            requestData.units,
+            requestData.tokens,
+            requestData.solverTip,
+            requestData.deadline,
+            requestData.maxPriceAge,
             aeraConfig.isFixedPrice
         );
 
         // emit additional aera-related info about the request
-        RequestType requestType = aeraConfig.isFixedPrice ? RequestType.REDEEM_FIXED_PRICE : RequestType.REDEEM_AUTO_PRICE;
-
         emit AeraAsyncRedeemHash(_getRequestHashParams(
             STAKE_TOKEN,
             address(this),
-            requestType,
-            minTokensOut,
-            shares_,
-            aeraConfig.solverTip,
-            deadline,
-            aeraConfig.maxPriceAge
+            requestData
         ));
 
         emit ExitRequested(requestId_, user_, shares_, readyAt);
@@ -269,6 +280,32 @@ contract GauntletStrategy is AbstractStrategy {
         uint256 n = ids_.length;
         for (uint256 i; i < n; ++i) {
             exitAmount += _claimOneExit(ids_[i], receiver_);
+        }
+    }
+
+    /// @inheritdoc IStrategy
+    function refundAllocation(
+        uint256[] calldata ids_,
+        address receiver_
+    ) external override onlyLumiaDiamond returns (uint256 refundedStake) {
+        require(receiver_ != address(0), ZeroReceiver());
+
+        uint256 n = ids_.length;
+        for (uint256 i; i < n; ++i) {
+            refundedStake += _refundOneAllocation(ids_[i], receiver_);
+        }
+    }
+
+    /// @inheritdoc IStrategy
+    function refundExit(
+        uint256[] calldata ids_,
+        address receiver_
+    ) external override onlyLumiaDiamond returns (uint256 refundedAllocation) {
+        require(receiver_ != address(0), ZeroReceiver());
+
+        uint256 n = ids_.length;
+        for (uint256 i; i < n; ++i) {
+            refundedAllocation += _refundOneExit(ids_[i], receiver_);
         }
     }
 
@@ -312,7 +349,23 @@ contract GauntletStrategy is AbstractStrategy {
 
     /// @inheritdoc IStrategy
     function revenueAsset() public view virtual returns(address) {
-        return address(LUMIA_GTUSDA);
+        return AERA_VAULT;
+    }
+
+    /// @inheritdoc IStrategy
+    function previewAllocationReadyAt(uint256) public view returns (uint64 readyAt) {
+        // uses deadlineOffset, but not adjust for hash collision
+        // may differ from _aeraDeadline
+        uint256 deadline = block.timestamp + aeraConfig.deadlineOffset;
+        readyAt = uint64(deadline);
+    }
+
+    /// @inheritdoc IStrategy
+    function previewExitReadyAt(uint256) public view returns (uint64 readyAt) {
+        // uses deadlineOffset, but not adjust for hash collision
+        // may differ from _aeraDeadline
+        uint256 deadline = block.timestamp + aeraConfig.deadlineOffset;
+        readyAt = uint64(deadline);
     }
 
     //============================================================================================//
@@ -328,14 +381,15 @@ contract GauntletStrategy is AbstractStrategy {
         _loadClaimable(id_, StrategyKind.Allocation);
 
         // guaranteed units for this request
-        allocation = recordedAllocation[id_];
+        allocation = aeraDeposit[id_].units;
         require(allocation != 0, PendingAllocationMissing());
 
-        // mark request as claimed
+        // mark request as claimed, and clear storage
         _markClaimed(id_);
+        delete aeraDeposit[id_];
 
-        // mint derivative allocation tokens
-        LUMIA_GTUSDA.mint(receiver_, allocation);
+        require(IERC20(AERA_VAULT).balanceOf(address(this)) >= allocation, MissingLiquidity());
+        IERC20(AERA_VAULT).safeTransfer(receiver_, allocation);
 
         emit AllocationClaimed(id_, receiver_, allocation);
     }
@@ -346,23 +400,90 @@ contract GauntletStrategy is AbstractStrategy {
         address receiver_
     ) internal returns (uint256 exitAmount) {
         // check if already claimed, wrong kind, or not ready
-        StrategyRequest memory r = _loadClaimable(id_, StrategyKind.Exit);
+        _loadClaimable(id_, StrategyKind.Exit);
 
-        // guaranteed units for this request
-        exitAmount = recordedExit[id_];
+        // guaranteed tokens for this request
+        exitAmount = aeraRedeem[id_].tokens;
         require(exitAmount != 0, PendingExitMissing());
 
-        // burn wrapper shares - prevent double spend
-        LUMIA_GTUSDA.burn(r.amount);
-
-        // mark request as claimed and clear pending record
+        // mark request as claimed and clear redeem record
         _markClaimed(id_);
+        delete aeraRedeem[id_];
 
         // transfer stake to receiver; revert if contract lacks liquidity
         require(STAKE_TOKEN.balanceOf(address(this)) >= exitAmount, MissingLiquidity());
         STAKE_TOKEN.safeTransfer(receiver_, exitAmount);
 
         emit ExitClaimed(id_, receiver_, exitAmount);
+    }
+
+    /// @notice refund one allocation request
+    function _refundOneAllocation(
+        uint256 id_,
+        address receiver_
+    ) internal returns (uint256 stakeRefunded) {
+        _loadActive(id_, StrategyKind.Allocation);
+
+        AeraRequestData memory requestData = aeraDeposit[id_];
+        require(requestData.units != 0, PendingAllocationMissing());
+
+        // refund the aera request (token param is stake token, request.user is this strategy)
+        AERA_PROVISIONER.refundRequest(
+            STAKE_TOKEN,
+            Request({
+                requestType: requestData.requestType,
+                user: address(this),
+                units: requestData.units,
+                tokens: requestData.tokens,
+                solverTip: requestData.solverTip,
+                deadline: requestData.deadline,
+                maxPriceAge: requestData.maxPriceAge
+            })
+        );
+
+        // mark handled and clear records
+        _markClaimed(id_);
+        delete aeraDeposit[id_];
+
+        // provisioner returns stake tokens to this contract, forward to receiver
+        stakeRefunded = requestData.tokens;
+        STAKE_TOKEN.safeTransfer(receiver_, stakeRefunded);
+
+        emit AllocationRefunded(id_, receiver_, stakeRefunded);
+    }
+
+    /// @notice refund one exit request
+    function _refundOneExit(
+        uint256 id_,
+        address receiver_
+    ) internal returns (uint256 allocationRefunded) {
+        _loadActive(id_, StrategyKind.Exit);
+
+        AeraRequestData memory requestData = aeraRedeem[id_];
+        require(requestData.tokens != 0, PendingExitMissing());
+
+        AERA_PROVISIONER.refundRequest(
+            STAKE_TOKEN,
+            Request({
+                requestType: requestData.requestType,
+                user: address(this),
+                units: requestData.units,
+                tokens: requestData.tokens,
+                solverTip: requestData.solverTip,
+                deadline: requestData.deadline,
+                maxPriceAge: requestData.maxPriceAge
+            })
+        );
+
+        // mark handled and clear records
+        _markClaimed(id_);
+        delete aeraRedeem[id_];
+
+        // provisioner returns allocation shares to this contract, forward to receiver
+        allocationRefunded = requestData.units;
+        IERC20(AERA_VAULT).safeTransfer(receiver_, allocationRefunded);
+
+        emit ExitRefunded(id_, receiver_, allocationRefunded);
     }
 
     // ========= View ========= //
@@ -409,13 +530,19 @@ contract GauntletStrategy is AbstractStrategy {
     function _getRequestHashParams(
         IERC20 token,
         address user,
-        RequestType requestType,
-        uint256 tokens,
-        uint256 units,
-        uint256 solverTip,
-        uint256 deadline,
-        uint256 maxPriceAge
+        AeraRequestData memory requestData
     ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(token, user, requestType, tokens, units, solverTip, deadline, maxPriceAge));
+        return keccak256(
+            abi.encodePacked(
+                token,
+                user,
+                requestData.requestType,
+                requestData.tokens,
+                requestData.units,
+                requestData.solverTip,
+                requestData.deadline,
+                requestData.maxPriceAge
+            )
+        );
     }
 }

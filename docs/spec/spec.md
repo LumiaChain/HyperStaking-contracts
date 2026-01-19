@@ -349,10 +349,12 @@ By combining Curve’s efficient pool mechanics with Superform’s yield‑boost
 
 ### Gauntlet gtUSDa (Aera Protocol Integration)
 
-The **Gauntlet Strategy** integrates with the [**Aera Protocol**](https://aera.finance/) to generate yield through the **gtUSDa** asset — a yield-bearing stablecoin designed to maintain capital efficiency while earning returns from multiple liquidity sources.
+The **Gauntlet Strategy** integrates with the [**Aera Protocol**](https://aera.finance/) to generate yield through the **gtUSDa**, a yield-bearing stablecoin designed to maintain capital efficiency while earning returns from multiple liquidity sources.
 
-When users stake USDC, the strategy allocates the deposit to Aera’s `MultiDepositorVault`, which mints **gtUSDa** tokens representing the user’s proportional share of the underlying yield-bearing assets.
-Internally, a wrapped version of this token, **LumiaGtUSDa**, is used within the HyperStaking system to ensure consistent accounting. The **Aera Protocol** manages yield generation and collateral composition for gtUSDa through governed vault strategies, maintaining stable value and steady returns.
+When users stake **USDC**, the strategy submits an **asynchronous deposit request** to the Aera Provisioner. The request is executed by Aera according to its pricing, slippage, and deadline rules, and results in **gtUSDa units** being minted to the strategy. These units represent the user’s proportional share of the underlying yield-bearing assets and are accounted for by the HyperStaking core once the request is settled.
 
-On exit, the strategy unwraps **LumiaGtUSDa** and redeems **gtUSDa** back into USDC through Aera’s vault. Any pending redemptions are handled asynchronously through the standard `requestExit` and `claimExit` flows.
+All deposits follow Aera’s native async workflow, including explicit deadlines, solver settlement, and refunds.
 
+On exit, the strategy submits an **asynchronous redeem request** to Aera, specifying a conservative `minTokensOut` based on current pricing and configured slippage. After the redeem request is solved, users can finalize the withdrawal through the standard `claimWithdraw` flow, receiving **USDC**.
+
+The Gauntlet Strategy operates fully in async mode and mirrors Aera’s execution semantics, providing transparent yield generation while preserving HyperStaking’s lifecycle and accounting guarantees.

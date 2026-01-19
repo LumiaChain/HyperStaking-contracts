@@ -1,6 +1,18 @@
 import { expect } from "chai";
+import { time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { ignition, ethers, network } from "hardhat";
-import { Contract, Interface, ZeroAddress, ZeroBytes32, parseEther, parseUnits, Addressable, TransactionResponse, Log } from "ethers";
+import {
+  Contract,
+  Signer,
+  Interface,
+  ZeroAddress,
+  ZeroBytes32,
+  parseEther,
+  parseUnits,
+  Addressable,
+  TransactionResponse,
+  Log,
+} from "ethers";
 import SuperformMockModule from "../ignition/modules/test/SuperformMock";
 import CurveMockModule from "../ignition/modules/test/CurveMock";
 
@@ -12,9 +24,17 @@ import { CurrencyStruct } from "../typechain-types/contracts/hyperstaking/interf
 import { IERC20 } from "../typechain-types";
 
 import { SingleDirectSingleVaultStateReqStruct } from "../typechain-types/contracts/external/superform/core/BaseRouter";
+import { WithdrawClaimStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IDeposit";
 
 // full - because there are two differnet vesions of IERC20 used in the project
 export const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20";
+
+export async function toIERC20(contractAddr: Addressable): Promise<IERC20> {
+  return await ethers.getContractAt(
+    fullyQualifiedIERC20,
+    contractAddr,
+  ) as unknown as IERC20;
+}
 
 export const stableUnits = (val: string) => parseUnits(val, 6);
 
@@ -210,8 +230,8 @@ export async function solveGauntletDepositRequest(
   gauntletStrategy: Contract,
   provisioner: Contract,
   token: Addressable,
-  amount: bigint,
-  requestId: number,
+  tokens: bigint,
+  requestId: number | bigint,
 ) {
   const depositRequestHash = await getEventArg(
     tx,
@@ -220,12 +240,12 @@ export async function solveGauntletDepositRequest(
   );
   expect(depositRequestHash).to.not.equal(ZeroBytes32);
 
-  const units = await gauntletStrategy.recordedAllocation(requestId);
+  const minUnitsOut = (await gauntletStrategy.aeraDeposit(requestId)).units;
   await provisioner.testSolveDeposit(
     token,
     await gauntletStrategy.getAddress(),
-    amount,
-    units,
+    tokens,
+    minUnitsOut,
     depositRequestHash,
   );
 }
@@ -235,8 +255,8 @@ export async function solveGauntletRedeemRequest(
   gauntletStrategy: Contract,
   provisioner: Contract,
   token: Addressable,
-  amount: bigint,
-  requestId: number,
+  minTokensOut: bigint,
+  requestId: number | bigint,
 ) {
   const redeemRequestHash = await getEventArg(
     tx,
@@ -245,11 +265,11 @@ export async function solveGauntletRedeemRequest(
   );
   expect(redeemRequestHash).to.not.equal(ZeroBytes32);
 
-  const units = await gauntletStrategy.recordedExit(requestId);
+  const units = (await gauntletStrategy.aeraRedeem(requestId)).units;
   await provisioner.testSolveRedeem(
     token,
     await gauntletStrategy.getAddress(),
-    amount,
+    minTokensOut,
     units,
     redeemRequestHash,
   );
@@ -274,8 +294,12 @@ const errorsIface = new Interface([
 ]);
 export const errors = { interface: errorsIface };
 
-export async function getLastClaimId(deposit: Contract, reserveStrategy1: Addressable, owner: Addressable) {
-  const lastClaims = await deposit.lastClaims(reserveStrategy1, owner, 1);
+export async function getLastClaimId(
+  deposit: Contract,
+  strategy: Addressable,
+  owner: Addressable,
+): Promise<bigint> {
+  const lastClaims = await deposit.lastClaims(strategy, owner, 1);
   return lastClaims[0] as bigint; // return only the claimId
 }
 
@@ -319,4 +343,50 @@ export async function getEventArg(tx: TransactionResponse, eventName: string, co
     return parsedEvent.args[0];
   }
   return null;
+}
+
+// claims a pending withdraw at its `unlockTime` by fast-forwarding the next block timestamp if needed
+// returns an promise that mines the claim
+export async function claimAtDeadline(
+  deposit: Contract,
+  requestId: number | bigint,
+  from: Signer,
+  to?: Addressable,
+): Promise<TransactionResponse> {
+  const pendingClaim: WithdrawClaimStruct[] = await deposit.pendingWithdrawClaims([requestId]);
+  const deadline = Number(pendingClaim[0].unlockTime) + 1; // move past unlockTime
+
+  const now = await getCurrentBlockTimestamp();
+  if (now < Number(deadline)) {
+    await time.setNextBlockTimestamp(Number(deadline));
+  }
+
+  if (!to) {
+    to = from;
+  }
+
+  return deposit.connect(from).claimWithdraws([requestId], to);
+}
+
+// fast-forwards the next block timestamp to just after the `readyAt` time of a strategy request
+export async function fastForwardStrategyRequest(
+  strategy: Contract,
+  requestId: number | bigint,
+) {
+  const reqInfo = await strategy.requestInfo(requestId);
+  await time.setNextBlockTimestamp(
+    Number(reqInfo.readyAt) + 1, // move past readyAt
+  );
+}
+
+// fast-forwards the next block timestamp to the last user request unlock time
+export async function fastForwardUserLastRequest(
+  deposit: Contract,
+  strategy: Contract,
+  user: Addressable,
+): Promise<bigint> {
+  const requestId = await getLastClaimId(deposit, strategy, user);
+  await fastForwardStrategyRequest(strategy, requestId);
+
+  return requestId;
 }
