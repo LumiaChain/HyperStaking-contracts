@@ -83,8 +83,8 @@ contract SwapSuperStrategy is SuperformStrategy {
 
     /// @notice Configure EMA pricing protection for both swap directions
     /// @dev Uses default values; can be changed via ema pricing facet
-    function configureEmaPricing() external {
-        // direction A: curveInputToken -> superformInputToken (e.g., USDC -> USDT)
+    function configureEmaPricing() external onlyStrategyManager {
+        // direction A: curveInputToken -> superformInputToken (e.g., USDT -> USDC)
         curveIntegration.configureSwapStrategyEma(
             address(CURVE_INPUT_TOKEN),
             address(SUPERFORM_INPUT_TOKEN),
@@ -94,7 +94,7 @@ contract SwapSuperStrategy is SuperformStrategy {
             1000e6     // 1000 units volume threshold
         );
 
-        // direction B: superformInputToken -> curveInputToken (e.g., USDT -> USDC)
+        // direction B: superformInputToken -> curveInputToken (e.g., USDC -> USDT)
         curveIntegration.configureSwapStrategyEma(
             address(SUPERFORM_INPUT_TOKEN),
             address(CURVE_INPUT_TOKEN),
@@ -225,7 +225,7 @@ contract SwapSuperStrategy is SuperformStrategy {
     /// @dev Converts the incoming stake (CURVE_INPUT_TOKEN) amount to its Curve quote
     ///      (SUPERFORM_INPUT_TOKEN), then feeds that into the parent (Superform Strategy) preview
     function _previewAllocationRaw(uint256 stake_) internal view override returns (uint256 allocation) {
-        // Use quoteProtected to match actual execution path
+        // use ema-anchored quote to match actual execution path
         uint256 superformInput = curveIntegration.quoteExpected(
             address(CURVE_INPUT_TOKEN),     // tokenIn
             CURVE_POOL,
@@ -240,7 +240,7 @@ contract SwapSuperStrategy is SuperformStrategy {
     function _previewExitRaw(uint256 allocation_) internal view override returns (uint256 stake) {
         uint256 superformOutput = super._previewExitRaw(allocation_);
 
-        // Use quoteProtected to match actual execution path
+        // use ema-anchored quote to match actual execution path
         stake = curveIntegration.quoteExpected(
             address(SUPERFORM_INPUT_TOKEN), // tokenIn
             CURVE_POOL,

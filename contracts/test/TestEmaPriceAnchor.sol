@@ -31,22 +31,6 @@ contract TestEmaPriceAnchor {
         LibEmaPriceAnchor.setEnabled(tokenIn, tokenOut, enabled);
     }
 
-    function guardAndRecord(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 spotOut,
-        uint16 slippageBps
-    ) external returns (uint256 minOut) {
-        return LibEmaPriceAnchor.guardAndRecord(
-            tokenIn,
-            tokenOut,
-            amountIn,
-            spotOut,
-            slippageBps
-        );
-    }
-
     function guardedOut(
         address tokenIn,
         address tokenOut,

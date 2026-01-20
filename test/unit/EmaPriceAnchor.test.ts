@@ -29,7 +29,7 @@ describe("LibEmaPriceAnchor", function () {
         true, // enabled
         100, // 1% deviation
         2000, // 20% alpha
-        parseUnits("1000", 18),  // 1000 volume threshold
+        parseUnits("1000", 6),  // 1000 volume threshold
       );
 
       const anchor = await ema.getAnchor(usdc.target, usdt.target);
@@ -38,7 +38,7 @@ describe("LibEmaPriceAnchor", function () {
       expect(anchor.enabled).to.equal(true);
       expect(anchor.deviationBps).to.equal(100);
       expect(anchor.emaAlphaBps).to.equal(2000);
-      expect(anchor.volumeThreshold).to.equal(parseUnits("1000", 18));
+      expect(anchor.volumeThreshold).to.equal(parseUnits("1000", 6));
       expect(anchor.emaPrice).to.equal(0); // not initialized yet
     });
 
@@ -208,7 +208,7 @@ describe("LibEmaPriceAnchor", function () {
     it("should not update EMA for trades below threshold", async function () {
       const { ema, usdc, usdt } = await loadFixture(deployFixture);
 
-      const threshold = parseUnits("1000", 18);
+      const threshold = parseUnits("1000", 6);
       await ema.configure(usdc.target, usdt.target, true, 100, 2000, threshold);
 
       // initialize at 1:1
@@ -254,46 +254,7 @@ describe("LibEmaPriceAnchor", function () {
   });
 
   describe("Guard and Record", function () {
-    it("should guard and record in single call", async function () {
-      const { ema, usdc, usdt } = await loadFixture(deployFixture);
-      const threshold = parseUnits("100", 6);
-      await ema.configure(usdc.target, usdt.target, true, 100, 2000, threshold);
-      const amountIn = parseUnits("1000", 6);
-      const spotOut = parseUnits("1000", 6);
-
-      // check what guardAndRecord would return (staticCall)
-      const minOutStatic = await ema.guardAndRecord.staticCall(
-        usdc.target,
-        usdt.target,
-        amountIn,
-        spotOut,
-        50,
-      );
-
-      // check guardedOut separately
-      const guardedOutValue = await ema.guardedOut(
-        usdc.target,
-        usdt.target,
-        amountIn,
-        spotOut,
-        50,
-      );
-
-      // should match
-      expect(minOutStatic).to.equal(guardedOutValue);
-
-      // now actually execute guardAndRecord
-      await ema.guardAndRecord(usdc.target, usdt.target, amountIn, spotOut, 50);
-
-      // should be initialized now
-      expect(await ema.isInitialized(usdc.target, usdt.target)).to.equal(true);
-
-      // check that minOut has slippage applied
-      // bootstrap phase: spotOut with slippage: 1000 * 0.995 = 995
-      expect(guardedOutValue).to.equal(parseUnits("995", 6));
-    });
-
-    it("should work with separate guard and record calls", async function () {
+    it("separate guard and record calls", async function () {
       const { ema, usdc, usdt } = await loadFixture(deployFixture);
       const threshold = parseUnits("100", 6);
       await ema.configure(usdc.target, usdt.target, true, 100, 2000, threshold);

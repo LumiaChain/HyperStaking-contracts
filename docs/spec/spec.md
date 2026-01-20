@@ -242,7 +242,7 @@ The EMA system tracks actual execution prices over time, building a baseline anc
 
 * **Deviation Band**: Configurable tolerance ensures spot prices align with historical execution data
 * **Volume Threshold**: Only trades above a minimum size update the EMA, preventing pollution from dust trades
-* **Adaptive Anchoring**: The EMA updates based on actual execution prices using a weighted average e.g 20% weight for new trades, allowing the system to gradually adapt to genuine market shifts while resisting short-term manipulation
+* **Adaptive Anchoring**: The EMA updates based on actual execution prices using a weighted average, e.g. 20% weight for new trades, allowing the system to gradually adapt to genuine market shifts while resisting short-term manipulation
 * **Bidirectional Independence**: Each swap direction maintains its own EMA anchor, preventing asymmetric manipulation attempts
 
 The EMA anchor is maintained in 18-decimal precision across all token pairs for consistency. When a swap executes, the actual output amount is recorded and updates the anchor using the formula:

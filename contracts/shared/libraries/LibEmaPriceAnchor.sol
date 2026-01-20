@@ -35,7 +35,7 @@ struct Anchor {
     uint16 emaAlphaBps;   // weight for new observations (e.g., 200 = 2%)
     uint64 lastUpdated;
     uint256 emaPrice;     // tokenOut per tokenIn, always 18-dec fixed point
-    uint256 volumeThreshold;  // trades below this use reduced alpha (in amountIn decimals)
+    uint256 volumeThreshold;  // trades below this threshold dont affect ema
 }
 
 struct EmaPriceAnchorStorage {
@@ -182,30 +182,11 @@ library LibEmaPriceAnchor {
     //================================================================================================//
 
     /**
-     * @notice Guard spot quote and record execution in one call
-     * @dev Computes EMA-guarded minOut, then updates EMA with realized amounts
+     * @notice Guard spot quote using EMA bounds (view only, no recording)
      * @param amountIn Input amount
      * @param spotOut Spot quote output
      * @param slippageBps Additional slippage tolerance
-     * @return minOut Protected minimum output after EMA guard + slippage
-     */
-    function guardAndRecord(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 spotOut,
-        uint16 slippageBps
-    ) internal returns (uint256 minOut) {
-        // Get guarded output
-        minOut = _guard(tokenIn, tokenOut, amountIn, spotOut, slippageBps);
-
-        // Update EMA with realized execution price
-        _record(tokenIn, tokenOut, amountIn, minOut);
-    }
-
-    /**
-     * @notice Guard spot quote using EMA bounds (view only, no recording)
-     * @param slippageBps Additional slippage tolerance
+     * @return Protected minimum output after EMA guard + slippage
      */
     function guardedOut(
         address tokenIn,
@@ -339,7 +320,7 @@ library LibEmaPriceAnchor {
         uint16 deviationBps
     ) private pure returns (uint256) {
         uint256 delta = (center * deviationBps) / 10_000;
-        uint256 lo = center - delta;
+        uint256 lo = delta > center ? 0 : center - delta; // prevent undeflow
         uint256 hi = center + delta;
 
         // if spot within bounds, return center (EMA)

@@ -475,7 +475,7 @@ describe("CurveStrategy", function () {
         indexes,
       );
 
-      // register sqap strategy
+      // register swap strategy
       await testSwapIntegration.connect(strategyManager).updateSwapStrategies(
         strangeStrategy,
         true,
