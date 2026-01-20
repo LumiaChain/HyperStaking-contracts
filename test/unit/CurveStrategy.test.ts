@@ -825,7 +825,7 @@ describe("EMA Pricing Protection", function () {
 
   it("should protect against manipulated spot price", async function () {
     const {
-      signers, hyperStaking, swapSuperStrategy, testUSDT, curvePool, curveRouter,
+      signers, hyperStaking, swapSuperStrategy, testUSDT, curvePool,
     } = await loadFixture(deployHyperStaking);
     const { deposit } = hyperStaking;
     const { alice } = signers;
@@ -1010,9 +1010,9 @@ describe("EMA Pricing Protection", function () {
     expect(reverseAnchor.emaPrice).to.equal(parseEther("1"));
   });
 
-  it("conservative preview: users get better execution than preview", async function () {
+  it("execution applies actual market rate", async function () {
     const {
-      signers, hyperStaking, swapSuperStrategy, testUSDT, curvePool, vaultShares,
+      signers, hyperStaking, swapSuperStrategy, testUSDT, testUSDC, curvePool, erc4626Vault,
     } = await loadFixture(deployHyperStaking);
     const { deposit } = hyperStaking;
     const { alice } = signers;
@@ -1022,33 +1022,22 @@ describe("EMA Pricing Protection", function () {
     await testUSDT.connect(alice).approve(deposit, initAmount);
     await deposit.connect(alice).deposit(swapSuperStrategy, alice, initAmount);
 
-    // set favorable rate: 0.999
+    // set rate to 0.999 (0.1% worse, within 1% band)
     await curvePool.setRate(parseEther("0.999"));
 
     const amount = parseUnits("1000", 6);
-
-    // Preview uses quoteProtected which applies slippage
-    const preview = await swapSuperStrategy.previewAllocation(amount);
-
-    // Preview calculation:
-    // 1. quoteProtected: spot=1000, minDy=1000*0.995=995
-    // 2. Superform preview based on 995 USDC input
-
     await testUSDT.connect(alice).approve(deposit, amount);
 
-    // get actual vault shares received
-    const sharesBefore = await vaultShares.balanceOf(alice);
-    await deposit.connect(alice).deposit(swapSuperStrategy, alice, amount);
-    const sharesAfter = await vaultShares.balanceOf(alice);
-    const actualShares = sharesAfter - sharesBefore;
+    const depositTx = deposit.connect(alice).deposit(swapSuperStrategy, alice, amount);
 
-    // Actual execution:
-    // 1. Swap: 1000 USDT -> 999 USDC
-    // 2. Superform allocation based on 999 USDC
-    // 3. Vault shares minted based on 999 USDC deposit
-
-    // User gets more vault shares than preview
-    expect(actualShares).to.be.gt(preview);
+    // actual execution uses real rate: 1000 * 0.999 = 999 USDC
+    // this difference is acceptable slippage
+    const actualUsdc = parseUnits("999", 6);
+    await expect(depositTx).to.changeTokenBalance(
+      testUSDC,
+      erc4626Vault,
+      actualUsdc,
+    );
   });
 
   it("EMA protection makes frontrunning unprofitable", async function () {

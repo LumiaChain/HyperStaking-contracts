@@ -107,7 +107,7 @@ interface ICurveIntegration {
     ) external view returns (uint256 dy);
 
     /**
-     * @notice Get EMA-protected quote with slippage
+     * @notice Get EMA-protected quote with slippage for swaps
      * @param slippageBps Slippage tolerance in basis points
      * @return minDy Protected minimum output with slippage applied
      */
@@ -118,6 +118,15 @@ interface ICurveIntegration {
         uint256 amountIn,
         uint16 slippageBps
     ) external view returns (uint256 minDy);
+
+    /// @notice Get EMA-protected quote without slippage for previews
+    /// @return expectedOut Protected output using EMA bounds
+    function quoteExpected(
+        address tokenIn,
+        address pool,
+        address tokenOut,
+        uint256 amountIn
+    ) external view returns (uint256 expectedOut);
 
     /// @notice Curve Router address currently used for swaps
     function curveRouter() external view returns (address);

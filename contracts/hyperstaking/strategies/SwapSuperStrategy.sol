@@ -226,12 +226,11 @@ contract SwapSuperStrategy is SuperformStrategy {
     ///      (SUPERFORM_INPUT_TOKEN), then feeds that into the parent (Superform Strategy) preview
     function _previewAllocationRaw(uint256 stake_) internal view override returns (uint256 allocation) {
         // Use quoteProtected to match actual execution path
-        uint256 superformInput = curveIntegration.quoteProtected(
+        uint256 superformInput = curveIntegration.quoteExpected(
             address(CURVE_INPUT_TOKEN),     // tokenIn
             CURVE_POOL,
             address(SUPERFORM_INPUT_TOKEN), // tokenOut
-            stake_,
-            slippageBps
+            stake_
         );
         allocation = super._previewAllocationRaw(superformInput);
     }
@@ -242,12 +241,11 @@ contract SwapSuperStrategy is SuperformStrategy {
         uint256 superformOutput = super._previewExitRaw(allocation_);
 
         // Use quoteProtected to match actual execution path
-        stake = curveIntegration.quoteProtected(
+        stake = curveIntegration.quoteExpected(
             address(SUPERFORM_INPUT_TOKEN), // tokenIn
             CURVE_POOL,
             address(CURVE_INPUT_TOKEN),     // tokenOut
-            superformOutput,
-            slippageBps
+            superformOutput
         );
     }
 }

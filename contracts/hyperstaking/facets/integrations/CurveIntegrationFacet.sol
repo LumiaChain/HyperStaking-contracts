@@ -5,7 +5,6 @@ import {ICurveIntegration} from "../../interfaces/ICurveIntegration.sol";
 import {HyperStakingAcl} from "../../HyperStakingAcl.sol";
 
 import {LibCurve, CurveStorage, PoolConfig} from "../../libraries/LibCurve.sol";
-import {IEmaPricing} from "../../interfaces/IEmaPricing.sol";
 
 import {ICurveRouterMinimal} from "../../strategies/integrations/curve/interfaces/ICurveRouterMinimal.sol";
 
@@ -181,26 +180,41 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
         );
     }
 
-    /// @notice Get EMA-protected quote with slippage - use this for swaps
-    /// @param slippageBps Slippage tolerance in basis points
-    /// @return minDy Protected minimum output with slippage applied
+    /// @inheritdoc ICurveIntegration
     function quoteProtected(
         address tokenIn,
         address pool,
         address tokenOut,
         uint256 amountIn,
         uint16 slippageBps
-    ) external view returns (uint256 minDy) {
-        // Get raw spot quote from Curve
+    ) public view returns (uint256 minDy) {
+        // get raw spot quote from Curve
         uint256 spotQuote = this.quote(tokenIn, pool, tokenOut, amountIn);
 
-        // Apply EMA protection + slippage
+        // apply EMA protection + slippage
         minDy = LibEmaPriceAnchor.guardedOut(
             tokenIn,
             tokenOut,
             amountIn,
             spotQuote,
             slippageBps
+        );
+    }
+
+    /// @inheritdoc ICurveIntegration
+    function quoteExpected(
+        address tokenIn,
+        address pool,
+        address tokenOut,
+        uint256 amountIn
+    ) external view returns (uint256 expectedOut) {
+        // apply EMA protection without slippage
+        expectedOut = quoteProtected(
+            tokenIn,
+            pool,
+            tokenOut,
+            amountIn,
+            0  // no slippage for previews
         );
     }
 
