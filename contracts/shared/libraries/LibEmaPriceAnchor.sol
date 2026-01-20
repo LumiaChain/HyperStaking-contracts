@@ -109,6 +109,23 @@ library LibEmaPriceAnchor {
     //                                         Configuration                                          //
     //================================================================================================//
 
+     function _validateConfigParams(
+         address tokenIn,
+         address tokenOut,
+         uint16 deviationBps,
+         uint16 emaAlphaBps
+     ) private pure {
+         if (tokenIn == address(0) || tokenOut == address(0) || tokenIn == tokenOut) {
+             revert BadTokens(tokenIn, tokenOut);
+         }
+         if (deviationBps > 10_000) {
+             revert BadBps(deviationBps);
+         }
+         if (emaAlphaBps == 0 || emaAlphaBps > 10_000) {
+             revert BadAlpha(emaAlphaBps);
+         }
+     }
+
     function configure(
         address tokenIn,
         address tokenOut,
@@ -117,15 +134,7 @@ library LibEmaPriceAnchor {
         uint16 emaAlphaBps,
         uint256 volumeThreshold
     ) internal {
-        if (tokenIn == address(0) || tokenOut == address(0) || tokenIn == tokenOut) {
-            revert BadTokens(tokenIn, tokenOut);
-        }
-        if (deviationBps > 10_000) {
-            revert BadBps(deviationBps);
-        }
-        if (emaAlphaBps == 0 || emaAlphaBps > 10_000) {
-            revert BadAlpha(emaAlphaBps);
-        }
+        _validateConfigParams(tokenIn, tokenOut, deviationBps, emaAlphaBps);
 
         Anchor storage a = _storage().anchors[tokenIn][tokenOut];
 
