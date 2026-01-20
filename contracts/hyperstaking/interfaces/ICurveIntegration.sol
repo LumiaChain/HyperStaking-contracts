@@ -21,7 +21,6 @@ interface ICurveIntegration {
     //============================================================================================//
 
     error NotFromSwapStrategy(address);
-    error NotFromSwapStrategyOrManager(address);
 
     error SameCoinSwap();
     error CoinNotInPool();

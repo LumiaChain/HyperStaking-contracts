@@ -232,6 +232,31 @@ This separation of allocation/exit logic from strategy‑type flags ensures clar
 
 ---
 
+### 2.4 EMA-Based Price Manipulation Protection
+
+Strategies that involve token swaps, such as the **Curve Swap Strategy**, employ an Exponential Moving Average (EMA) price oracle to protect against price manipulation and frontrunning attacks. This protection mechanism operates independently for each token pair direction.
+
+The EMA system tracks actual execution prices over time, building a baseline anchor that represents recent market conditions. When a new swap is requested, the system validates that the current spot price falls within an acceptable deviation band from the EMA anchor. Swaps that deviate beyond this threshold are rejected, preventing attackers from exploiting temporary price manipulations.
+
+**Key Protection Features:**
+
+* **Deviation Band**: Configurable tolerance ensures spot prices align with historical execution data
+* **Volume Threshold**: Only trades above a minimum size update the EMA, preventing pollution from dust trades
+* **Adaptive Anchoring**: The EMA updates based on actual execution prices using a weighted average e.g 20% weight for new trades, allowing the system to gradually adapt to genuine market shifts while resisting short-term manipulation
+* **Bidirectional Independence**: Each swap direction maintains its own EMA anchor, preventing asymmetric manipulation attempts
+
+The EMA anchor is maintained in 18-decimal precision across all token pairs for consistency. When a swap executes, the actual output amount is recorded and updates the anchor using the formula:
+
+`newEMA = oldEMA * (1 - alpha) + executionPrice * alpha`
+
+This exponential weighting ensures recent trades have appropriate influence while maintaining historical stability.
+
+Price validation occurs before execution: if the spot quote deviates more than the configured threshold from the EMA anchor, the transaction reverts. This creates an economic barrier for attackers, as manipulating the pool price beyond the deviation band triggers rejection, while manipulations within the band yield insufficient profit to justify gas costs and slippage.
+
+<div style="page-break-after: always;"></div>
+
+---
+
 ## Reward Distribution via `report()` (Allocation Facet)
 
 The `report()` function, implemented in the **Allocation Facet**, serves as the central mechanism for yield aggregation and reward synchronization across chains.
@@ -257,6 +282,7 @@ This mechanism keeps strategies lightweight and asynchronous while ensuring cons
 
 <div style="page-break-after: always;"></div>
 
+---
 
 ## Strategy Integration Examples
 
@@ -344,6 +370,14 @@ On exit, the strategy reverses these steps:
 3. Returns USDT to the user, all through internal facet calls.
 
 By combining Curve’s efficient pool mechanics with Superform’s yield‑boosting wrapper, the Swap Super Strategy offers a seamless entry from USDT into interest‑bearing SuperUSDC and exit back to USDT, **fully integrated** within the diamond’s logic and asset management framework.
+
+**EMA Protection Configuration:**
+
+The strategy initializes bidirectional EMA protection (USDT -> USDC and USDC -> USDT) during deployment via `configureEmaPricing()`. Each direction uses independent anchors with configurable parameters (default: 1% deviation tolerance, 20% EMA weight, 1000 USDT minimum volume threshold). This prevents frontrunning attacks while allowing the strategy to adapt to genuine market conditions.
+
+**Preview vs Execution:**
+
+User-facing previews (`previewAllocation`, `previewExit`) use optimistic quotes that validate EMA bounds without applying slippage, showing expected outcomes under normal conditions. Actual execution (`requestAllocation`, `claimExit`) applies both EMA validation and slippage protection (default 0.5%), ensuring users receive fair prices while guarding against manipulation.
 
 ---
 
