@@ -5,12 +5,15 @@ import {ICurveIntegration} from "../../interfaces/ICurveIntegration.sol";
 import {HyperStakingAcl} from "../../HyperStakingAcl.sol";
 
 import {LibCurve, CurveStorage, PoolConfig} from "../../libraries/LibCurve.sol";
+import {IEmaPricing} from "../../interfaces/IEmaPricing.sol";
 
 import {ICurveRouterMinimal} from "../../strategies/integrations/curve/interfaces/ICurveRouterMinimal.sol";
+
 
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import {LibEmaPriceAnchor} from "../../../shared/libraries/LibEmaPriceAnchor.sol";
 import * as Errors from "../../../shared/Errors.sol";
 
 /**
@@ -74,6 +77,9 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
             blank,
             receiver
         );
+
+        // record execution for EMA
+        LibEmaPriceAnchor.recordExecution(tokenIn, tokenOut, amountIn, dy);
     }
 
     /* ========== Strategy Manager ========== */
@@ -131,6 +137,24 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
 
         emit PoolRegistered(pool, nCoins);
     }
+    /// @inheritdoc ICurveIntegration
+    function configureSwapStrategyEma(
+        address tokenIn,
+        address tokenOut,
+        bool enabled,
+        uint16 deviationBps,
+        uint16 emaAlphaBps,
+        uint256 volumeThreshold
+    ) external onlySwapStrategy {
+        LibEmaPriceAnchor.configure(
+            tokenIn,
+            tokenOut,
+            enabled,
+            deviationBps,
+            emaAlphaBps,
+            volumeThreshold
+        );
+    }
 
     // ========= View ========= //
 
@@ -154,6 +178,29 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
             params,
             amountIn,
             blank // no zap pools for one-hop
+        );
+    }
+
+    /// @notice Get EMA-protected quote with slippage - use this for swaps
+    /// @param slippageBps Slippage tolerance in basis points
+    /// @return minDy Protected minimum output with slippage applied
+    function quoteProtected(
+        address tokenIn,
+        address pool,
+        address tokenOut,
+        uint256 amountIn,
+        uint16 slippageBps
+    ) external view returns (uint256 minDy) {
+        // Get raw spot quote from Curve
+        uint256 spotQuote = this.quote(tokenIn, pool, tokenOut, amountIn);
+
+        // Apply EMA protection + slippage
+        minDy = LibEmaPriceAnchor.guardedOut(
+            tokenIn,
+            tokenOut,
+            amountIn,
+            spotQuote,
+            slippageBps
         );
     }
 

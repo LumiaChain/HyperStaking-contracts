@@ -8,7 +8,7 @@ const TestSwapIntegrationModule = buildModule("TestSwapIntegrationModule", (m) =
 
   const testSwapIntegration = m.contract("TestSwapIntegration");
 
-  const strategyManager = m.getAccount(0);
+  const strategyManager = m.getAccount(3);
 
   m.call(testSwapIntegration, "initialize", [
     superformFactory,
