@@ -320,12 +320,12 @@ library LibEmaPriceAnchor {
         uint16 deviationBps
     ) private pure returns (uint256) {
         uint256 delta = (center * deviationBps) / 10_000;
-        uint256 lo = delta > center ? 0 : center - delta; // prevent undeflow
+        uint256 lo = delta > center ? 0 : center - delta; // prevent underflow
         uint256 hi = center + delta;
 
-        // if spot within bounds, return center (EMA)
+        // if spot within bounds
         if (value >= lo && value <= hi) {
-            return center;
+            return value; // return spot, it's already validated as acceptable
         }
 
         // otherwise clamp spot to bounds

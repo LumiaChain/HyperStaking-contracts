@@ -236,7 +236,7 @@ This separation of allocation/exit logic from strategy‑type flags ensures clar
 
 Strategies that involve token swaps, such as the **Curve Swap Strategy**, employ an Exponential Moving Average (EMA) price oracle to protect against price manipulation and frontrunning attacks. This protection mechanism operates independently for each token pair direction.
 
-The EMA system tracks actual execution prices over time, building a baseline anchor that represents recent market conditions. When a new swap is requested, the system validates that the current spot price falls within an acceptable deviation band from the EMA anchor. Swaps that deviate beyond this threshold are rejected, preventing attackers from exploiting temporary price manipulations.
+The EMA system tracks actual execution prices over time, building a baseline anchor that represents recent market conditions. When a new swap is requested, the spot price is validated against the EMA anchor. Spot prices within the deviation band are accepted; prices outside are clamped to the acceptable range. The swap executes with this EMA-constrained minimum output requirement, causing manipulated swaps to revert when they cannot meet the bounds.
 
 **Key Protection Features:**
 

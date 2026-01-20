@@ -176,12 +176,12 @@ describe("LibEmaPriceAnchor", function () {
 
       const amountIn = parseUnits("100", 6);
 
-      // spot quote is 0.995 (0.5% worse) - within 1% band, should return emaOut
+      // spot quote is 0.995 (0.5% worse) - within 1% band
       const goodSpot = parseUnits("99.5", 6);
       const result = await ema.guardedOut(usdc.target, usdt.target, amountIn, goodSpot, 0);
 
-      // returns EMA-based output (100 USDC * 1.0 = 100 USDT)
-      expect(result).to.equal(parseUnits("100", 6));
+      // returns spot since it's within acceptable bounds (99.5)
+      expect(result).to.equal(parseUnits("99.5", 6));
     });
 
     it("should apply slippage on top of EMA protection", async function () {
