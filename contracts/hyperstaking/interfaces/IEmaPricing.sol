@@ -67,4 +67,10 @@ interface IEmaPricing {
         address tokenIn,
         address tokenOut
     ) external view returns (bool);
+
+    /// @notice Check if EMA is enabled
+    function isEmaEnabled(
+        address tokenIn,
+        address tokenOut
+    ) external view returns (bool);
 }

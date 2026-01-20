@@ -91,4 +91,12 @@ contract EmaPricingFacet is IEmaPricing, HyperStakingAcl {
     ) external view returns (bool) {
         return LibEmaPriceAnchor.isInitialized(tokenIn, tokenOut);
     }
+
+    /// @inheritdoc IEmaPricing
+    function isEmaEnabled(
+        address tokenIn,
+        address tokenOut
+    ) external view returns (bool) {
+        return LibEmaPriceAnchor.isEnabled(tokenIn, tokenOut);
+    }
 }

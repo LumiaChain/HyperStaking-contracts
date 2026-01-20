@@ -232,6 +232,10 @@ library LibEmaPriceAnchor {
         return _storage().anchors[tokenIn][tokenOut].emaPrice != 0;
     }
 
+    function isEnabled(address tokenIn, address tokenOut) internal view returns (bool) {
+        return _storage().anchors[tokenIn][tokenOut].enabled;
+    }
+
     //================================================================================================//
     //                                          Private                                               //
     //================================================================================================//
@@ -332,14 +336,11 @@ library LibEmaPriceAnchor {
         uint256 lo = delta > center ? 0 : center - delta; // prevent underflow
         uint256 hi = center + delta;
 
-        // if spot within bounds
-        if (value >= lo && value <= hi) {
-            return value; // return spot, it's already validated as acceptable
-        }
-
-        // otherwise clamp spot to bounds
+        // clamp to bounds
         if (value < lo) return lo;
         if (value > hi) return hi;
+
+        // within bounds - return spot, it's already validated as acceptable
         return value;
     }
 

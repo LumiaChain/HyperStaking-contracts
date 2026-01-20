@@ -77,8 +77,10 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
             receiver
         );
 
-        // record execution for EMA
-        LibEmaPriceAnchor.recordExecution(tokenIn, tokenOut, amountIn, dy);
+        // record execution if EMA is configured and enabled for this pair
+        if (LibEmaPriceAnchor.isEnabled(tokenIn, tokenOut)) {
+            LibEmaPriceAnchor.recordExecution(tokenIn, tokenOut, amountIn, dy);
+        }
     }
 
     /* ========== Strategy Manager ========== */
@@ -163,7 +165,7 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
         address pool,
         address tokenOut,
         uint256 amountIn
-    ) external view returns (uint256 dy) {
+    ) public view returns (uint256 dy) {
         ICurveRouterMinimal router = LibCurve.diamondStorage().curveRouter;
 
         (
@@ -189,7 +191,7 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
         uint16 slippageBps
     ) public view returns (uint256 minDy) {
         // get raw spot quote from Curve
-        uint256 spotQuote = this.quote(tokenIn, pool, tokenOut, amountIn);
+        uint256 spotQuote = quote(tokenIn, pool, tokenOut, amountIn);
 
         // apply EMA protection + slippage
         minDy = LibEmaPriceAnchor.guardedOut(

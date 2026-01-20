@@ -234,7 +234,6 @@ contract GauntletStrategy is AbstractStrategy {
         // transfer stake amount to this contract and approve Aera
         IERC20(AERA_VAULT).safeTransferFrom(msg.sender, address(this), shares_);
         IERC20(AERA_VAULT).safeIncreaseAllowance(address(AERA_PROVISIONER), shares_);
-
         RequestType requestType = aeraConfig.isFixedPrice ?
              RequestType.REDEEM_FIXED_PRICE :
              RequestType.REDEEM_AUTO_PRICE;

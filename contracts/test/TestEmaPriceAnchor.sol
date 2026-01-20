@@ -63,4 +63,8 @@ contract TestEmaPriceAnchor {
     function isInitialized(address tokenIn, address tokenOut) external view returns (bool) {
         return LibEmaPriceAnchor.isInitialized(tokenIn, tokenOut);
     }
+
+    function isEnabled(address tokenIn, address tokenOut) external view returns (bool) {
+        return LibEmaPriceAnchor.isEnabled(tokenIn, tokenOut);
+    }
 }
