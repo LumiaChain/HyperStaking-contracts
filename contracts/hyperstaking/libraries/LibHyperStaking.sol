@@ -4,6 +4,7 @@ pragma solidity =0.8.27;
 // solhint-disable var-name-mixedcase
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
+import {IPostDispatchHook} from "../../external/hyperlane/interfaces/hooks/IPostDispatchHook.sol";
 import {IInterchainSecurityModule} from "../../external/hyperlane/interfaces/IInterchainSecurityModule.sol";
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -64,6 +65,7 @@ struct HyperlaneMessage {
 struct LockboxData {
     IMailbox mailbox; /// Hyperlane Mailbox
     IInterchainSecurityModule ism; // May be zero if default ISM is used
+    IPostDispatchHook postDispatchHook; // May be zero, required by post dispatch relay process
     uint32 destination; /// ChainID - route destination
     address lumiaFactory; /// Destinaion contract which will be receiving messages
     HyperlaneMessage lastMessage; /// Information about last mailbox message received
@@ -113,7 +115,7 @@ struct HyperStakingStorage {
 
     /// @notice General lockbox data
     LockboxData lockboxData;
-    uint256[12] __gap_lockboxData;
+    uint256[11] __gap_lockboxData;
 
     /// @notice Pending lockbox mailbox update
     PendingMailbox pendingMailbox;

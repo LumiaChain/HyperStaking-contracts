@@ -2,6 +2,7 @@
 pragma solidity =0.8.27;
 
 import {IMessageRecipient} from "../../external/hyperlane//interfaces/IMessageRecipient.sol";
+import {IPostDispatchHook} from "../../external/hyperlane/interfaces/hooks/IPostDispatchHook.sol";
 import {
     IInterchainSecurityModule,
     ISpecifiesInterchainSecurityModule
@@ -34,6 +35,7 @@ interface ILockbox is IMessageRecipient, ISpecifiesInterchainSecurityModule {
     event LumiaFactoryChangeProposed(address newLumiaFactory, uint256 applyAfter);
 
     event HyperlaneISMUpdated(address ism);
+    event HyperlaneHookUpdated(address hook);
 
     event StakeRedeemFailed(address indexed strategy, address indexed user, uint256 amount, uint256 id);
     event StakeRedeemReexecuted(
@@ -124,12 +126,22 @@ interface ILockbox is IMessageRecipient, ISpecifiesInterchainSecurityModule {
      */
     function setInterchainSecurityModule(IInterchainSecurityModule ism) external;
 
+    /// @notice Sets the post-dispatch hook for outgoing cross-chain messages
+    function setHook(address hook) external;
+
     //============================================================================================//
     //                                           View                                             //
     //============================================================================================//
 
     /// @notice Returns Lockbox data, including mailbox address, destination, and recipient address
     function lockboxData() external view returns (LockboxData memory);
+
+    /**
+     * @notice Returns the post dispatch hook
+     * @dev Required by Hyperlane for relayer simulation and fee quoting
+     *      Returning address(0) will cause the mailbox to use its default hook
+     */
+    function hook() external view returns (IPostDispatchHook);
 
     /// @notice Returns the total number of failed redeem attempts (counter)
     function getFailedRedeemCount() external view returns (uint256);

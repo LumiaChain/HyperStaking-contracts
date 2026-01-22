@@ -14,6 +14,7 @@ import {ILumiaVaultShares} from "../interfaces/ILumiaVaultShares.sol";
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {IInterchainSecurityModule} from "../../external/hyperlane/interfaces/IInterchainSecurityModule.sol";
+import {IPostDispatchHook} from "../../external/hyperlane/interfaces/hooks/IPostDispatchHook.sol";
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
 import {
@@ -26,7 +27,7 @@ import {
 
 import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
 import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplayGuard.sol";
-import {BadOriginDestination, DispatchUnderpaid} from "../../shared/Errors.sol";
+import {BadOriginDestination, DispatchUnderpaid, InvalidHook} from "../../shared/Errors.sol";
 
 /**
  * @title HyperlaneHandlerFacet
@@ -172,6 +173,17 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
         emit HyperlaneISMUpdated(address(ism));
     }
 
+    /// @inheritdoc IHyperlaneHandler
+    function setHook(address postDispatchHook) external onlyLumiaFactoryManager {
+        require(
+            postDispatchHook == address(0) || postDispatchHook.code.length > 0,
+            InvalidHook(postDispatchHook)
+        );
+
+        LibInterchainFactory.diamondStorage().postDispatchHook = IPostDispatchHook(postDispatchHook);
+        emit HyperlaneHookUpdated(postDispatchHook);
+    }
+
     // ========= View ========= //
 
     /// @inheritdoc IHyperlaneHandler
@@ -183,6 +195,11 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
     /// @dev implements hyperlane ISpecifiesInterchainSecurityModule
     function interchainSecurityModule() external view returns (IInterchainSecurityModule) {
         return LibInterchainFactory.diamondStorage().ism;
+    }
+
+    /// @inheritdoc IHyperlaneHandler
+    function hook() external view returns (IPostDispatchHook) {
+        return LibInterchainFactory.diamondStorage().postDispatchHook;
     }
 
     /// @inheritdoc IHyperlaneHandler

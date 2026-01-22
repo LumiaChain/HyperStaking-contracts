@@ -7,6 +7,7 @@ import promptSync from "prompt-sync";
 import { ZeroAddress } from "ethers";
 
 import * as addresses from "../ignition/parameters.sepolia.json";
+// import * as addresses from "../ignition/parameters.lumia_beam.json";
 import { processTx } from "./libraries/utils";
 
 // This script upgrades a facet in a Diamond by deploying a new facet contract
@@ -19,13 +20,14 @@ import { processTx } from "./libraries/utils";
 // 3. Set the FACET_CONTRACT_INTERFACE to the interface name of the new facet contract.
 // 4. Run the script using `npx hardhat run --network <network> scripts/diamondCut.ts`
 
-const OLD_FACET_ADDRESS = "";
+const OLD_FACET_ADDRESS = "0x2d399A3e859ef0c2283525810e12827BF64Da904";
 
-const FACET_CONTRACT_NAME = "";
-const FACET_CONTRACT_INTERFACE = "";
+const FACET_CONTRACT_NAME = "LockboxFacet";
+const FACET_CONTRACT_INTERFACE = "ILockbox";
 
 async function main() {
   const diamond = addresses.General.diamond;
+  // const diamond = addresses.General.lumiaDiamond;
 
   console.log(
     `Upgrading facet ${FACET_CONTRACT_NAME} at address: ${OLD_FACET_ADDRESS} in diamond: ${diamond}`,
@@ -46,6 +48,19 @@ async function main() {
   // ACL selectors are added to DepositFacet, so we should not remove them
   if (FACET_CONTRACT_NAME === "DepositFacet") {
     const aclInterface = getContractInterface("HyperStakingAcl");
+    const aclInterfaceSelectors = getSelectors(aclInterface).remove(["supportsInterface(bytes4)"]);
+
+    for (const selector of aclInterfaceSelectors) {
+      const index = removeSelectors.indexOf(selector);
+      if (index !== -1) {
+        removeSelectors.splice(index, 1);
+      }
+    }
+  }
+
+  // ACL selectors are added also on the Lumia Diamond to HyperlaneHandlerFacet
+  if (FACET_CONTRACT_NAME === "HyperlaneHandlerFacet") {
+    const aclInterface = getContractInterface("LumiaDiamondAcl");
     const aclInterfaceSelectors = getSelectors(aclInterface).remove(["supportsInterface(bytes4)"]);
 
     for (const selector of aclInterfaceSelectors) {

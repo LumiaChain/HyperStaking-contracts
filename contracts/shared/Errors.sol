@@ -26,4 +26,4 @@ error BadOriginDestination(uint32 originDestination);
 error DispatchUnderpaid();
 
 error HyperlaneReplay(bytes32 msgId);
-
+error InvalidHook(address hook);

@@ -3,6 +3,7 @@ pragma solidity =0.8.27;
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
 import {IMessageRecipient} from "../../external/hyperlane//interfaces/IMessageRecipient.sol";
+import {IPostDispatchHook} from "../../external/hyperlane/interfaces/hooks/IPostDispatchHook.sol";
 import {
     IInterchainSecurityModule,
     ISpecifiesInterchainSecurityModule
@@ -29,6 +30,7 @@ interface IHyperlaneHandler is IMessageRecipient, ISpecifiesInterchainSecurityMo
     event MailboxUpdated(address oldMailbox, address newMailbox);
 
     event HyperlaneISMUpdated(address ism);
+    event HyperlaneHookUpdated(address hook);
 
     event AuthorizedOriginUpdated(
         address originLockbox,
@@ -106,6 +108,9 @@ interface IHyperlaneHandler is IMessageRecipient, ISpecifiesInterchainSecurityMo
      */
     function setInterchainSecurityModule(IInterchainSecurityModule ism) external;
 
+    /// @notice Sets the post-dispatch hook for outgoing cross-chain messages
+    function setHook(address hook) external;
+
     //============================================================================================//
     //                                           View                                             //
     //============================================================================================//
@@ -121,4 +126,11 @@ interface IHyperlaneHandler is IMessageRecipient, ISpecifiesInterchainSecurityMo
 
     /// @notice Returns detailed route information for a given strategy
     function getRouteInfo(address strategy) external view returns (RouteInfo memory);
+
+    /**
+     * @notice Returns the post dispatch hook
+     * @dev Required by Hyperlane for relayer simulation and fee quoting
+     *      Returning address(0) will cause the mailbox to use its default hook
+     */
+    function hook() external view returns (IPostDispatchHook);
 }
