@@ -26,7 +26,7 @@ contract SwapSuperStrategy is SuperformStrategy {
     ICurveIntegration public curveIntegration;
 
      /// @dev Maximum slippage in basis points (1 bp = 0.01 %)
-    uint256 private slippageBps;
+    uint16 private slippageBps;
 
     /// Storage gap for upgradeability. Must remain the last state variable
     uint256[50] private __gap;
@@ -39,7 +39,7 @@ contract SwapSuperStrategy is SuperformStrategy {
         address indexed user,
         uint256 amountIn,
         uint256 amountOut,
-        uint256 slippageBps
+        uint16 slippageBps
     );
 
     event CurveSwapExit(
@@ -47,13 +47,14 @@ contract SwapSuperStrategy is SuperformStrategy {
         address indexed receiver,
         uint256 amountIn,
         uint256 amountOut,
-        uint256 slippageBps
+        uint16 slippageBps
     );
 
     //============================================================================================//
     //                                          Errors                                            //
     //============================================================================================//
 
+    error ZeroQuote();
     error SlippageTooHigh();
 
     //============================================================================================//
@@ -80,6 +81,30 @@ contract SwapSuperStrategy is SuperformStrategy {
         slippageBps = 50; // default 0.5% slippage
     }
 
+    /// @notice Configure EMA pricing protection for both swap directions
+    /// @dev Uses default values; can be changed via ema pricing facet
+    function configureEmaPricing() external onlyStrategyManager {
+        // direction A: curveInputToken -> superformInputToken (e.g., USDT -> USDC)
+        curveIntegration.configureSwapStrategyEma(
+            address(CURVE_INPUT_TOKEN),
+            address(SUPERFORM_INPUT_TOKEN),
+            true,      // enabled
+            100,       // 1% deviation tolerance
+            2000,      // 20% EMA weight
+            1000e6     // 1000 units volume threshold
+        );
+
+        // direction B: superformInputToken -> curveInputToken (e.g., USDC -> USDT)
+        curveIntegration.configureSwapStrategyEma(
+            address(SUPERFORM_INPUT_TOKEN),
+            address(CURVE_INPUT_TOKEN),
+            true,      // enabled
+            100,       // 1% deviation tolerance
+            2000,      // 20% EMA weight
+            1000e6     // 1000 units volume threshold
+        );
+    }
+
     //============================================================================================//
     //                                      Public Functions                                      //
     //============================================================================================//
@@ -94,17 +119,18 @@ contract SwapSuperStrategy is SuperformStrategy {
     ) public payable override onlyLumiaDiamond returns (uint64 readyAt) {
         require(amount_ > 0, ZeroAmount());
 
-        // requestAllocation uses already uses Curve integration to store a claim request
+        // requestAllocation already uses Curve integration to store a claim request
         // which later fulfills using the swapped out-amount in Superform Strategy
 
-        // slippage adjusted
-        uint256 expected = curveIntegration.quote(
+        // Get EMA-protected quote with slippage
+        uint256 minDy = curveIntegration.quoteProtected(
             address(CURVE_INPUT_TOKEN),
             CURVE_POOL,
             address(SUPERFORM_INPUT_TOKEN),
-            amount_
+            amount_,
+            slippageBps // slippage adjusted
         );
-        uint256 minDy = (expected * (10_000 - slippageBps)) / 10_000;
+        require(minDy > 0, ZeroQuote());
 
         // execute the swap; tokens arrive in sender (diamond)
         uint256 amountOut = curveIntegration.swap(
@@ -140,14 +166,15 @@ contract SwapSuperStrategy is SuperformStrategy {
         // redeem from Superform – tokens land in this contract
         uint256 superformOut = super.claimExit(ids_, address(curveIntegration));
 
-        // slippage-adjusted quote
-        uint256 expected = curveIntegration.quote(
-            address(SUPERFORM_INPUT_TOKEN),   // tokenIn
+        // Get EMA-protected quote with slippage
+        uint256 minDx = curveIntegration.quoteProtected(
+            address(SUPERFORM_INPUT_TOKEN), // tokenIn
             CURVE_POOL,
-            address(CURVE_INPUT_TOKEN),       // tokenOut
-            superformOut
+            address(CURVE_INPUT_TOKEN),     // tokenOut
+            superformOut,
+            slippageBps
         );
-        uint256 minDx = (expected * (10_000 - slippageBps)) / 10_000;
+        require(minDx > 0, ZeroQuote());
 
         // swap back to stake token
         exitAmount = curveIntegration.swap(
@@ -166,7 +193,7 @@ contract SwapSuperStrategy is SuperformStrategy {
 
     /// @notice Change the slippage tolerance for allocation and exit
     /// @param bps New limit in basis points (10 000 = 100 %).
-    function setSlippage(uint256 bps) external onlyStrategyManager {
+    function setSlippage(uint16 bps) external onlyStrategyManager {
         require(bps <= 10_000, SlippageTooHigh());
         slippageBps = bps;
     }
@@ -186,7 +213,7 @@ contract SwapSuperStrategy is SuperformStrategy {
     }
 
     /// @return Current slippage setting in basis points
-    function slippage() external view returns (uint256) {
+    function slippage() external view returns (uint16) {
         return slippageBps;
     }
 
@@ -198,7 +225,8 @@ contract SwapSuperStrategy is SuperformStrategy {
     /// @dev Converts the incoming stake (CURVE_INPUT_TOKEN) amount to its Curve quote
     ///      (SUPERFORM_INPUT_TOKEN), then feeds that into the parent (Superform Strategy) preview
     function _previewAllocationRaw(uint256 stake_) internal view override returns (uint256 allocation) {
-        uint256 superformInput = curveIntegration.quote(
+        // use ema-anchored quote to match actual execution path
+        uint256 superformInput = curveIntegration.quoteExpected(
             address(CURVE_INPUT_TOKEN),     // tokenIn
             CURVE_POOL,
             address(SUPERFORM_INPUT_TOKEN), // tokenOut
@@ -212,7 +240,8 @@ contract SwapSuperStrategy is SuperformStrategy {
     function _previewExitRaw(uint256 allocation_) internal view override returns (uint256 stake) {
         uint256 superformOutput = super._previewExitRaw(allocation_);
 
-        stake = curveIntegration.quote(
+        // use ema-anchored quote to match actual execution path
+        stake = curveIntegration.quoteExpected(
             address(SUPERFORM_INPUT_TOKEN), // tokenIn
             CURVE_POOL,
             address(CURVE_INPUT_TOKEN),     // tokenOut

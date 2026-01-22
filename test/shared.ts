@@ -291,6 +291,7 @@ const errorsIface = new Interface([
   "error TransferFailed()",
   "error RefundFailed()",
   "error HyperlaneReplay(bytes32 msgId)",
+  "error Slippage()",
 ]);
 export const errors = { interface: errorsIface };
 

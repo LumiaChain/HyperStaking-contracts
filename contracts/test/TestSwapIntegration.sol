@@ -7,6 +7,7 @@ import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 
 import {CurveIntegrationFacet} from "../hyperstaking/facets/integrations/CurveIntegrationFacet.sol";
 import {SuperformIntegrationFacet} from "../hyperstaking/facets/integrations/SuperformIntegrationFacet.sol";
+import {EmaPricingFacet} from "../hyperstaking/facets/EmaPricingFacet.sol";
 
 import {SuperformConfig, LibSuperform} from "../hyperstaking/libraries/LibSuperform.sol";
 import {LibCurve} from "../hyperstaking/libraries/LibCurve.sol";
@@ -19,7 +20,7 @@ import {Currency, CurrencyHandler} from "../shared/libraries/CurrencyHandler.sol
  * @dev On-chain test implementation of merged ISuperformIntegration and ICurveIntegration
  *      deploys without the diamond proxy and invokes Superform/Curve contracts directly
  */
-contract TestSwapIntegration is SuperformIntegrationFacet, CurveIntegrationFacet {
+contract TestSwapIntegration is SuperformIntegrationFacet, CurveIntegrationFacet, EmaPricingFacet {
     using SafeERC20 for IERC20;
     using CurrencyHandler for Currency;
 

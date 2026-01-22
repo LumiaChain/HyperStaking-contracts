@@ -75,6 +75,17 @@ interface ICurveIntegration {
         uint8[] calldata indexes
     ) external;
 
+    /// @notice Helper to configure EMA protection for a swap strategy
+    /// @dev Look at shared LibEmaPriceAnchor.sol
+    function configureSwapStrategyEma(
+        address tokenIn,
+        address tokenOut,
+        bool enabled,
+        uint16 deviationBps,
+        uint16 emaAlphaBps,
+        uint256 volumeThreshold
+    ) external;
+
     //============================================================================================//
     //                                           View                                             //
     //============================================================================================//
@@ -93,6 +104,28 @@ interface ICurveIntegration {
         address tokenOut,
         uint256 amountIn
     ) external view returns (uint256 dy);
+
+    /**
+     * @notice Get EMA-protected quote with slippage for swaps
+     * @param slippageBps Slippage tolerance in basis points
+     * @return minDy Protected minimum output with slippage applied
+     */
+    function quoteProtected(
+        address tokenIn,
+        address pool,
+        address tokenOut,
+        uint256 amountIn,
+        uint16 slippageBps
+    ) external view returns (uint256 minDy);
+
+    /// @notice Get EMA-protected quote without slippage for previews
+    /// @return expectedOut Protected output using EMA bounds
+    function quoteExpected(
+        address tokenIn,
+        address pool,
+        address tokenOut,
+        uint256 amountIn
+    ) external view returns (uint256 expectedOut);
 
     /// @notice Curve Router address currently used for swaps
     function curveRouter() external view returns (address);

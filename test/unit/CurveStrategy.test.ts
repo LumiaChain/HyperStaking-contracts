@@ -95,6 +95,10 @@ async function deployHyperStaking() {
     true,
   );
 
+  // ------------------ Configure Pricing ------------------
+
+  await swapSuperStrategy.connect(signers.strategyManager).configureEmaPricing();
+
   // -------------------- Setup Checker --------------------
 
   await invariantChecker.addStrategy(await swapSuperStrategy.getAddress());
@@ -351,15 +355,19 @@ describe("CurveStrategy", function () {
 
       // ------------------ Add Strategy ------------------
 
-      await testSwapIntegration.connect(signers.owner).updateSuperformStrategies(
+      await testSwapIntegration.connect(signers.strategyManager).updateSuperformStrategies(
         swapSuperStrategy,
         true,
       );
 
-      await testSwapIntegration.connect(signers.owner).updateSwapStrategies(
+      await testSwapIntegration.connect(signers.strategyManager).updateSwapStrategies(
         swapSuperStrategy,
         true,
       );
+
+      // ------------------ Configure Pricing ------------------
+
+      await swapSuperStrategy.connect(signers.strategyManager).configureEmaPricing();
 
       // ------------------ SuperUSDC ------------------
 
@@ -373,7 +381,7 @@ describe("CurveStrategy", function () {
       const testDAIAddr = ZeroAddress; // not used in mock
       const registerTokens = [testDAIAddr, usdc.target, usdt.target];
       const indexes = [0n, 1n, 2n];
-      await testSwapIntegration.connect(signers.owner).registerPool(
+      await testSwapIntegration.connect(signers.strategyManager).registerPool(
         curvePool,
         nCoins,
         registerTokens,
@@ -398,7 +406,7 @@ describe("CurveStrategy", function () {
 
       const badToken = await shared.deployTestERC20("Test BAD1", "BB1", 6);
 
-      const { owner, alice } = signers;
+      const { owner, alice, strategyManager } = signers;
       await badToken.mint(owner, stableUnits("1000000"));
       await badToken.mint(alice, stableUnits("1000000"));
 
@@ -430,7 +438,7 @@ describe("CurveStrategy", function () {
       let nCoins = 2n;
       let registerTokens = [usdc.target, usdt.target]; // missing badToken
       let indexes = [0n, 1n];
-      await testSwapIntegration.registerPool(
+      await testSwapIntegration.connect(strategyManager).registerPool(
         strangePool,
         nCoins,
         registerTokens,
@@ -445,7 +453,7 @@ describe("CurveStrategy", function () {
       nCoins = 2n;
       registerTokens = [badToken.target, usdt.target]; // usdt instead of usdc
       indexes = [45n, 4n]; // strange indexes
-      await testSwapIntegration.registerPool(
+      await testSwapIntegration.connect(strategyManager).registerPool(
         strangePool,
         nCoins,
         registerTokens,
@@ -460,19 +468,38 @@ describe("CurveStrategy", function () {
       nCoins = 2n;
       registerTokens = [badToken.target, usdc.target]; // usdt instead of usdc
       indexes = [0n, 1n]; // strange indexes
-      await testSwapIntegration.registerPool(
+      await testSwapIntegration.connect(strategyManager).registerPool(
         strangePool,
         nCoins,
         registerTokens,
         indexes,
       );
 
+      // register swap strategy
+      await testSwapIntegration.connect(strategyManager).updateSwapStrategies(
+        strangeStrategy,
+        true,
+      );
+
+      // price is not configured yet
+      await expect(testSwapIntegration.connect(alice).allocate(strangeStrategy, amount))
+        .to.be.revertedWithCustomError(testSwapIntegration, "AnchorNotConfigured")
+        .withArgs(badToken.target, usdc.target);
+
+      await strangeStrategy.connect(strategyManager).configureEmaPricing();
+
+      // disable swap strategy
+      await testSwapIntegration.connect(strategyManager).updateSwapStrategies(
+        strangeStrategy,
+        false,
+      );
+
       await expect(testSwapIntegration.connect(alice).allocate(strangeStrategy, amount))
         .to.be.revertedWithCustomError(testSwapIntegration, "NotFromSwapStrategy")
         .withArgs(strangeStrategy);
 
-      // register strategy
-      await testSwapIntegration.updateSwapStrategies(
+      // enable again
+      await testSwapIntegration.connect(strategyManager).updateSwapStrategies(
         strangeStrategy,
         true,
       );
@@ -481,7 +508,7 @@ describe("CurveStrategy", function () {
         .to.be.revertedWithCustomError(testSwapIntegration, "NotFromSuperStrategy")
         .withArgs(strangeStrategy);
 
-      await testSwapIntegration.updateSuperformStrategies(
+      await testSwapIntegration.connect(strategyManager).updateSuperformStrategies(
         strangeStrategy,
         true,
       );
@@ -526,7 +553,7 @@ describe("CurveStrategy", function () {
 
     it("slippage tolerance", async function () {
       const { testSwapIntegration, swapSuperStrategy, curveRouter, usdt, usdc, erc4626Vault, curvePool, superUSDC, signers } = await loadFixture(getMockedIntegrations);
-      const { alice } = signers;
+      const { alice, strategyManager } = signers;
 
       const amount = parseUnits("300", 6);
 
@@ -538,13 +565,13 @@ describe("CurveStrategy", function () {
       await expect(testSwapIntegration.connect(alice).allocate(swapSuperStrategy, amount))
         .to.be.revertedWithCustomError(curveRouter, "Slippage");
 
-      await swapSuperStrategy.setSlippage(499); // 4.99% slippage tolerance
+      await swapSuperStrategy.connect(strategyManager).setSlippage(499); // 4.99% slippage tolerance
 
       // still should revert, 4.99% < 5%
       await expect(testSwapIntegration.connect(alice).allocate(swapSuperStrategy, amount))
         .to.be.revertedWithCustomError(curveRouter, "Slippage");
 
-      await swapSuperStrategy.setSlippage(500);
+      await swapSuperStrategy.connect(strategyManager).setSlippage(500);
 
       const allocTx = testSwapIntegration.connect(alice).allocate(swapSuperStrategy, amount);
 
@@ -570,6 +597,7 @@ describe("CurveStrategy", function () {
       } = await loadFixture(deployHyperStakingBase);
 
       const { curveRouter } = await shared.deployCurveMock(testUSDC, testUSDT);
+      const { strategyManager } = signers;
 
       // missing router setting
 
@@ -581,7 +609,7 @@ describe("CurveStrategy", function () {
       };
 
       const randomStrategy = "0x0000000000000000000000000000000000001234";
-      await expect(hyperStaking.curveIntegration.connect(signers.strategyManager).updateSwapStrategies(
+      await expect(hyperStaking.curveIntegration.connect(strategyManager).updateSwapStrategies(
         randomStrategy,
         true,
       )).to.be.revertedWithCustomError(
@@ -597,12 +625,12 @@ describe("CurveStrategy", function () {
         "OnlyStrategyManager",
       );
 
-      await hyperStaking.curveIntegration.connect(signers.strategyManager).setCurveRouter(
+      await hyperStaking.curveIntegration.connect(strategyManager).setCurveRouter(
         curveRouter,
       );
 
       // OK
-      await hyperStaking.curveIntegration.connect(signers.strategyManager).updateSwapStrategies(
+      await hyperStaking.curveIntegration.connect(strategyManager).updateSwapStrategies(
         randomStrategy,
         true,
       );
@@ -763,5 +791,317 @@ describe("CurveStrategy", function () {
       expect(await vaultShares.balanceOf(bob)).to.be.eq(0);
       expect(await vaultShares.balanceOf(alice)).to.be.eq(0);
     });
+  });
+});
+
+describe("EMA Pricing Protection", function () {
+  it("should initialize EMA on first swap", async function () {
+    const {
+      signers, hyperStaking, swapSuperStrategy, testUSDC, testUSDT,
+    } = await loadFixture(deployHyperStaking);
+    const { deposit, emaPricing } = hyperStaking;
+    const { alice } = signers;
+
+    const amount = parseUnits("2000", 6);
+
+    // check EMA not initialized
+    expect(
+      await emaPricing.isEmaInitialized(testUSDT.target, testUSDC.target),
+    ).to.equal(false);
+
+    await testUSDT.connect(alice).approve(deposit, amount);
+    await deposit.connect(alice).deposit(swapSuperStrategy, alice, amount);
+
+    // check EMA initialized after first swap
+    expect(
+      await emaPricing.isEmaInitialized(testUSDT.target, testUSDC.target),
+    ).to.equal(true);
+
+    const anchor = await emaPricing.getEmaAnchor(testUSDT.target, testUSDC.target);
+    // pool rate is 1:1, actual execution: 2000 USDT -> 2000 USDC
+    // first swap initializes EMA to execution price
+    expect(anchor.emaPrice).to.equal(parseEther("1"));
+  });
+
+  it("should protect against manipulated spot price", async function () {
+    const {
+      signers, hyperStaking, swapSuperStrategy, testUSDT, curvePool,
+    } = await loadFixture(deployHyperStaking);
+    const { deposit } = hyperStaking;
+    const { alice } = signers;
+
+    // first deposit to initialize EMA at 1:1
+    const initAmount = parseUnits("2000", 6);
+    await testUSDT.connect(alice).approve(deposit, initAmount);
+    await deposit.connect(alice).deposit(swapSuperStrategy, alice, initAmount);
+
+    // attacker manipulates pool rate to 0.97 (3% worse than EMA anchor)
+    await curvePool.setRate(parseEther("0.97"));
+
+    const amount = parseUnits("1000", 6);
+    await testUSDT.connect(alice).approve(deposit, amount);
+
+    // Flow of protection:
+    // 1. quoteProtected gets spot: 1000 * 0.97 = 970 USDC
+    // 2. Checks deviation: (1000 - 970) / 1000 = 3% > 1% deviation band
+    // 3. guardedOut reverts with Slippage error
+    await expect(
+      deposit.connect(alice).deposit(swapSuperStrategy, alice, amount),
+    ).to.be.revertedWithCustomError(shared.errors, "Slippage");
+  });
+
+  it("should accept spot within deviation band and execute at actual rate", async function () {
+    const {
+      signers, hyperStaking, swapSuperStrategy, testUSDT, testUSDC, curvePool, erc4626Vault,
+    } = await loadFixture(deployHyperStaking);
+    const { deposit } = hyperStaking;
+    const { alice } = signers;
+
+    // initialize EMA at 1:1
+    const initAmount = parseUnits("2000", 6);
+    await testUSDT.connect(alice).approve(deposit, initAmount);
+    await deposit.connect(alice).deposit(swapSuperStrategy, alice, initAmount);
+
+    // attacker tries small manipulation: 0.999 (0.1% worse, within 1% band)
+    await curvePool.setRate(parseEther("0.999"));
+
+    const amount = parseUnits("1000", 6);
+    await testUSDT.connect(alice).approve(deposit, amount);
+
+    const depositTx = deposit.connect(alice).deposit(swapSuperStrategy, alice, amount);
+
+    // Flow:
+    // 1. quoteProtected:
+    //    - Gets spot quote: 1000 -> 1000 USDC
+    //    - Checks deviation: 1000 - 1000 / 1000 = 0%
+    //    - Applies slippage: minDy = 1000 * 0.995 = 995 USDC
+    // 2. Actual swap execution:
+    //    - Uses realDy: 1000 * 0.999 = 999 USDC (applies the rate)
+    //    - 999 > 995 passes minDy check
+    // 3. Result: User gets 999 USDC
+
+    const expectedOutput = parseUnits("999", 6);
+    await expect(depositTx).to.changeTokenBalance(
+      testUSDC,
+      erc4626Vault,
+      expectedOutput,
+    );
+  });
+
+  it("should not update EMA for trades below volume threshold", async function () {
+    const {
+      signers, hyperStaking, swapSuperStrategy, testUSDT, testUSDC, curvePool,
+    } = await loadFixture(deployHyperStaking);
+    const { deposit, emaPricing } = hyperStaking;
+    const { alice } = signers;
+
+    // initialize with large trade (above 1000 USDT threshold)
+    const largeAmount = parseUnits("2000", 6);
+    await testUSDT.connect(alice).approve(deposit, largeAmount);
+    await deposit.connect(alice).deposit(swapSuperStrategy, alice, largeAmount);
+
+    const initialAnchor = await emaPricing.getEmaAnchor(
+      testUSDT.target,
+      testUSDC.target,
+    );
+
+    // manipulate rate to 0.995 (0.5% worse, within 1% band)
+    await curvePool.setRate(parseEther("0.995"));
+
+    // small trade below 1000 USDT threshold
+    const smallAmount = parseUnits("500", 6);
+    await testUSDT.connect(alice).approve(deposit, smallAmount);
+    await deposit.connect(alice).deposit(swapSuperStrategy, alice, smallAmount);
+
+    const afterAnchor = await emaPricing.getEmaAnchor(
+      testUSDT.target,
+      testUSDC.target,
+    );
+
+    // EMA should NOT update because volume (500) < threshold (1000)
+    // this prevents EMA pollution from small trades
+    expect(afterAnchor.emaPrice).to.equal(initialAnchor.emaPrice);
+  });
+
+  it("should update EMA for trades above threshold using actual execution price", async function () {
+    const {
+      signers, hyperStaking, swapSuperStrategy, testUSDT, testUSDC, curvePool,
+    } = await loadFixture(deployHyperStaking);
+    const { deposit, emaPricing } = hyperStaking;
+    const { alice } = signers;
+
+    // initialize at 1:1
+    const initAmount = parseUnits("2000", 6);
+    await testUSDT.connect(alice).approve(deposit, initAmount);
+    await deposit.connect(alice).deposit(swapSuperStrategy, alice, initAmount);
+
+    const initialAnchor = await emaPricing.getEmaAnchor(
+      testUSDT.target,
+      testUSDC.target,
+    );
+    expect(initialAnchor.emaPrice).to.equal(parseEther("1"));
+
+    // set rate to 0.999 (0.1% worse, within 1% deviation band)
+    await curvePool.setRate(parseEther("0.999"));
+
+    // large trade above 1000 USDT threshold
+    const largeAmount = parseUnits("2000", 6);
+    await testUSDT.connect(alice).approve(deposit, largeAmount);
+    await deposit.connect(alice).deposit(swapSuperStrategy, alice, largeAmount);
+
+    const afterAnchor = await emaPricing.getEmaAnchor(
+      testUSDT.target,
+      testUSDC.target,
+    );
+
+    // EMA update calculation:
+    // 1. Actual execution: 2000 USDT -> 2000 * 0.999 = 1998 USDC
+    // 2. Execution price: 1998 / 2000 = 0.999
+    // 3. EMA recorded via recordExecution(2000, 1998)
+    // 4. New EMA = oldEMA * (1 - alpha) + executionPrice * alpha = 0.9998
+    const expectedEma = parseEther("0.9998");
+    expect(afterAnchor.emaPrice).to.equal(expectedEma);
+  });
+
+  it("should work in both swap directions", async function () {
+    const {
+      signers, hyperStaking, lumiaDiamond, swapSuperStrategy, testUSDT, testUSDC, vaultShares,
+    } = await loadFixture(deployHyperStaking);
+    const { deposit, emaPricing } = hyperStaking;
+    const { realAssets } = lumiaDiamond;
+    const { alice } = signers;
+
+    // forward direction: USDT -> USDC (deposit flow)
+    const amount = parseUnits("2000", 6);
+    await testUSDT.connect(alice).approve(deposit, amount);
+    await deposit.connect(alice).deposit(swapSuperStrategy, alice, amount);
+
+    // check forward EMA initialized
+    expect(
+      await emaPricing.isEmaInitialized(testUSDT.target, testUSDC.target),
+    ).to.equal(true);
+
+    // reverse direction: USDC -> USDT (redeem flow)
+    const shares = await vaultShares.balanceOf(alice);
+    await realAssets.connect(alice).redeem(swapSuperStrategy, alice, alice, shares);
+
+    const lastClaimId = await shared.getLastClaimId(deposit, swapSuperStrategy, alice);
+    await shared.claimAtDeadline(deposit, lastClaimId, alice);
+
+    // check reverse direction EMA initialized
+    expect(
+      await emaPricing.isEmaInitialized(testUSDC.target, testUSDT.target),
+    ).to.equal(true);
+
+    const forwardAnchor = await emaPricing.getEmaAnchor(
+      testUSDT.target,
+      testUSDC.target,
+    );
+    const reverseAnchor = await emaPricing.getEmaAnchor(
+      testUSDC.target,
+      testUSDT.target,
+    );
+
+    // Both directions record 1:1 rate because:
+    // - Pool default rate is 1:1 (parseEther("1"))
+    // - Forward: 2000 USDT -> 2000 USDC, price = 1.0
+    // - Reverse: ~2000 USDC -> ~2000 USDT, price = 1.0
+    expect(forwardAnchor.emaPrice).to.equal(parseEther("1"));
+    expect(reverseAnchor.emaPrice).to.equal(parseEther("1"));
+  });
+
+  it("execution applies actual market rate", async function () {
+    const {
+      signers, hyperStaking, swapSuperStrategy, testUSDT, testUSDC, curvePool, erc4626Vault,
+    } = await loadFixture(deployHyperStaking);
+    const { deposit } = hyperStaking;
+    const { alice } = signers;
+
+    // initialize EMA at 1:1
+    const initAmount = parseUnits("2000", 6);
+    await testUSDT.connect(alice).approve(deposit, initAmount);
+    await deposit.connect(alice).deposit(swapSuperStrategy, alice, initAmount);
+
+    // set rate to 0.999 (0.1% worse, within 1% band)
+    await curvePool.setRate(parseEther("0.999"));
+
+    const amount = parseUnits("1000", 6);
+    await testUSDT.connect(alice).approve(deposit, amount);
+
+    const depositTx = deposit.connect(alice).deposit(swapSuperStrategy, alice, amount);
+
+    // actual execution uses real rate: 1000 * 0.999 = 999 USDC
+    // this difference is acceptable slippage
+    const actualUsdc = parseUnits("999", 6);
+    await expect(depositTx).to.changeTokenBalance(
+      testUSDC,
+      erc4626Vault,
+      actualUsdc,
+    );
+  });
+
+  it("EMA protection makes frontrunning unprofitable", async function () {
+    const {
+      signers, hyperStaking, swapSuperStrategy, testUSDT, testUSDC, curvePool, erc4626Vault,
+    } = await loadFixture(deployHyperStaking);
+    const { deposit, emaPricing } = hyperStaking;
+    const { alice, bob } = signers;
+
+    // alice initializes EMA at 1:1 with large deposit
+    const aliceInit = parseUnits("5000", 6);
+    await testUSDT.connect(alice).approve(deposit, aliceInit);
+    await deposit.connect(alice).deposit(swapSuperStrategy, alice, aliceInit);
+
+    const initialAnchor = await emaPricing.getEmaAnchor(testUSDT.target, testUSDC.target);
+    expect(initialAnchor.emaPrice).to.equal(parseEther("1"));
+
+    // attacker (bob) tries to frontrun alice's next trade
+    await curvePool.setRate(parseEther("0.995"));
+
+    const aliceAmount = parseUnits("2000", 6); // large trade above threshold
+    await testUSDT.connect(alice).approve(deposit, aliceAmount);
+
+    // alice's trade executes
+    // - quoteProtected: spot=1000
+    // - minDy = 1000 * 0.995 = 995
+    // - Actual execution: 2000 * 0.995 = 1990 USDC
+    // - Alice gets 1990 USDC deposited into vault
+    const aliceTx = deposit.connect(alice).deposit(swapSuperStrategy, alice, aliceAmount);
+
+    const expectedAliceOutput = parseUnits("1990", 6); // 2000 * 0.995
+    await expect(aliceTx).to.changeTokenBalance(
+      testUSDC,
+      erc4626Vault,
+      expectedAliceOutput,
+    );
+
+    // EMA updates to reflect actual execution
+    const updatedAnchor = await emaPricing.getEmaAnchor(testUSDT.target, testUSDC.target);
+
+    // new EMA = 1.0 * 0.8 + 0.995 * 0.2 = 0.8 + 0.199 = 0.999
+    const expectedEma = parseEther("0.999");
+    expect(updatedAnchor.emaPrice).to.equal(expectedEma);
+
+    // attacker tries to profit by unwinding manipulation
+    // But now EMA is 0.999, so any future trades have a tighter band
+    // if attacker tries to set rate back to 1.0, it's a 0.1% improvement
+    await curvePool.setRate(parseEther("1.0"));
+
+    const bobAmount = parseUnits("2000", 6);
+    await testUSDT.mint(bob, bobAmount);
+    await testUSDT.connect(bob).approve(deposit, bobAmount);
+
+    // bob's trade:
+    // - quoteProtected: spot=1000, EMA=0.999, deviation = 0.1%
+    // - actual execution: 2000 * 1.0 = 2000 USDC
+    // - bob gets fair price, attacker extracted no value
+    const bobTx = deposit.connect(bob).deposit(swapSuperStrategy, bob, bobAmount);
+
+    const expectedBobOutput = parseUnits("2000", 6);
+    await expect(bobTx).to.changeTokenBalance(
+      testUSDC,
+      erc4626Vault,
+      expectedBobOutput,
+    );
   });
 });

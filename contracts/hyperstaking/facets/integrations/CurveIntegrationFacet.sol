@@ -8,9 +8,11 @@ import {LibCurve, CurveStorage, PoolConfig} from "../../libraries/LibCurve.sol";
 
 import {ICurveRouterMinimal} from "../../strategies/integrations/curve/interfaces/ICurveRouterMinimal.sol";
 
+
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import {LibEmaPriceAnchor} from "../../../shared/libraries/LibEmaPriceAnchor.sol";
 import * as Errors from "../../../shared/Errors.sol";
 
 /**
@@ -74,6 +76,11 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
             blank,
             receiver
         );
+
+        // record execution if EMA is configured and enabled for this pair
+        if (LibEmaPriceAnchor.isEnabled(tokenIn, tokenOut)) {
+            LibEmaPriceAnchor.recordExecution(tokenIn, tokenOut, amountIn, dy);
+        }
     }
 
     /* ========== Strategy Manager ========== */
@@ -131,6 +138,24 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
 
         emit PoolRegistered(pool, nCoins);
     }
+    /// @inheritdoc ICurveIntegration
+    function configureSwapStrategyEma(
+        address tokenIn,
+        address tokenOut,
+        bool enabled,
+        uint16 deviationBps,
+        uint16 emaAlphaBps,
+        uint256 volumeThreshold
+    ) external onlySwapStrategy {
+        LibEmaPriceAnchor.configure(
+            tokenIn,
+            tokenOut,
+            enabled,
+            deviationBps,
+            emaAlphaBps,
+            volumeThreshold
+        );
+    }
 
     // ========= View ========= //
 
@@ -140,7 +165,7 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
         address pool,
         address tokenOut,
         uint256 amountIn
-    ) external view returns (uint256 dy) {
+    ) public view returns (uint256 dy) {
         ICurveRouterMinimal router = LibCurve.diamondStorage().curveRouter;
 
         (
@@ -154,6 +179,44 @@ contract CurveIntegrationFacet is ICurveIntegration, HyperStakingAcl {
             params,
             amountIn,
             blank // no zap pools for one-hop
+        );
+    }
+
+    /// @inheritdoc ICurveIntegration
+    function quoteProtected(
+        address tokenIn,
+        address pool,
+        address tokenOut,
+        uint256 amountIn,
+        uint16 slippageBps
+    ) public view returns (uint256 minDy) {
+        // get raw spot quote from Curve
+        uint256 spotQuote = quote(tokenIn, pool, tokenOut, amountIn);
+
+        // apply EMA protection + slippage
+        minDy = LibEmaPriceAnchor.guardedOut(
+            tokenIn,
+            tokenOut,
+            amountIn,
+            spotQuote,
+            slippageBps
+        );
+    }
+
+    /// @inheritdoc ICurveIntegration
+    function quoteExpected(
+        address tokenIn,
+        address pool,
+        address tokenOut,
+        uint256 amountIn
+    ) external view returns (uint256 expectedOut) {
+        // apply EMA protection without slippage
+        expectedOut = quoteProtected(
+            tokenIn,
+            pool,
+            tokenOut,
+            amountIn,
+            0  // no slippage for previews
         );
     }
 

@@ -34,7 +34,7 @@ const fullyQualifiedIERC20 = "@openzeppelin/contracts/token/ERC20/IERC20.sol:IER
 describe("Swap Test Integration", function () {
   async function getMockedIntegrations() {
     const signers = await shared.getSigners();
-    const strategyManager = signers.owner;
+    const { strategyManager } = signers;
 
     // ------------------ USDC / USDT ------------------
 
@@ -128,6 +128,10 @@ describe("Swap Test Integration", function () {
       registerTokens,
       indexes,
     );
+
+    // ------------------ Configure Pricing ------------------
+
+    await swapSuperStrategy.connect(strategyManager).configureEmaPricing();
 
     /* eslint-disable object-property-newline */
     return {

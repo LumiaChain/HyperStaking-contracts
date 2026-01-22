@@ -44,18 +44,17 @@ describe("Test Gauntlet Strategy", function () {
     const whaleSigner = await ethers.getSigner(WHALE_ADDRESS);
 
     await usdc.connect(whaleSigner).transfer(signers.owner, parseUnits("1000", 6));
+
+    // Strategy needs some revenueAsset (gtUSDa) to be able to redeem in fork tests
     await gtUSDa.connect(whaleSigner).transfer(gauntletStrategy, parseEther("1000"));
 
     await stopImpersonatingAccount(WHALE_ADDRESS);
 
-    const lumiaGtUSDAAddress = await gauntletStrategy.LUMIA_GTUSDA();
-    const lumiaGtUSDA = await ethers.getContractAt(shared.fullyQualifiedIERC20, lumiaGtUSDAAddress);
-
     /* eslint-disable object-property-newline */
     return {
-      gauntletStrategy, // strategy
-      usdc, gtUSDa, lumiaGtUSDA, // tokens
-      signers, // signers
+      gauntletStrategy,
+      usdc, gtUSDa,
+      signers,
     };
     /* eslint-disable object-property-newline */
   }
@@ -82,17 +81,24 @@ describe("Test Gauntlet Strategy", function () {
     const provUSDCAfter = await usdc.balanceOf(AERA_PROVISIONER_ADDRESS);
     expect(provUSDCAfter).to.be.greaterThan(provUSDCBefore);
 
-    // recorded allocation (units > 0)
-    expect(await gauntletStrategy.recordedAllocation(reqId)).to.be.gt(0n);
+    // request data
+    const requestData = await gauntletStrategy.aeraDeposit(reqId);
+    expect(requestData.tokens).to.equal(amount);
   });
 
-  it("request exit (fork): claim wrapper, transfer to strategy, emit redeem hash, set recordedExit & allowance", async function () {
-    const { gauntletStrategy, usdc, lumiaGtUSDA, signers } = await loadFixture(getAeraIntegration);
+  it("request exit (fork): no wrapper, emit redeem hash, set recordedExit", async function () {
+    const { gauntletStrategy, usdc, signers } = await loadFixture(getAeraIntegration);
     const { owner } = signers;
 
-    // --- stake via strategy -> emits deposit hash & escrows USDC on Provisioner ---
+    // --- stake via strategy
     const amount = parseUnits("250", 6);
     await usdc.connect(owner).approve(gauntletStrategy, amount);
+
+    const revenueAsset = await shared.toIERC20(await gauntletStrategy.revenueAsset());
+    expect(revenueAsset.target).to.equal(GTUSDA_ADDRESS);
+
+    const balanceBefore = await revenueAsset.balanceOf(owner);
+    expect(balanceBefore).to.equal(0);
 
     const allocReqId = 1;
     const stakeTx = await gauntletStrategy.connect(owner).requestAllocation(allocReqId, amount, owner);
@@ -105,30 +111,22 @@ describe("Test Gauntlet Strategy", function () {
     await ethers.provider.send("evm_increaseTime", [Number(cfg.deadlineOffset)]);
     await ethers.provider.send("evm_mine", []);
 
-    // --- claim allocation -> mints wrapper to owner ---
+    // --- claim allocation
     await gauntletStrategy.connect(owner).claimAllocation([allocReqId], owner);
 
-    const shares = await lumiaGtUSDA.balanceOf(owner);
-    expect(shares).to.be.gt(0n);
+    const balanceAfter = await revenueAsset.balanceOf(owner);
+    expect(balanceAfter).to.be.gt(balanceBefore);
 
-    // approve the strategy to pull wrapper on exit
-    await lumiaGtUSDA.connect(owner).approve(gauntletStrategy, shares);
-
-    // --- request exit using lumiaGtUSDA ---
+    // --- request exit
     const exitReqId = 2;
-    const exitTx = await gauntletStrategy.connect(owner).requestExit(exitReqId, shares, owner);
+    await revenueAsset.connect(owner).approve(gauntletStrategy, balanceAfter);
+    const exitTx = await gauntletStrategy.connect(owner).requestExit(exitReqId, balanceAfter, owner);
 
-    // redeem hash emitted
     const redeemHash = await shared.getEventArg(exitTx, "AeraAsyncRedeemHash", gauntletStrategy);
     expect(redeemHash).to.not.equal("0x" + "00".repeat(32));
 
-    // wrapper moved owner -> strategy (held until settlement/claim)
-    expect(await lumiaGtUSDA.balanceOf(owner)).to.eq(0n);
-    expect(await lumiaGtUSDA.balanceOf(await gauntletStrategy.getAddress())).to.eq(shares);
-
-    // recordedExit (USDC out)
-    expect(await gauntletStrategy.recordedExit(exitReqId)).to.be.gt(0n);
-
-    // no settlement on fork; local mock suite handles solve & claim
+    // request data
+    const exitRequestData = await gauntletStrategy.aeraRedeem(exitReqId);
+    expect(exitRequestData.units).to.equal(balanceAfter);
   });
 });
