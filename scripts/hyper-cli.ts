@@ -3,15 +3,18 @@ import { parseUnits, parseEther, formatEther } from "ethers";
 import { sendEther, processTx } from "./libraries/utils";
 import * as shared from "../test/shared";
 
-import { RouteRegistryDataStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IRouteRegistry";
-import { StakeInfoDataStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IStakeInfoRoute";
-import { StakeRewardDataStruct } from "../typechain-types/contracts/hyperstaking/interfaces/IStakeRewardRoute";
-import { StakeRedeemDataStruct } from "../typechain-types/contracts/lumia-diamond//interfaces/IStakeRedeemRoute";
+// Network-specific ignition parameters
+// Swap these imports to target a different network
+import * as originAddresses from "../ignition/parameters.sepolia.json";
+import * as lumiaAddresses from "../ignition/parameters.lumia_beam.json";
 
-import * as sepoliaAddresses from "../ignition/parameters.sepolia.json";
-import * as beamAddresses from "../ignition/parameters.lumia_beam.json";
-
-const SEPOLIA_CHAIN_ID = 11155111;
+// CLI Configuration
+const CLI_CONFIG = {
+  DEFAULT_COMMAND: "info",
+  DEFAULT_STRATEGY_NAME: "Test Native Strategy",
+  DEFAULT_STRATEGY_SYMBOL: "tETH1",
+  DEFAULT_FEE_RATE: parseEther("0.02"), // 2%
+} as const;
 
 // --- Get Contracts ---
 
@@ -20,53 +23,20 @@ async function getContracts() {
 
   const testStrategy = await ethers.getContractAt(
     "MockReserveStrategy",
-    sepoliaAddresses.General.testReserveStrategy,
+    originAddresses.General.testReserveStrategy,
   );
 
   const ethYieldToken = await ethers.getContractAt(
     "TestERC20",
-    sepoliaAddresses.General.testEthYieldToken,
+    originAddresses.General.testEthYieldToken,
   );
 
-  const diamond = sepoliaAddresses.General.diamond;
+  const diamond = originAddresses.General.diamond;
 
-  // diamond hyper factory facet
-  const hyperFactory = await ethers.getContractAt(
-    "IHyperFactory",
-    diamond,
-  );
-
-  // diamond deposit facet
-  const deposit = await ethers.getContractAt(
-    "IDeposit",
-    diamond,
-  );
-
-  const allocation = await ethers.getContractAt(
-    "IAllocation",
-    diamond,
-  );
-
-  const routeRegistry = await ethers.getContractAt(
-    "IRouteRegistry",
-    diamond,
-  );
-
-  const stakeInfoRoute = await ethers.getContractAt(
-    "IStakeInfoRoute",
-    diamond,
-  );
-
-  const stakeRewardRoute = await ethers.getContractAt(
-    "IStakeRewardRoute",
-    diamond,
-  );
-
-  // diamond lockbox facet
-  const lockbox = await ethers.getContractAt(
-    "ILockbox",
-    diamond,
-  );
+  const hyperFactory = await ethers.getContractAt("IHyperFactory", diamond);
+  const deposit = await ethers.getContractAt("IDeposit", diamond);
+  const allocation = await ethers.getContractAt("IAllocation", diamond);
+  const lockbox = await ethers.getContractAt("ILockbox", diamond);
 
   return {
     diamond,
@@ -76,20 +46,16 @@ async function getContracts() {
     hyperFactory,
     deposit,
     allocation,
-    routeRegistry,
-    stakeInfoRoute,
-    stakeRewardRoute,
     lockbox,
   };
 }
 
-async function getBeamContracts() {
+async function getLumiaContracts() {
   const signers = await shared.getSigners();
 
-  const lumiaDiamond = beamAddresses.General.lumiaDiamond;
-  const testStrategyAddress = sepoliaAddresses.General.testReserveStrategy;
+  const lumiaDiamond = lumiaAddresses.General.lumiaDiamond;
+  const testStrategyAddress = originAddresses.General.testReserveStrategy;
 
-  // lumia diamond hyperlane handler facet
   const hyperlaneHandler = await ethers.getContractAt(
     "IHyperlaneHandler",
     lumiaDiamond,
@@ -97,12 +63,7 @@ async function getBeamContracts() {
 
   const realAssets = await ethers.getContractAt(
     "IRealAssets",
-    beamAddresses.General.lumiaDiamond,
-  );
-
-  const stakeRedeemRoute = await ethers.getContractAt(
-    "IStakeRedeemRoute",
-    lumiaDiamond,
+    lumiaAddresses.General.lumiaDiamond,
   );
 
   return {
@@ -111,36 +72,33 @@ async function getBeamContracts() {
     lumiaDiamond,
     hyperlaneHandler,
     realAssets,
-    stakeRedeemRoute,
   };
 }
 
-// --- Commands ---
+// --- Management Commands ---
 
 async function cmdAddStrategy() {
-  const { signers, routeRegistry, hyperFactory, testStrategy } = await getContracts();
+  const { signers, hyperFactory, testStrategy } = await getContracts();
   const { vaultManager } = signers;
 
   console.log(`Adding reserve strategy ${testStrategy.target} via hyperFactory...`);
 
-  const name = "Test Native Strategy";
-  const symbol = "tETH1";
+  const name = CLI_CONFIG.DEFAULT_STRATEGY_NAME;
+  const symbol = CLI_CONFIG.DEFAULT_STRATEGY_SYMBOL;
 
-  const quoteVaule = await routeRegistry.quoteDispatchRouteRegistry({
-    strategy: testStrategy,
+  const dispatchFee = await hyperFactory.quoteAddStrategy(
+    testStrategy,
     name,
     symbol,
-    decimals: 18,
-    metadata: "0x",
-  } as RouteRegistryDataStruct);
+  );
 
-  console.log("Quoted value for adding strategy:", formatEther(quoteVaule));
+  console.log("Dispatch fee for adding strategy:", formatEther(dispatchFee));
 
   const tx = await hyperFactory.connect(vaultManager).addStrategy(
     testStrategy,
     name,
     symbol,
-    { value: quoteVaule },
+    { value: dispatchFee },
   );
 
   await processTx(tx, "Add Strategy");
@@ -161,12 +119,9 @@ async function cmdSetStrategyAssetPrice() {
 }
 
 async function cmdSupplyStrategy() {
+  // hardcoded values for simplicity
   const amountRaw = 1000; // amount of yield tokens (without decimals);
   const decimals = 18;
-
-  if (!amountRaw) {
-    throw new Error("Usage: supply-strategy <amountEth>");
-  }
 
   const amount = parseUnits(amountRaw.toString(), decimals);
 
@@ -180,11 +135,11 @@ async function cmdSupplyStrategy() {
   let tx;
 
   // mint yield tokens to strategyManager
-  tx = await ethYieldToken.connect(owner).mint(strategyManager.address, amount);
+  tx = await ethYieldToken.connect(owner).mint(strategyManager, amount);
   await processTx(tx, "Mint yield tokens to strategyManager");
 
   tx = await ethYieldToken.connect(strategyManager).approve(
-    testStrategy.target,
+    testStrategy,
     amount,
   );
   await processTx(tx, "Approve yield tokens to testStrategy");
@@ -199,8 +154,8 @@ async function cmdSetupLockbox() {
   const { signers, lockbox } = await getContracts();
   const { vaultManager } = signers;
 
-  const newDestination = 2030232745;
-  const newLumiaFactory = "0x6EF866091F2cee3A58279AF877C2266498c95D31";
+  const newDestination = originAddresses.General.lockboxDestination;
+  const newLumiaFactory = originAddresses.General.lockboxLumiaFactory;
 
   console.log("Setting up lockbox...");
   console.log("New destination:", newDestination);
@@ -218,23 +173,33 @@ async function cmdSetupLockbox() {
   console.log("Lockbox setup complete.");
 }
 
-async function cmdSetLockboxISM() {
+async function cmdSetOriginISM() {
   const { signers, lockbox } = await getContracts();
   const { vaultManager } = signers;
 
-  const newISM = "0x5eabFcdDf2e8816CA5E466921c865633C277A7a9";
-  console.log("Setting new Lockbox ISM:", newISM);
+  const newISM = originAddresses.General.lockboxISM;
+  console.log("Setting new origin Lockbox ISM:", newISM);
 
   const tx = await lockbox.connect(vaultManager).setInterchainSecurityModule(newISM);
   await processTx(tx, "Set Lockbox ISM");
 }
 
-// set both fee and recipient
+async function cmdSetLumiaISM() {
+  const { signers, hyperlaneHandler } = await getLumiaContracts();
+  const { vaultManager } = signers;
+
+  const newISM = lumiaAddresses.General.lumiaISM;
+  console.log("Setting new lumia ISM:", newISM);
+
+  const tx = await hyperlaneHandler.connect(vaultManager).setInterchainSecurityModule(newISM);
+  await processTx(tx, "Set Lockbox ISM");
+}
+
 async function cmdSetFeeData() {
   const { signers, allocation, testStrategy } = await getContracts();
   const { bob, vaultManager } = signers;
 
-  const newFeeRate = parseEther("0.02"); // 2%
+  const newFeeRate = CLI_CONFIG.DEFAULT_FEE_RATE;
   const newFeeRecipient = bob.address;
 
   console.log(
@@ -259,26 +224,26 @@ async function cmdSetFeeData() {
 }
 
 async function cmdSetupHyperlaneHandler() {
-  const { signers, hyperlaneHandler } = await getBeamContracts();
+  const { signers, hyperlaneHandler } = await getLumiaContracts();
   const { lumiaFactoryManager } = signers;
 
-  const originLockbox = sepoliaAddresses.General.diamond;
+  const originLockbox = originAddresses.General.diamond;
 
   const tx = await hyperlaneHandler
     .connect(lumiaFactoryManager)
     .updateAuthorizedOrigin(
       originLockbox,
       true,
-      SEPOLIA_CHAIN_ID,
+      lumiaAddresses.General.originDestination,
     );
   await processTx(tx, "Authorize Origin Lockbox");
 }
 
 async function cmdSetLumiaMailbox() {
-  const { signers, hyperlaneHandler } = await getBeamContracts();
+  const { signers, hyperlaneHandler } = await getLumiaContracts();
   const { lumiaFactoryManager } = signers;
 
-  const mailbox = beamAddresses.General.lumiaMailbox;
+  const mailbox = lumiaAddresses.General.lumiaMailbox;
 
   const tx = await hyperlaneHandler
     .connect(lumiaFactoryManager)
@@ -289,21 +254,15 @@ async function cmdSetLumiaMailbox() {
 // --- Main Operations Commands ---
 
 async function cmdReportRevenue() {
-  const { signers, testStrategy, allocation, stakeRewardRoute } = await getContracts();
+  const { signers, testStrategy, allocation } = await getContracts();
   const { vaultManager } = signers;
 
   console.log(`Reporting revenue for strategy ${testStrategy.target}...`);
 
-  // TODO quoteReport
-
-  const stakeAdded = await allocation.checkRevenue(testStrategy);
-  console.log(stakeAdded);
+  const stakeAdded = await allocation.checkRevenue(testStrategy.target);
   console.log("Stake added from revenue:", formatEther(stakeAdded));
 
-  const dispatchFee = await stakeRewardRoute.quoteDispatchStakeReward({
-    strategy: testStrategy,
-    stakeAdded,
-  } as StakeRewardDataStruct);
+  const dispatchFee = await allocation.quoteReport(testStrategy.target);
 
   console.log("Dispatch fee for reporting revenue:", formatEther(dispatchFee));
 
@@ -315,21 +274,21 @@ async function cmdReportRevenue() {
 }
 
 async function cmdStakeDeposit() {
-  const { signers, deposit, stakeInfoRoute, testStrategy } = await getContracts();
+  const { signers, deposit, testStrategy } = await getContracts();
   const { alice } = signers;
 
   const stakeAmount = parseEther("0.1");
   console.log(`Staking deposit of ${formatEther(stakeAmount)} ETH for strategy ${testStrategy.target}...`);
 
-  const dispatchFee = await stakeInfoRoute.quoteDispatchStakeInfo({
-    strategy: testStrategy,
-    sender: alice.address,
-    stake: stakeAmount,
-  } as StakeInfoDataStruct);
+  const dispatchFee = await deposit.quoteDepositDispatch(
+    testStrategy,
+    alice,
+    stakeAmount,
+  );
 
   console.log("Dispatch fee for staking deposit:", formatEther(dispatchFee));
 
-  const tx = await deposit.connect(alice).stakeDeposit(
+  const tx = await deposit.connect(alice).deposit(
     testStrategy,
     alice,
     stakeAmount,
@@ -339,7 +298,7 @@ async function cmdStakeDeposit() {
 }
 
 async function cmdSharesRedeem() {
-  const { signers, realAssets, hyperlaneHandler, stakeRedeemRoute, testStrategyAddress } = await getBeamContracts();
+  const { signers, realAssets, hyperlaneHandler, testStrategyAddress } = await getLumiaContracts();
   const { alice } = signers;
 
   const sharesAmount = parseEther("0.2");
@@ -352,17 +311,19 @@ async function cmdSharesRedeem() {
 
   await processTx(
     await shares.connect(alice).approve(
-      realAssets.target,
+      realAssets,
       sharesAmount,
     ),
     "Approve Shares to RealAssets",
   );
 
-  const dispatchFee = await stakeRedeemRoute.quoteDispatchStakeRedeem({
-    strategy: testStrategyAddress,
-    sender: alice.address,
-    redeemAmount: sharesAmount,
-  } as StakeRedeemDataStruct);
+  const dispatchFee = await realAssets.quoteRedeem(
+    testStrategyAddress,
+    alice,
+    sharesAmount,
+  );
+
+  console.log("Dispatch fee for redeem:", formatEther(dispatchFee));
 
   await processTx(
     await realAssets.connect(alice).redeem(
@@ -399,7 +360,7 @@ async function cmdClaimWithdraw() {
   await processTx(tx, "Claim Withdraw");
 }
 
-// --- Info Command ---
+// --- Info Commands ---
 
 async function cmdInfo() {
   const {
@@ -420,9 +381,9 @@ async function cmdInfo() {
   const diamondBalance = await ethYieldToken.balanceOf(diamond);
 
   console.log("=== Info ===");
-  console.log("testStrategy:", await testStrategy.getAddress());
-  console.log("depositFacet (diamond):", await deposit.getAddress());
-  console.log("ethYieldToken:", await ethYieldToken.getAddress());
+  console.log("testStrategy:", testStrategy.target);
+  console.log("depositFacet (diamond):", deposit.target);
+  console.log("ethYieldToken:", ethYieldToken.target);
 
   console.log("owner:", owner.address);
   console.log("strategyManager:", strategyManager.address);
@@ -476,6 +437,7 @@ async function cmdInfo() {
   console.log({
     mailbox: lockboxData.mailbox,
     ism: lockboxData.ism,
+    postDispatchHook: lockboxData.postDispatchHook,
     destination: lockboxData.destination,
     lumiaFactory: lockboxData.lumiaFactory,
     lastMessage: lockboxData.lastMessage,
@@ -522,7 +484,7 @@ async function getUserLastClaims() {
     lastClaimIds.map((id) => id.toString()),
   ));
 
-  const claims = await deposit.pendingWithdraws([...lastClaimIds]);
+  const claims = await deposit.pendingWithdrawClaims([...lastClaimIds]);
   for (let i = 0; i < lastClaimIds.length; i++) {
     const claim = claims[i];
     console.log(`Claim ID ${lastClaimIds[i]}:`, {
@@ -536,7 +498,7 @@ async function getUserLastClaims() {
 }
 
 async function cmdLumiaInfo() {
-  const { signers, testStrategyAddress, lumiaDiamond, hyperlaneHandler } = await getBeamContracts();
+  const { signers, testStrategyAddress, lumiaDiamond, hyperlaneHandler } = await getLumiaContracts();
   const { lumiaFactoryManager, alice } = signers;
 
   // native LUMIA balances
@@ -545,12 +507,16 @@ async function cmdLumiaInfo() {
 
   console.log("=== Lumia Info ===");
   console.log("lumiaDiamond:", lumiaDiamond);
-  console.log("hyperlaneHandler:", await hyperlaneHandler.getAddress());
+  console.log("hyperlaneHandler:", hyperlaneHandler.target);
 
   console.log("lumiaFactoryManager:", lumiaFactoryManager.address);
 
   const mailbox = await hyperlaneHandler.mailbox();
+  const ism = await hyperlaneHandler.interchainSecurityModule();
+  const postDispatchHook = await hyperlaneHandler.hook();
   console.log("mailbox:", mailbox);
+  console.log("ISM:", ism);
+  console.log("postDispatchHook:", postDispatchHook);
 
   console.log("==============");
 
@@ -569,7 +535,7 @@ async function cmdLumiaInfo() {
       vaultShares: routeInfo.vaultShares,
     });
 
-    const principial = await ethers.getContractAt(
+    const principal = await ethers.getContractAt(
       "LumiaPrincipal", routeInfo.assetToken,
     );
     const shares = await ethers.getContractAt(
@@ -577,7 +543,7 @@ async function cmdLumiaInfo() {
     );
 
     // total supplies
-    const principalTotalSupply = await principial.totalSupply();
+    const principalTotalSupply = await principal.totalSupply();
     const sharesTotalSupply = await shares.totalSupply();
 
     console.log("Lumia Principal total supply:", formatEther(principalTotalSupply));
@@ -592,13 +558,60 @@ async function cmdLumiaInfo() {
   console.log("==============");
 }
 
+// --- Help Command ---
+
+function printHelp() {
+  console.log(`
+╔════════════════════════════════════════════════════════════╗
+║              HyperStaking CLI - Command Reference          ║
+╚════════════════════════════════════════════════════════════╝
+
+MANAGEMENT COMMANDS:
+  add-strategy                 Add a new reserve strategy
+  supply-strategy             Supply yield tokens to strategy
+  set-strategy-asset-price    Update strategy asset price
+  setup-lockbox               Configure lockbox settings
+  set-origin-ism              Set origin lockbox ISM
+  set-lumia-ism               Set lumia ISM
+  set-fee-data                Configure fee rate and recipient
+  setup-hyperlane-handler     Setup Hyperlane handler
+  set-lumia-mailbox           Set Lumia mailbox
+
+OPERATION COMMANDS:
+  report-revenue              Report and compound strategy revenue
+  stake-deposit               Deposit and stake ETH
+  shares-redeem               Redeem shares for assets
+  reexecute-failed-redeem     Retry failed redeem messages
+  claim-withdraw              Claim pending withdrawals
+
+INFO COMMANDS:
+  info                        Display general info (default)
+  lumia-info                  Display Lumia chain info
+  get-user-failed-redeems     Get user's failed redeems
+  get-user-last-claims        Get user's recent claims
+  help                        Show this help message
+
+UTILITY COMMANDS:
+  send-ether                  Send ETH to an address
+
+USAGE:
+  CMD=<command> npx hardhat run scripts/hyper-cli.ts --network <network>
+
+EXAMPLES:
+  CMD=info npx hardhat run scripts/hyper-cli.ts --network sepolia
+  CMD=stake-deposit npx hardhat run scripts/hyper-cli.ts --network sepolia
+  CMD=help npx hardhat run scripts/hyper-cli.ts
+
+  `);
+}
+
 // --- Main ---
 
 async function main() {
   // hardhat script cant take args, so we use env var for command
   let command = process.env.CMD;
   if (!command) {
-    command = "info"; // default command
+    command = CLI_CONFIG.DEFAULT_COMMAND;
   }
 
   switch (command) {
@@ -620,8 +633,12 @@ async function main() {
       await cmdSetupLockbox();
       break;
     }
-    case "set-lockbox-ism": {
-      await cmdSetLockboxISM();
+    case "set-origin-ism": {
+      await cmdSetOriginISM();
+      break;
+    }
+    case "set-lumia-ism": {
+      await cmdSetLumiaISM();
       break;
     }
     case "set-fee-data": {
@@ -682,6 +699,13 @@ async function main() {
       break;
     }
 
+    // --- Help ---
+
+    case "help": {
+      printHelp();
+      break;
+    }
+
     // --- Utility Commands ---
 
     case "send-ether": {
@@ -694,7 +718,9 @@ async function main() {
       break;
     }
     default:
-      console.error(`Unknown command: ${command}`);
+      console.error(`❌ Unknown command: ${command}`);
+      console.log("Run 'CMD=help' to see available commands\n");
+      printHelp();
       process.exitCode = 1;
   }
 }

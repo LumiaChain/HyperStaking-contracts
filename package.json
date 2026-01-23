@@ -12,7 +12,7 @@
     "prepare": "husky",
     "docgen": "npx hardhat docgen",
     "deploy-hyperstaking-sepolia": "npx hardhat ignition deploy ignition/modules/HyperStaking.ts --parameters ignition/parameters.sepolia.json --network sepolia",
-    "deploy-lumia-diamond-beam": "npx hardhat ignition deploy ignition/modules/LumiaDiamond.ts --parameters ignition/parameters.lumia-beam.json --network lumia-beam",
+    "deploy-lumia-diamond-beam": "npx hardhat ignition deploy ignition/modules/LumiaDiamond.ts --parameters ignition/parameters.lumia_beam.json --network lumia_beam",
     "deploy-dinero-strategy-sepolia": "npx hardhat ignition deploy ignition/modules/DineroStrategy.ts --parameters ignition/parameters.sepolia.json --network sepolia",
     "deploy-superform-strategy-sepolia": "npx hardhat ignition deploy ignition/modules/SuperformStrategy.ts --parameters ignition/parameters.sepolia.json --network sepolia",
     "deploy-test-strategy-sepolia": "npx hardhat ignition deploy ignition/modules/test/MockReserveStrategy.ts --parameters ignition/parameters.sepolia.json --network sepolia"
