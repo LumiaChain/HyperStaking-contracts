@@ -20,7 +20,7 @@ import { processTx } from "./libraries/utils";
 // 3. Set the FACET_CONTRACT_INTERFACE to the interface name of the new facet contract.
 // 4. Run the script using `npx hardhat run --network <network> scripts/diamondCut.ts`
 
-const OLD_FACET_ADDRESS = "0x2d399A3e859ef0c2283525810e12827BF64Da904";
+const OLD_FACET_ADDRESS = "0xf080957499C38bE35aBB2af5709D5F7FC1B13770";
 
 const FACET_CONTRACT_NAME = "LockboxFacet";
 const FACET_CONTRACT_INTERFACE = "ILockbox";

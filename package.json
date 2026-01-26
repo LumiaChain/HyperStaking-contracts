@@ -6,7 +6,6 @@
     "test:integration:ethereum": "FORK=ethereum hardhat test test/integration/eth.test.ts",
     "test:integration:base": "FORK=base hardhat test test/integration/base.test.ts",
     "coverage": "npx hardhat coverage --testfiles test/unit --solcoverjs .solcover.ts",
-    "prettier": "prettier --write --plugin=prettier-plugin-solidity 'contracts/**/*.sol'",
     "lint": "prettier --list-different --plugin=prettier-plugin-solidity 'contracts/**/*.sol' || npx eslint . --ext .js,.ts",
     "check": "solhint -c .solhint.json 'contracts/**/*.sol'",
     "prepare": "husky",
@@ -19,7 +18,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:orionprotocol/HyperStaking-contracts.git"
+    "url": "git@github.com:LumiaChain/HyperStaking-contracts.git"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-foundry": "^1.1.2",

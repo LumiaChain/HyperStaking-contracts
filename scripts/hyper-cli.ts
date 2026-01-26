@@ -108,7 +108,7 @@ async function cmdSetStrategyAssetPrice() {
   const { signers, testStrategy } = await getContracts();
   const { strategyManager } = signers;
 
-  const newPrice = parseEther("1.2"); // new price in ETH +20% from 1 ETH
+  const newPrice = parseEther("2.0"); // new price in ETH +100% from 1 ETH
 
   console.log(
     `Setting new asset price for strategy ${testStrategy.target} to ${formatEther(newPrice)}...`,
@@ -167,6 +167,7 @@ async function cmdSetupLockbox() {
   tx = await lockbox.connect(vaultManager).proposeLumiaFactory(newLumiaFactory);
   await processTx(tx, "Propose Lumia Factory");
 
+  // in a real scenario, there would be a timelock delay here
   tx = await lockbox.connect(vaultManager).applyLumiaFactory();
   await processTx(tx, "Apply Lumia Factory");
 
@@ -182,6 +183,17 @@ async function cmdSetOriginISM() {
 
   const tx = await lockbox.connect(vaultManager).setInterchainSecurityModule(newISM);
   await processTx(tx, "Set Lockbox ISM");
+}
+
+async function cmdSetOriginHook() {
+  const { signers, lockbox } = await getContracts();
+  const { vaultManager } = signers;
+
+  const newHook = originAddresses.General.lockboxHook;
+  console.log("Setting new origin Lockbox Post Dispatch Hook:", newHook);
+
+  const tx = await lockbox.connect(vaultManager).setHook(newHook);
+  await processTx(tx, "Set Lockbox Post Dispatch Hook");
 }
 
 async function cmdSetLumiaISM() {
@@ -270,6 +282,7 @@ async function cmdReportRevenue() {
     testStrategy,
     { value: dispatchFee },
   );
+
   await processTx(tx, "Report Strategy Revenue");
 }
 
@@ -277,7 +290,7 @@ async function cmdStakeDeposit() {
   const { signers, deposit, testStrategy } = await getContracts();
   const { alice } = signers;
 
-  const stakeAmount = parseEther("0.1");
+  const stakeAmount = parseEther("0.05");
   console.log(`Staking deposit of ${formatEther(stakeAmount)} ETH for strategy ${testStrategy.target}...`);
 
   const dispatchFee = await deposit.quoteDepositDispatch(
@@ -294,6 +307,7 @@ async function cmdStakeDeposit() {
     stakeAmount,
     { value: stakeAmount + dispatchFee },
   );
+
   await processTx(tx, "Stake Deposit");
 }
 
@@ -301,7 +315,7 @@ async function cmdSharesRedeem() {
   const { signers, realAssets, hyperlaneHandler, testStrategyAddress } = await getLumiaContracts();
   const { alice } = signers;
 
-  const sharesAmount = parseEther("0.2");
+  const sharesAmount = parseEther("0.04");
   console.log(`Redeeming ${formatEther(sharesAmount)} shares for strategy ${testStrategyAddress}...`);
 
   const routeInfo = await hyperlaneHandler.getRouteInfo(testStrategyAddress);
@@ -309,13 +323,18 @@ async function cmdSharesRedeem() {
     "LumiaVaultShares", routeInfo.vaultShares,
   );
 
-  await processTx(
-    await shares.connect(alice).approve(
-      realAssets,
-      sharesAmount,
-    ),
-    "Approve Shares to RealAssets",
-  );
+  console.log("Shares Vault address:", shares.target);
+  console.log("Total shares supply:", formatEther(await shares.totalSupply()));
+  console.log("Alice shares balance before redeem:", formatEther(await shares.balanceOf(alice)));
+
+  // optional (for third-party allowance):
+  // await processTx(
+  //   await shares.connect(alice).approve(
+  //     realAssets,
+  //     sharesAmount,
+  //   ),
+  //   "Approve Shares to RealAssets",
+  // );
 
   const dispatchFee = await realAssets.quoteRedeem(
     testStrategyAddress,
@@ -637,6 +656,10 @@ async function main() {
       await cmdSetOriginISM();
       break;
     }
+    case "set-origin-hook": {
+      await cmdSetOriginHook();
+      break;
+    }
     case "set-lumia-ism": {
       await cmdSetLumiaISM();
       break;
@@ -712,8 +735,8 @@ async function main() {
       const { signers } = await getContracts();
       await sendEther(
         signers.owner,
-        signers.lumiaFactoryManager.address,
-        "0.1",
+        signers.strategyManager.address,
+        "0.2",
       );
       break;
     }
