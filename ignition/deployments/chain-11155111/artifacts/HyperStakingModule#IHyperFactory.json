@@ -4,8 +4,35 @@
   "sourceName": "contracts/hyperstaking/interfaces/IHyperFactory.sol",
   "abi": [
     {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "caller",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "strategy",
+          "type": "address"
+        }
+      ],
+      "name": "OnlyStrategyCaller",
+      "type": "error"
+    },
+    {
       "inputs": [],
       "name": "VaultAlreadyExist",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "strategy",
+          "type": "address"
+        }
+      ],
+      "name": "VaultDisabled",
       "type": "error"
     },
     {
@@ -88,6 +115,31 @@
       "type": "event"
     },
     {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "strategy",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "oldStakeCurrency",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newStakeCurrency",
+          "type": "address"
+        }
+      ],
+      "name": "VaultStakeCurrencyUpdated",
+      "type": "event"
+    },
+    {
       "inputs": [
         {
           "internalType": "address",
@@ -118,12 +170,66 @@
           "type": "address"
         },
         {
+          "internalType": "string",
+          "name": "vaultTokenName",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "vaultTokenSymbol",
+          "type": "string"
+        }
+      ],
+      "name": "quoteAddStrategy",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "strategy",
+          "type": "address"
+        },
+        {
           "internalType": "bool",
           "name": "enabled",
           "type": "bool"
         }
       ],
       "name": "setStrategyEnabled",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "strategy",
+          "type": "address"
+        },
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "token",
+              "type": "address"
+            }
+          ],
+          "internalType": "struct Currency",
+          "name": "newCurrency",
+          "type": "tuple"
+        }
+      ],
+      "name": "updateVaultStakeCurrency",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"

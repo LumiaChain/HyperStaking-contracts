@@ -29,6 +29,12 @@
           "type": "address"
         },
         {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "nonce",
+          "type": "uint64"
+        },
+        {
           "indexed": true,
           "internalType": "address",
           "name": "strategy",
@@ -48,6 +54,11 @@
       "inputs": [
         {
           "components": [
+            {
+              "internalType": "uint64",
+              "name": "nonce",
+              "type": "uint64"
+            },
             {
               "internalType": "address",
               "name": "strategy",
@@ -80,6 +91,11 @@
         {
           "components": [
             {
+              "internalType": "uint64",
+              "name": "nonce",
+              "type": "uint64"
+            },
+            {
               "internalType": "address",
               "name": "strategy",
               "type": "address"
@@ -110,6 +126,11 @@
       "inputs": [
         {
           "components": [
+            {
+              "internalType": "uint64",
+              "name": "nonce",
+              "type": "uint64"
+            },
             {
               "internalType": "address",
               "name": "strategy",

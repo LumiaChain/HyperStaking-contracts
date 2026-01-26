@@ -115,6 +115,32 @@
         {
           "indexed": false,
           "internalType": "address",
+          "name": "hook",
+          "type": "address"
+        }
+      ],
+      "name": "HyperlaneHookUpdated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "ism",
+          "type": "address"
+        }
+      ],
+      "name": "HyperlaneISMUpdated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
           "name": "newLumiaFactory",
           "type": "address"
         },
@@ -208,9 +234,9 @@
         },
         {
           "indexed": false,
-          "internalType": "string",
+          "internalType": "bytes",
           "name": "message",
-          "type": "string"
+          "type": "bytes"
         }
       ],
       "name": "ReceivedMessage",
@@ -312,7 +338,7 @@
       ],
       "name": "bridgeStakeInfo",
       "outputs": [],
-      "stateMutability": "payable",
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
@@ -329,6 +355,24 @@
         }
       ],
       "name": "bridgeStakeReward",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "dispatchFee",
+          "type": "uint256"
+        }
+      ],
+      "name": "collectDispatchFee",
       "outputs": [],
       "stateMutability": "payable",
       "type": "function"
@@ -405,23 +449,49 @@
       "inputs": [
         {
           "internalType": "uint32",
-          "name": "origin",
+          "name": "_origin",
           "type": "uint32"
         },
         {
           "internalType": "bytes32",
-          "name": "sender",
+          "name": "_sender",
           "type": "bytes32"
         },
         {
           "internalType": "bytes",
-          "name": "data",
+          "name": "_message",
           "type": "bytes"
         }
       ],
       "name": "handle",
       "outputs": [],
       "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "hook",
+      "outputs": [
+        {
+          "internalType": "contract IPostDispatchHook",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "interchainSecurityModule",
+      "outputs": [
+        {
+          "internalType": "contract IInterchainSecurityModule",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -433,6 +503,16 @@
             {
               "internalType": "contract IMailbox",
               "name": "mailbox",
+              "type": "address"
+            },
+            {
+              "internalType": "contract IInterchainSecurityModule",
+              "name": "ism",
+              "type": "address"
+            },
+            {
+              "internalType": "contract IPostDispatchHook",
+              "name": "postDispatchHook",
               "type": "address"
             },
             {
@@ -519,6 +599,32 @@
         }
       ],
       "name": "setDestination",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "hook",
+          "type": "address"
+        }
+      ],
+      "name": "setHook",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "contract IInterchainSecurityModule",
+          "name": "ism",
+          "type": "address"
+        }
+      ],
+      "name": "setInterchainSecurityModule",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
