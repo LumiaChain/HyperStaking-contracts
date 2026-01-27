@@ -17,7 +17,7 @@ import {IPostDispatchHook} from "../../external/hyperlane/interfaces/hooks/IPost
 import {TypeCasts} from "../../external/hyperlane/libs/TypeCasts.sol";
 
 import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
-import {NotAuthorized, BadOriginDestination, DispatchUnderpaid, InvalidHook} from "../../shared/Errors.sol";
+import {NotAuthorized, BadOriginDestination, DispatchUnderpaid, InvalidHook, InvalidIsm} from "../../shared/Errors.sol";
 
 import {
     LibHyperStaking,
@@ -262,6 +262,10 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
 
     /// @inheritdoc ILockbox
     function setInterchainSecurityModule(IInterchainSecurityModule ism) external onlyVaultManager {
+        require(
+            address(ism) == address(0) || address(ism).code.length > 0,
+            InvalidIsm(address(ism))
+        );
         LibHyperStaking.diamondStorage().lockboxData.ism = ism;
         emit HyperlaneISMUpdated(address(ism));
     }
@@ -276,7 +280,6 @@ contract LockboxFacet is ILockbox, HyperStakingAcl {
         LibHyperStaking.diamondStorage().lockboxData.postDispatchHook = IPostDispatchHook(postDispatchHook);
         emit HyperlaneHookUpdated(postDispatchHook);
     }
-
 
     // ========= View ========= //
 

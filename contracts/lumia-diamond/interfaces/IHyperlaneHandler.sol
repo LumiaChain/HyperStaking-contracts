@@ -2,7 +2,7 @@
 pragma solidity =0.8.27;
 
 import {IMailbox} from "../../external/hyperlane/interfaces/IMailbox.sol";
-import {IMessageRecipient} from "../../external/hyperlane//interfaces/IMessageRecipient.sol";
+import {IMessageRecipient} from "../../external/hyperlane/interfaces/IMessageRecipient.sol";
 import {IPostDispatchHook} from "../../external/hyperlane/interfaces/hooks/IPostDispatchHook.sol";
 import {
     IInterchainSecurityModule,

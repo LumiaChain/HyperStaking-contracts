@@ -27,7 +27,7 @@ import {
 
 import {Currency, CurrencyHandler} from "../../shared/libraries/CurrencyHandler.sol";
 import {LibHyperlaneReplayGuard} from "../../shared/libraries/LibHyperlaneReplayGuard.sol";
-import {BadOriginDestination, DispatchUnderpaid, InvalidHook} from "../../shared/Errors.sol";
+import {BadOriginDestination, DispatchUnderpaid, InvalidHook, InvalidIsm} from "../../shared/Errors.sol";
 
 /**
  * @title HyperlaneHandlerFacet
@@ -169,6 +169,10 @@ contract HyperlaneHandlerFacet is IHyperlaneHandler, LumiaDiamondAcl {
 
     /// @inheritdoc IHyperlaneHandler
     function setInterchainSecurityModule(IInterchainSecurityModule ism) external onlyLumiaFactoryManager {
+        require(
+            address(ism) == address(0) || address(ism).code.length > 0,
+            InvalidIsm(address(ism))
+        );
         LibInterchainFactory.diamondStorage().ism = ism;
         emit HyperlaneISMUpdated(address(ism));
     }

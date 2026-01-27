@@ -3,6 +3,7 @@
 > **Note**: This guide focuses on developing and testing the HyperStaking protocol. For deployment instructions, see [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md).
 
 ## Table of Contents
+
 1. [Project Overview](#project-overview)
 2. [Architecture](#architecture)
 3. [Environment Setup](#environment-setup)
@@ -20,6 +21,7 @@
 HyperStaking is a cross-chain staking protocol built on the Diamond Proxy (ERC-2535) pattern, enabling users to stake various tokens across multiple chains with yield-generating strategies.
 
 ### Key Features
+
 - **Diamond Proxy Architecture**: Modular, upgradeable contract system
 - **Multi-Chain Support**: Origin chains (Ethereum, Base, Arbitrum) + Lumia Chain
 - **ERC4626 Vaults**: Standard-compliant yield-bearing vaults
@@ -45,6 +47,7 @@ graph TB
 ```
 
 **Key Design Principles:**
+
 - **Single Lumia Diamond**: One central diamond deployed only on Lumia Chain
 - **Multiple Origin Diamonds**: One HyperStaking diamond per supported origin chain
 - **Hyperlane Bridge**: Cross-chain messaging between any origin chain and Lumia
@@ -55,10 +58,13 @@ graph TB
 The system uses two types of diamond proxies:
 
 #### 1. Origin-Chain Diamonds (HyperStaking)
-**Deployed on**: Multiple chains (Ethereum, Base, Arbitrum, etc.)  
+
+**Deployed on**: Multiple chains (Ethereum, Base, Arbitrum, etc.)
+
 **Purpose**: Handle local deposits, allocations, and strategy execution
 
 **Core Facets**:
+
 - `DepositFacet`: User deposit entry point
 - `AllocationFacet`: Strategy allocation management
 - `LockboxFacet`: Cross-chain message coordination
@@ -67,16 +73,20 @@ The system uses two types of diamond proxies:
 - Integration facets (may vary by deployment)
 
 > **Future Architecture Note**: Strategy implementations (currently in `contracts/hyperstaking/strategies/`) may be separated into a standalone repository outside the core HyperStaking codebase. This would enable:
+>
 > - Better scalability and independent strategy development
 > - External parties to contribute strategies
 > - Lumia team review process for community strategies
 > - Enhanced security isolation (malicious strategies cannot affect core protocol or other strategies)
 
 #### 2. Lumia-Chain Diamond
-**Deployed on**: Lumia Chain **only**  
+
+**Deployed on**: Lumia Chain **only**
+
 **Purpose**: Central accounting hub for all origin chains
 
 **Facets**:
+
 - `HyperlaneHandlerFacet`: Receives and processes cross-chain messages
 - `RealAssetsFacet`: Manages principal token minting/burning
 - `LumiaFactoryFacet`: Deploys and manages ERC4626 vaults
@@ -101,17 +111,17 @@ sequenceDiagram
     AF->>Strategy: Execute allocation
     Strategy-->>AF: Return allocation
     AF->>LF: Report stake info
-    
+
     Note over LF,HM: Cross-Chain Message
     LF->>HM: dispatch(StakeInfo)
     HM-->>HH: relay message
-    
+
     HH->>RA: Process stake
     RA->>RA: Mint Principal tokens
     RA->>Vault: Update accounting
     Vault->>Vault: Issue vault shares
     Vault-->>User: Shares to user
-    
+
     Note over LF,HM: Rewards/Redeem Flow
     Vault->>HH: Redeem request
     HH->>HM: dispatch(StakeRedeem)
@@ -126,6 +136,7 @@ sequenceDiagram
 ## Environment Setup
 
 ### 1. Prerequisites
+
 ```bash
 # Required versions
 Node.js: 22.x
@@ -133,9 +144,10 @@ npm: 10.x
 ```
 
 ### 2. Installation
+
 ```bash
 # Clone the repository
-git clone git@github.com:orionprotocol/HyperStaking-contracts.git
+git clone git@github.com:LumiaChain/HyperStaking-contracts.git
 cd HyperStaking-contracts
 
 # Install JavaScript dependencies
@@ -149,7 +161,9 @@ cp .env.example .env
 ```
 
 ### 3. Environment Variables
+
 Edit `.env` file with your configuration:
+
 ```env
 # Gas and Size Reporting
 REPORT_GAS=false
@@ -161,7 +175,7 @@ SEPOLIA_RPC_URL=""
 HOLESKY_RPC_URL=""
 BSC_TESTNET_RPC_URL=""
 
-LUMIA_MAINNET_RPC_URL="https://meinnet-rpc.lumia.org"
+LUMIA_MAINNET_RPC_URL="https://mainnet-rpc.lumia.org"
 LUMIA_TESTNET_RPC_URL="https://testnet-rpc.lumia.org"
 
 LOCAL_RPC_URL="http://127.0.0.1:8545/"
@@ -178,6 +192,7 @@ DEPLOYER_PRIVATE_KEY="0x00000000000000000000000000000000000000000000000000000000
 ```
 
 ### 4. Verify Installation
+
 ```bash
 # Compile contracts
 npx hardhat compile
@@ -272,9 +287,8 @@ npm run coverage
 
 ### Writing Tests
 
-The repository contains comprehensive test examples in `test/unit/` and `test/integration/`. 
-
 **Key testing patterns to follow:**
+
 - Use `loadFixture` from Hardhat for efficient test setup
 - Leverage `test/setup.ts` base fixtures (`deployHyperStakingBase`)
 - Check protocol invariants with `afterEach` hooks
@@ -294,19 +308,19 @@ All strategies must implement `IStrategy`:
 ```solidity
 interface IStrategy {
     // Asynchronous allocation
-    function requestAllocation(uint256 amount, address receiver) 
+    function requestAllocation(uint256 amount, address receiver)
         external returns (uint256 id);
     function claimAllocation(uint256 id) external returns (uint256 allocated);
 
     // Asynchronous exit
-    function requestExit(uint256 allocation, address receiver) 
+    function requestExit(uint256 allocation, address receiver)
         external returns (uint256 id);
     function claimExit(uint256 id) external returns (uint256 returned);
 
     // Views
-    function previewAllocation(uint256 amount) 
+    function previewAllocation(uint256 amount)
         external view returns (uint256);
-    function previewExit(uint256 allocation) 
+    function previewExit(uint256 allocation)
         external view returns (uint256);
 
     // Metadata
@@ -318,6 +332,7 @@ interface IStrategy {
 ### Strategy Base Class
 
 All strategies should inherit from `AbstractStrategy` which provides:
+
 - UUPS upgradeability pattern
 - Diamond integration (`DIAMOND` address and `onlyDiamond` modifier)
 - Request/response pattern implementation
@@ -335,7 +350,7 @@ contract MyCustomStrategy is AbstractStrategy {
         DIAMOND = diamond_;
         // Initialize your strategy...
     }
-    
+
     // Implement IStrategy interface methods...
 }
 ```
@@ -355,15 +370,15 @@ const MyCustomStrategyModule = buildModule("MyCustomStrategyModule", (m) => {
 
   // 1. Deploy implementation contract
   const impl = m.contract("MyCustomStrategy", [], { id: "impl" });
-  
+
   // 2. Encode initializer calldata
   const initCalldata = m.encodeFunctionCall(impl, "initialize", [
     diamond, stakeCurrency, revenueAsset,
   ]);
-  
+
   // 3. Deploy ERC1967Proxy with initialization data
   const proxy = m.contract("ERC1967Proxy", [impl, initCalldata]);
-  
+
   // 4. Treat the proxy as MyCustomStrategy
   const myCustomStrategy = m.contractAt("MyCustomStrategy", proxy);
 
@@ -374,6 +389,7 @@ export default MyCustomStrategyModule;
 ```
 
 **Key Points:**
+
 - Uses **UUPS (ERC1967)** proxy pattern for upgradeability
 - Implementation deployed separately from proxy
 - Initialization calldata is encoded and passed to proxy constructor (atomic initialization)
@@ -507,10 +523,10 @@ rm -rf cache/ artifacts/ typechain-types/ # Deep clean
 ## Additional Resources
 
 - **Specification**: `docs/spec/spec.md`
-- **Diamond Proxy (ERC-2535)**: https://eips.ethereum.org/EIPS/eip-2535
-- **Hardhat Ignition**: https://hardhat.org/ignition/docs/getting-started
-- **Hyperlane**: https://docs.hyperlane.xyz/
-- **ERC4626**: https://eips.ethereum.org/EIPS/eip-4626
+- **Diamond Proxy (ERC-2535)**: <https://eips.ethereum.org/EIPS/eip-2535>
+- **Hardhat Ignition**: <https://hardhat.org/ignition/docs/getting-started>
+- **Hyperlane**: <https://docs.hyperlane.xyz/>
+- **ERC4626**: <https://eips.ethereum.org/EIPS/eip-4626>
 
 ---
 
@@ -536,7 +552,7 @@ rm -rf cache/ artifacts/ typechain-types/ # Deep clean
 4. **Submodule errors**
    - Run `git submodule update --init --recursive`
    - Check `.gitmodules` file integrity
-   - Verify `remappings.txt` is up to date (Foundry-style imports)
+   - Verify `remappings.txt` is up-to-date (Foundry-style imports)
    - Check `hardhat.config.ts` for correct remapping paths
 
 5. **Type errors in TypeScript**
@@ -545,4 +561,4 @@ rm -rf cache/ artifacts/ typechain-types/ # Deep clean
 
 ---
 
-*Last Updated: January 2026*
+Last Updated: January 2026

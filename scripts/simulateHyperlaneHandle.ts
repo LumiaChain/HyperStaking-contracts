@@ -42,7 +42,12 @@ async function main() {
     },
   ]);
 
-  processTx(tx, "Simulate Hyperlane handle");
+  await processTx(tx, "Simulate Hyperlane handle");
+
+  await network.provider.request({
+    method: "hardhat_stopImpersonatingAccount",
+    params: [mailbox],
+  });
 }
 
 main().catch((e) => {

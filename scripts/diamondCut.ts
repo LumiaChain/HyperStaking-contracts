@@ -4,7 +4,7 @@ import { diffFacetSelectors } from "./libraries/diamondLoupe";
 import { getContractInterface } from "./libraries/hardhat";
 import promptSync from "prompt-sync";
 
-import { ZeroAddress } from "ethers";
+import { Addressable, ZeroAddress } from "ethers";
 
 import * as addresses from "../ignition/parameters.sepolia.json";
 // import * as addresses from "../ignition/parameters.lumia_beam.json";
@@ -86,9 +86,15 @@ async function main() {
 
   // -- Deploy new facet
 
-  const newFacet = await ethers.deployContract(FACET_CONTRACT_NAME);
-  await newFacet.waitForDeployment();
-  console.log(`Deployed new facet ${FACET_CONTRACT_NAME} at address:`, newFacet.target);
+  let newFacetAddress: string | Addressable = ZeroAddress;
+
+  // Only deploy if we have selectors to add or replace
+  if (addSelectors.length > 0 || replaceSelectors.length > 0) {
+    const newFacet = await ethers.deployContract(FACET_CONTRACT_NAME);
+    await newFacet.waitForDeployment();
+    console.log(`Deployed new facet ${FACET_CONTRACT_NAME} at address:`, newFacet.target);
+    newFacetAddress = newFacet.target;
+  }
 
   // -- Prepare diamond cut
 
@@ -96,7 +102,7 @@ async function main() {
 
   if (addSelectors.length > 0) {
     cut.push({
-      facetAddress: newFacet.target,
+      facetAddress: newFacetAddress,
       action: FacetCutAction.Add,
       functionSelectors: addSelectors,
     });
@@ -104,7 +110,7 @@ async function main() {
 
   if (replaceSelectors.length > 0) {
     cut.push({
-      facetAddress: newFacet.target,
+      facetAddress: newFacetAddress,
       action: FacetCutAction.Replace,
       functionSelectors: replaceSelectors,
     });

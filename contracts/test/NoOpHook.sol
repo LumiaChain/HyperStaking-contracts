@@ -8,7 +8,7 @@ import {IPostDispatchHook} from "../external/hyperlane/interfaces/hooks/IPostDis
 /**
  * @title NoOpHook
  * @notice A hyperlane post dispatch hook that does nothing
-           no gas payments, no merkle trees, just passes through
+           no gas payments, just passes through
  */
 contract NoOpHook is IPostDispatchHook {
     /// @inheritdoc IPostDispatchHook

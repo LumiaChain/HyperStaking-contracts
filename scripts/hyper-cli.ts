@@ -198,13 +198,13 @@ async function cmdSetOriginHook() {
 
 async function cmdSetLumiaISM() {
   const { signers, hyperlaneHandler } = await getLumiaContracts();
-  const { vaultManager } = signers;
+  const { lumiaFactoryManager } = signers;
 
   const newISM = lumiaAddresses.General.lumiaISM;
   console.log("Setting new lumia ISM:", newISM);
 
-  const tx = await hyperlaneHandler.connect(vaultManager).setInterchainSecurityModule(newISM);
-  await processTx(tx, "Set Lockbox ISM");
+  const tx = await hyperlaneHandler.connect(lumiaFactoryManager).setInterchainSecurityModule(newISM);
+  await processTx(tx, "Set Lumia ISM");
 }
 
 async function cmdSetFeeData() {
@@ -591,6 +591,7 @@ MANAGEMENT COMMANDS:
   set-strategy-asset-price    Update strategy asset price
   setup-lockbox               Configure lockbox settings
   set-origin-ism              Set origin lockbox ISM
+  set-origin-hook             Set origin lockbox post-dispatch hook
   set-lumia-ism               Set lumia ISM
   set-fee-data                Configure fee rate and recipient
   setup-hyperlane-handler     Setup Hyperlane handler

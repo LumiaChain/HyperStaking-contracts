@@ -18,7 +18,7 @@ export async function processTx(
   tx: TransactionResponse,
   description?: string,
 ) {
-  console.log(`${description} tx sent:`, tx.hash);
+  console.log(`${description} tx sent: ${tx.hash}`);
   const receipt = await tx.wait();
   if (!receipt) {
     throw new Error(`${description} transaction failed: no receipt`);

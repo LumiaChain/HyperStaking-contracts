@@ -9,9 +9,11 @@ This directory contains documentation for the HyperStaking protocol.
 ## Core Documentation
 
 ### Development Guide
+
 [DEVELOPMENT.md](./DEVELOPMENT.md)
 
 Guide for developing and testing the HyperStaking protocol, including:
+
 - Project architecture and design patterns
 - Environment setup and configuration
 - Testing framework
@@ -21,9 +23,11 @@ Guide for developing and testing the HyperStaking protocol, including:
 **Use this guide for**: Local development, writing tests, creating strategies, and understanding the codebase.
 
 ### Deployment Guide
+
 [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
 
 Step-by-step guide for deploying HyperStaking across multiple chains:
+
 - Pre-deployment checklist
 - Deployment procedures (Lumia and origin chains)
 - Cross-chain configuration with Hyperlane
@@ -38,9 +42,11 @@ Step-by-step guide for deploying HyperStaking across multiple chains:
 ## Specification
 
 ### Protocol Specification
+
 [spec/spec.pdf](./spec/spec.pdf)
 
 Detailed technical specification of the HyperStaking protocol, covering:
+
 - System architecture and design decisions
 - Contract interfaces and data structures
 - Cross-chain messaging flows
@@ -61,6 +67,7 @@ npm run docgen
 The generated API documentation will be saved in `docs/index.md`.
 
 **What's included**:
+
 - Contract interfaces and functions
 - Parameter descriptions
 - Return values
@@ -78,4 +85,4 @@ The generated API documentation will be saved in `docs/index.md`.
 
 ---
 
-*Last Updated: January 2026*
+Last Updated: January 2026

@@ -115,7 +115,7 @@ struct HyperStakingStorage {
 
     /// @notice General lockbox data
     LockboxData lockboxData;
-    uint256[11] __gap_lockboxData;
+    uint256[12] __gap_lockboxData;
 
     /// @notice Pending lockbox mailbox update
     PendingMailbox pendingMailbox;

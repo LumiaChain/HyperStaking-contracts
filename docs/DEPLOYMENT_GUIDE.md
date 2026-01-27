@@ -1,8 +1,9 @@
 # HyperStaking Contracts - Deployment Guide
 
-> **Note**: This guide focuses on deploying and configuring the HyperStaking protocol. For development instructions, see [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md).
+> **Note**: This guide focuses on deploying and configuring the HyperStaking protocol. For development instructions, see [DEVELOPMENT.md](./DEVELOPMENT.md).
 
 ## Table of Contents
+
 1. [Deployment Overview](#deployment-overview)
 2. [Pre-Deployment Checklist](#pre-deployment-checklist)
 3. [Deployment Procedures](#deployment-procedures)
@@ -30,6 +31,7 @@ graph TB
 ```
 
 **Critical Deployment Facts:**
+
 - **Lumia Diamond**: Deploy **once** on Lumia Chain only
 - **Origin Diamonds**: Deploy **one per supported chain** (Ethereum, Base, etc.)
 - **Hyperlane**: Cross-chain messaging (integrated into diamonds)
@@ -43,22 +45,22 @@ sequenceDiagram
     participant L as Lumia Chain
     participant O as Origin Chain
     participant H as Hyperlane
-    
+
     Note over D,L: Phase 1: Lumia Deployment
     D->>L: Deploy Lumia Diamond
     D->>L: Grant roles
     D->>L: Configure Hyperlane handler
-    
+
     Note over D,O: Phase 2: Origin Deployment
     D->>O: Deploy HyperStaking Diamond
     D->>O: Grant roles
     D->>O: Configure Lockbox
-    
+
     Note over D,H: Phase 3: Cross-Chain Setup
     D->>O: Set Lumia destination
     D->>L: Authorize origin lockbox
     D->>O: Set ISM (if needed)
-    
+
     Note over D,O: Phase 4: Strategy Deployment
     D->>O: Deploy strategy contracts
     D->>O: Register strategies (triggers Hyperlane)
@@ -109,6 +111,7 @@ ETHERSCAN_API_KEY="..."
 Create parameter files for each network in `ignition/parameters.*.json`:
 
 **Example: `ignition/parameters.sepolia.json`**
+
 ```json
 {
   "General": {
@@ -122,6 +125,7 @@ Create parameter files for each network in `ignition/parameters.*.json`:
 ```
 
 **Example: `ignition/parameters.lumia-mainnet.json`**
+
 ```json
 {
   "General": {
@@ -135,10 +139,12 @@ Create parameter files for each network in `ignition/parameters.*.json`:
 ### 4. Gather Hyperlane Addresses
 
 Obtain Hyperlane mailbox addresses and domain IDs from:
+
 - [Hyperlane Documentation](https://docs.hyperlane.xyz/)
 - Repository: `hyperlane/chains/<network>/addresses.yaml`
 
 **Common Domain IDs:**
+
 ```javascript
 const DOMAINS = {
   ethereum: 1,
@@ -171,12 +177,13 @@ npx hardhat ignition deploy \
 ```
 
 **Deployed Components:**
+
 - Diamond proxy
 - Core facets: DiamondCut, DiamondLoupe, Ownership
 - Lumia facets: HyperlaneHandler, RealAssets, LumiaFactory, StakeRedeemRoute
 - LumiaDiamondInit (initialization)
 
-#### Step 2: Verify Deployment
+#### Step 2: Verify Lumia Deployment
 
 ```bash
 # Verify contracts on block explorer (ignition)
@@ -223,12 +230,13 @@ npx hardhat ignition deploy \
 ```
 
 **Deployed Components:**
+
 - Diamond proxy
 - Core facets: DepositFacet, AllocationFacet, LockboxFacet, HyperFactoryFacet
 - Integration facets: SuperformIntegration, CurveIntegration, EmaPricing
 - HyperStakingInit (initialization)
 
-#### Step 2: Verify Deployment
+#### Step 2: Verify Origin Deployment
 
 ```bash
 # Verify contracts on block explorer (Ignition built-in)
@@ -257,6 +265,7 @@ CMD=setup-lockbox npx hardhat run scripts/hyper-cli.ts --network sepolia
 ```
 
 **What this does:**
+
 - Sets `lockboxDestination` (Lumia domain ID)
 - Proposes and applies `lumiaFactory` address
 - Enables message routing to Lumia
@@ -269,10 +278,11 @@ Allow Lumia to receive messages from the origin chain:
 
 ```bash
 # Using hyper-cli
-CMD=setup-hyperlane-handler npx hardhat run scripts/hyper-cli.ts --network lumia_mainnet
+CMD=setup-hyperlane-handler npx hardhat run scripts/hyper-cli.ts --network lumia_beam
 ```
 
 **What this does:**
+
 - Calls `updateAuthorizedOrigin(originLockbox, true, originDomain)`
 - Enables Lumia to accept messages from the origin chain
 
@@ -313,7 +323,7 @@ Deploy strategy contracts as separate UUPS upgradeable proxies.
 
 #### Step 1: Deploy Strategy Contract
 
-**Example: Deploying Test Reserve Strategy**
+##### Example: Deploying Test Reserve Strategy
 
 ```bash
 # Using npm script
@@ -337,6 +347,7 @@ npm run deploy-superform-strategy-sepolia
 ```
 
 All strategies are deployed using Hardhat Ignition with the UUPS proxy pattern:
+
 1. Implementation contract deployed
 2. ERC1967Proxy deployed with initialization data
 3. Proxy treated as the strategy contract
@@ -359,6 +370,7 @@ CMD=supply-strategy npx hardhat run scripts/hyper-cli.ts --network sepolia
 #### Step 3: Register Strategy
 
 Register the strategy with HyperFactory, which triggers:
+
 1. Local registration on origin chain
 2. Hyperlane message to Lumia
 3. Vault and principal token deployment on Lumia
@@ -369,6 +381,7 @@ CMD=add-strategy npx hardhat run scripts/hyper-cli.ts --network sepolia
 ```
 
 **What happens:**
+
 - Strategy registered in `HyperFactoryFacet`
 - `RouteRegistry` message sent via Hyperlane
 - Lumia deploys ERC4626 vault and principal token
@@ -388,12 +401,13 @@ CMD=set-fee-data npx hardhat run scripts/hyper-cli.ts --network sepolia
 ```
 
 **Example values (configured in CLI_CONFIG):**
+
 - Fee rate: 2% (0.02 * 1e18)
 - Fee recipient: Protocol treasury address
 
 ### Strategy Integration Configuration
 
-#### For Superform Strategies:
+#### For Superform Strategies
 
 ```typescript
 const superformIntegration = await ethers.getContractAt(
@@ -408,7 +422,7 @@ await superformIntegration.connect(strategyManager).initializeStorage({
 });
 ```
 
-#### For Curve Strategies:
+#### For Curve Strategies
 
 ```typescript
 const curveIntegration = await ethers.getContractAt(
@@ -436,6 +450,7 @@ This section provides a complete walkthrough of deploying HyperStaking on testne
 ### Environment: Sepolia to Lumia Beam
 
 **Networks:**
+
 - Origin: Sepolia (Ethereum testnet)
 - Hub: Lumia Beam (Lumia testnet)
 
@@ -448,6 +463,7 @@ npm run deploy-lumia-diamond-beam
 ```
 
 **Output:**
+
 ```
 Deployed LumiaDiamond at: 0x...
 ```
@@ -513,6 +529,7 @@ CMD=add-strategy npx hardhat run scripts/hyper-cli.ts --network sepolia
 ```
 
 **Monitor Hyperlane:**
+
 - Watch for `Dispatch` event on Sepolia
 - Track message at [Hyperlane Explorer](https://explorer.hyperlane.xyz/)
 - Verify delivery on Lumia Beam (route registered, vault deployed)
@@ -524,12 +541,14 @@ CMD=stake-deposit npx hardhat run scripts/hyper-cli.ts --network sepolia
 ```
 
 **Expected flow:**
+
 1. Deposit on Sepolia
 2. Hyperlane message dispatched
 3. Relayer delivers to Lumia
 4. Vault shares minted on Lumia
 
 **Example relayer log:**
+
 ```
 Observed message 0x640f56b2... on sepolia to lumiabeam
 Preparing to relay message 0x640f56b2...
@@ -641,6 +660,7 @@ npx hardhat run scripts/diamondCut.ts --network sepolia
 ```
 
 **Process:**
+
 1. Script compares old vs new selectors
 2. Deploys new facet contract
 3. Prepares diamondCut (Add/Replace/Remove)
@@ -659,24 +679,25 @@ graph TD
     A --> D[STRATEGY_MANAGER_ROLE]
     A --> E[STRATEGY_UPGRADER_ROLE]
     A --> F[LUMIA_FACTORY_MANAGER_ROLE]
-    
+
     B --> B1[Pause/Unpause Deposits]
     B --> B2[Set Withdrawal Delays]
-    
+
     C --> C1[Add/Enable Strategies]
     C --> C2[Set Fees]
     C --> C3[Configure Hyperlane]
-    
+
     D --> D1[Configure Integrations]
     D --> D2[Register Protocols]
-    
+
     E --> E1[Upgrade Strategy Contracts]
-    
+
     F --> F1[Manage Lumia Routes]
     F --> F2[Configure Vault Factory]
 ```
 
 **Role Assignment Best Practices:**
+
 - `DEFAULT_ADMIN_ROLE`: Multi-sig wallet (3-of-5 recommended)
 - `VAULT_MANAGER_ROLE`: Multi-sig (can be same as admin)
 - `STAKING_MANAGER_ROLE`: EOA for faster response (operations team)
@@ -698,18 +719,19 @@ enum MessageType {
 ### Hyper-CLI Commands
 
 View all available commands:
+
 ```bash
 CMD=help npx hardhat run scripts/hyper-cli.ts
 ```
 
 ### Useful Resources
 
-- **Hyperlane Explorer**: https://explorer.hyperlane.xyz/
-- **Hyperlane Docs**: https://docs.hyperlane.xyz/
-- **ERC-2535 Diamond**: https://eips.ethereum.org/EIPS/eip-2535
-- **ERC-4626 Vaults**: https://eips.ethereum.org/EIPS/eip-4626
-- **Hardhat Ignition**: https://hardhat.org/ignition/
+- **Hyperlane Explorer**: <https://explorer.hyperlane.xyz/>
+- **Hyperlane Docs**: <https://docs.hyperlane.xyz/>
+- **ERC-2535 Diamond**: <https://eips.ethereum.org/EIPS/eip-2535>
+- **ERC-4626 Vaults**: <https://eips.ethereum.org/EIPS/eip-4626>
+- **Hardhat Ignition**: <https://hardhat.org/ignition/>
 
 ---
 
-*Last Updated: January 2026*
+Last Updated: January 2026
